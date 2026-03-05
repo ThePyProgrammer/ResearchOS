@@ -3,6 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from models.paper import PaperCreate, PaperUpdate
 from services import paper_service
@@ -31,6 +32,82 @@ async def list_papers(
 async def create_paper(data: PaperCreate):
     paper = paper_service.create_paper(data)
     return JSONResponse(paper.model_dump(by_alias=True), status_code=201)
+
+
+# ---------------------------------------------------------------------------
+# Quick-add: resolve DOI / arXiv ID / URL → create paper
+# ---------------------------------------------------------------------------
+
+class ImportRequest(BaseModel):
+    identifier: str  # DOI, arXiv ID, or URL
+
+
+@router.post("/import", status_code=201)
+async def import_paper(data: ImportRequest):
+    """
+    Resolve a DOI, arXiv ID, or URL to paper metadata and add it to the library.
+
+    - DOI   → Crossref Works API
+    - arXiv → arXiv Atom API
+    - URL   → arXiv/doi.org sniff, then HTML citation_* meta-tag extraction
+    """
+    from services.import_service import resolve_identifier
+
+    identifier = data.identifier.strip()
+    if not identifier:
+        raise HTTPException(status_code=422, detail="identifier must not be empty")
+
+    try:
+        meta = await resolve_identifier(identifier)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error resolving identifier '%s'", identifier)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Metadata lookup failed: {exc}",
+        ) from exc
+
+    if not meta.get("title"):
+        raise HTTPException(
+            status_code=422,
+            detail="Could not extract a title from that identifier.",
+        )
+
+    # Deduplicate: skip if a paper with the same arxiv_id or DOI already exists
+    existing_papers = paper_service.list_papers()
+    arxiv_id = meta.get("arxiv_id")
+    doi = meta.get("doi")
+    for existing in existing_papers:
+        if arxiv_id and existing.arxiv_id == arxiv_id:
+            return JSONResponse(
+                {**existing.model_dump(by_alias=True), "already_exists": True},
+                status_code=200,
+            )
+        if doi and existing.doi == doi:
+            return JSONResponse(
+                {**existing.model_dump(by_alias=True), "already_exists": True},
+                status_code=200,
+            )
+
+    paper_create = PaperCreate(
+        title=meta["title"],
+        authors=meta.get("authors") or [],
+        year=meta.get("year") or 0,
+        venue=meta.get("venue") or "Unknown",
+        doi=doi,
+        arxiv_id=arxiv_id,
+        status="inbox",
+        abstract=meta.get("abstract"),
+        source="human",
+        pdf_url=meta.get("pdf_url"),
+    )
+    paper = paper_service.create_paper(paper_create)
+    logger.info("Imported paper '%s' from identifier '%s'", paper.title, identifier)
+    return JSONResponse(
+        {**paper.model_dump(by_alias=True), "already_exists": False},
+        status_code=201,
+    )
 
 
 @router.get("/{paper_id}")

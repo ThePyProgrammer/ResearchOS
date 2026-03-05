@@ -29,6 +29,9 @@ export const papersApi = {
   create: (data) => apiFetch('/papers', { method: 'POST', body: data }),
   update: (id, data) => apiFetch(`/papers/${id}`, { method: 'PATCH', body: data }),
   remove: (id) => apiFetch(`/papers/${id}`, { method: 'DELETE' }),
+  /** Resolve a DOI, arXiv ID, or URL and add to the library. */
+  import: (identifier) =>
+    apiFetch('/papers/import', { method: 'POST', body: { identifier } }),
 }
 
 export const collectionsApi = {
