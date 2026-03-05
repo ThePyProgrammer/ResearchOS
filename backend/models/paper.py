@@ -40,6 +40,9 @@ class PaperCreate(CamelModel):
     tags: list[str] = []
     abstract: Optional[str] = None
     source: str = "human"
+    agent_run: Optional[AgentRunRef] = None
+    relevance_score: Optional[int] = None
+    agent_reasoning: Optional[str] = None
     collections: list[str] = []
     pdf_url: Optional[str] = None
 
@@ -49,3 +52,6 @@ class PaperUpdate(CamelModel):
     tags: Optional[list[str]] = None
     collections: Optional[list[str]] = None
     rejected: Optional[bool] = None
+    agent_run: Optional[AgentRunRef] = None
+    relevance_score: Optional[int] = None
+    agent_reasoning: Optional[str] = None

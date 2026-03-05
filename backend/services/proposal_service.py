@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Optional
 
 from models.proposal import Proposal, ProposalResponse
@@ -46,6 +47,22 @@ def _to_response(proposal: Proposal, papers: list[Paper]) -> Optional[ProposalRe
         checked=proposal.checked,
         paper=paper,
     )
+
+
+def create_proposal(paper_id: str, run_id: str) -> Proposal:
+    """Create a new pending proposal linking a paper to a run."""
+    proposals = _load_proposals()
+    proposal = Proposal(
+        id=f"pp_{uuid.uuid4().hex[:8]}",
+        paper_id=paper_id,
+        run_id=run_id,
+        status="pending",
+        checked=True,
+    )
+    proposals.append(proposal)
+    _save_proposals(proposals)
+    logger.info("Created proposal %s for paper %s (run %s)", proposal.id, paper_id, run_id)
+    return proposal
 
 
 def list_proposals(run_id: Optional[str] = None) -> list[ProposalResponse]:
