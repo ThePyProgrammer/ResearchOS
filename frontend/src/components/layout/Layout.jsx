@@ -15,3 +15,15 @@ export default function Layout() {
     </div>
   )
 }
+
+/** For pages that render their own full-width page header (Proposals, Paper). */
+export function LayoutBare() {
+  return (
+    <div className="flex h-screen bg-slate-50 overflow-hidden">
+      <Sidebar />
+      <main className="flex-1 overflow-hidden">
+        <Outlet />
+      </main>
+    </div>
+  )
+}
