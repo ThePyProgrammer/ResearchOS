@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ResearchOS — PDF Reader</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style type="text/tailwindcss">
+    :root {
+        --bg-color: #f3f4f6;
+        --surface-color: #ffffff;
+        --border-color: #e5e7eb;
+        --primary-color: #4f46e5;
+        --primary-hover: #4338ca;
+        --text-main: #111827;
+        --text-muted: #6b7280;
+        --highlight-yellow: rgba(253, 224, 71, 0.4);
+        --highlight-blue: rgba(147, 197, 253, 0.4);
+    }
+    body { font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: var(--text-main); }
+    .pdf-page { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .icon-btn { @apply p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors flex items-center justify-center; }
+    .active-tab { @apply border-b-2 border-[var(--primary-color)] text-[var(--primary-color)] font-medium; }
+    .inactive-tab { @apply text-gray-500 hover:text-gray-700 hover:border-gray-300; }
+</style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-[var(--bg-color)]">
+
+<!-- Header -->
+<header class="h-14 bg-[var(--surface-color)] border-b border-[var(--border-color)] flex items-center justify-between px-4 shrink-0">
+  <div class="flex items-center gap-4">
+    <a href="library.html" class="icon-btn" title="Back to Library">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </a>
+    <div class="flex items-center gap-2">
+      <span class="material-symbols-outlined text-red-500">picture_as_pdf</span>
+      <h1 class="font-medium text-sm truncate max-w-[400px]">Attention Is All You Need.pdf</h1>
+      <span class="text-xs text-[var(--text-muted)] bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">ArXiv: 1706.03762</span>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <div class="flex items-center bg-gray-100 rounded-md p-0.5 border border-gray-200">
+      <button class="icon-btn !p-1 bg-white shadow-sm" title="Split View" id="view-split" onclick="setView('split')">
+        <span class="material-symbols-outlined text-sm">vertical_split</span>
+      </button>
+      <button class="icon-btn !p-1" title="Reader Only" id="view-reader" onclick="setView('reader')">
+        <span class="material-symbols-outlined text-sm">crop_portrait</span>
+      </button>
+    </div>
+    <div class="h-4 w-px bg-gray-300 mx-2"></div>
+    <button class="icon-btn" title="Search document">
+      <span class="material-symbols-outlined">search</span>
+    </button>
+    <button class="icon-btn" title="Share">
+      <span class="material-symbols-outlined">share</span>
+    </button>
+    <button class="icon-btn" title="More options">
+      <span class="material-symbols-outlined">more_vert</span>
+    </button>
+    <a href="library.html" class="w-8 h-8 rounded-full bg-indigo-100 text-[var(--primary-color)] flex items-center justify-center font-semibold text-sm ml-2 border border-indigo-200" title="Back to Library">
+      DR
+    </a>
+  </div>
+</header>
+
+<main class="flex-1 flex overflow-hidden" id="main-layout">
+
+  <!-- PDF viewer panel -->
+  <section class="flex-1 flex flex-col relative bg-gray-200/50 border-r border-[var(--border-color)] min-w-[400px]" id="pdf-panel">
+    <!-- PDF toolbar -->
+    <div class="h-10 bg-[var(--surface-color)] border-b border-[var(--border-color)] flex items-center justify-between px-3 shrink-0 text-sm">
+      <div class="flex items-center gap-1">
+        <button class="icon-btn" title="Toggle Sidebar">
+          <span class="material-symbols-outlined text-sm">menu_open</span>
+        </button>
+        <div class="h-4 w-px bg-gray-300 mx-1"></div>
+        <button class="icon-btn" title="Previous Page" onclick="changePage(-1)">
+          <span class="material-symbols-outlined text-sm">chevron_left</span>
+        </button>
+        <span class="px-2 text-[var(--text-muted)]">Page
+          <input id="page-input" class="w-8 h-6 text-center border border-gray-300 rounded mx-1 text-xs" type="text" value="1" onchange="goToPage(this.value)"/>
+          of <span id="page-count">15</span>
+        </span>
+        <button class="icon-btn" title="Next Page" onclick="changePage(1)">
+          <span class="material-symbols-outlined text-sm">chevron_right</span>
+        </button>
+      </div>
+      <div class="flex items-center gap-1">
+        <button class="icon-btn" title="Zoom Out" onclick="adjustZoom(-25)">
+          <span class="material-symbols-outlined text-sm">remove</span>
+        </button>
+        <select id="zoom-select" class="h-6 text-xs border border-gray-300 rounded bg-white text-gray-700 px-1 py-0 outline-none" onchange="setZoom(this.value)">
+          <option>75%</option>
+          <option>100%</option>
+          <option>125%</option>
+          <option selected>150%</option>
+          <option>Fit Width</option>
+          <option>Fit Page</option>
+        </select>
+        <button class="icon-btn" title="Zoom In" onclick="adjustZoom(25)">
+          <span class="material-symbols-outlined text-sm">add</span>
+        </button>
+      </div>
+      <div class="flex items-center gap-1">
+        <button class="icon-btn bg-yellow-100/50 text-yellow-600 hover:bg-yellow-100" title="Highlight Yellow">
+          <span class="material-symbols-outlined text-sm">format_ink_highlighter</span>
+        </button>
+        <button class="icon-btn" title="Add Comment">
+          <span class="material-symbols-outlined text-sm">add_comment</span>
+        </button>
+        <button class="icon-btn" title="Area Selection">
+          <span class="material-symbols-outlined text-sm">crop</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- PDF content -->
+    <div class="flex-1 overflow-auto p-8 flex flex-col items-center gap-6 scrollbar-hide relative" id="pdf-viewport">
+      <!-- Text selection toolbar (shown on selection) -->
+      <div class="absolute top-[280px] left-[320px] bg-gray-900 text-white rounded-md shadow-lg flex items-center p-1 gap-1 z-10" id="selection-toolbar">
+        <button class="p-1.5 hover:bg-gray-700 rounded text-yellow-300" title="Highlight Yellow"><span class="material-symbols-outlined text-sm">format_ink_highlighter</span></button>
+        <button class="p-1.5 hover:bg-gray-700 rounded text-blue-300" title="Highlight Blue"><span class="material-symbols-outlined text-sm">format_ink_highlighter</span></button>
+        <div class="w-px h-4 bg-gray-600 mx-1"></div>
+        <button class="p-1.5 hover:bg-gray-700 rounded text-white flex items-center gap-1 text-xs font-medium" title="Ask AI" onclick="switchToTab('ai')">
+          <span class="material-symbols-outlined text-sm">auto_awesome</span> Ask AI
+        </button>
+        <button class="p-1.5 hover:bg-gray-700 rounded text-white flex items-center gap-1 text-xs font-medium" title="Add Note" onclick="switchToTab('notes')">
+          <span class="material-symbols-outlined text-sm">note_add</span> Note
+        </button>
+      </div>
+
+      <!-- Page 1 -->
+      <div class="pdf-page bg-white w-[800px] min-h-[1131px] relative" id="pdf-page-1">
+        <div class="absolute inset-0 p-16 font-serif text-sm leading-relaxed text-gray-800">
+          <h1 class="text-3xl font-bold text-center mb-4">Attention Is All You Need</h1>
+          <p class="text-center italic mb-12">Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, Illia Polosukhin</p>
+          <h2 class="text-xl font-bold mb-2">Abstract</h2>
+          <p class="mb-6 text-justify">
+            The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer,
+            <span class="bg-[var(--highlight-yellow)] cursor-pointer group relative">
+              based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.
+              <span class="absolute -left-3 top-0 bottom-0 w-1 bg-yellow-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
+            </span>
+            Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task, improving over the existing best results, including ensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task, our model establishes a new single-model state-of-the-art BLEU score of 41.8 after training for 3.5 days on eight GPUs, a small fraction of the training costs of the best models from the literature. We show that the Transformer generalizes well to other tasks by applying it successfully to English constituency parsing both with large and limited training data.
+          </p>
+          <h2 class="text-xl font-bold mb-2 mt-8">1 Introduction</h2>
+          <p class="mb-4 text-justify">
+            Recurrent neural networks, long short-term memory [13] and gated recurrent [7] neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation [35, 2, 5]. Numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures [38, 24, 15].
+          </p>
+          <p class="mb-4 text-justify">
+            <span class="bg-[var(--highlight-blue)] cursor-pointer group relative">
+              Recurrent models typically factor computation along the symbol positions of the input and output sequences.
+              <span class="absolute -left-3 top-0 bottom-0 w-1 bg-blue-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
+            </span>
+            Aligning the positions to steps in computation time, they generate a sequence of hidden states h<sub>t</sub>, as a function of the previous hidden state h<sub>t−1</sub> and the input for position t. This inherently sequential nature precludes parallelization within training examples, which becomes critical at longer sequence lengths, as memory constraints limit batching across examples.
+          </p>
+        </div>
+      </div>
+
+      <!-- Page 2 -->
+      <div class="pdf-page bg-white w-[800px] min-h-[1131px] relative" id="pdf-page-2">
+        <div class="absolute inset-0 p-16 font-serif text-sm leading-relaxed text-gray-800">
+          <p class="text-gray-400 italic">Page 2 — document continues…</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comments / Notes / AI panel -->
+  <section class="w-[450px] bg-[var(--surface-color)] flex flex-col shrink-0 relative shadow-[-4px_0_15px_rgba(0,0,0,0.03)] z-10" id="side-panel">
+    <!-- Panel tabs -->
+    <div class="flex border-b border-[var(--border-color)] pt-2 px-2 gap-4">
+      <button id="tab-comments" onclick="switchToTab('comments')" class="px-3 py-2 text-sm active-tab flex items-center gap-1.5 panel-tab">
+        <span class="material-symbols-outlined text-[18px]">forum</span> Comments (2)
+      </button>
+      <button id="tab-notes" onclick="switchToTab('notes')" class="px-3 py-2 text-sm inactive-tab flex items-center gap-1.5 transition-colors panel-tab">
+        <span class="material-symbols-outlined text-[18px]">edit_note</span> Notes
+      </button>
+      <button id="tab-ai" onclick="switchToTab('ai')" class="px-3 py-2 text-sm inactive-tab flex items-center gap-1.5 transition-colors panel-tab">
+        <span class="material-symbols-outlined text-[18px]">smart_toy</span> AI Assistant
+      </button>
+    </div>
+
+    <!-- Comments -->
+    <div class="flex-1 overflow-y-auto bg-gray-50/50 panel-content" id="content-comments">
+      <div class="p-4 flex flex-col gap-4">
+        <!-- Comment 1 -->
+        <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden border-l-4 border-l-yellow-400 cursor-pointer hover:border-gray-300 hover:border-l-yellow-400 transition-colors">
+          <div class="bg-gray-50 p-3 text-xs text-gray-600 border-b border-gray-100 italic border-l-2 border-l-yellow-400 ml-3 mt-3 mr-3 rounded-r">
+            "…based solely on attention mechanisms, dispensing with recurrence and convolutions entirely."
+          </div>
+          <div class="p-3">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">DR</div>
+              <div class="flex-1">
+                <div class="flex items-baseline justify-between">
+                  <span class="text-sm font-semibold text-gray-900">Dr. Researcher</span>
+                  <span class="text-[10px] text-gray-500">2h ago</span>
+                </div>
+                <p class="text-sm text-gray-700 mt-1">This is the core thesis. Need to check if later architectures completely abandoned convolutions or if hybrid approaches emerged.</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-3 mt-3 ml-6 pl-3 border-l border-gray-200">
+              <div class="w-6 h-6 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-[10px] font-bold shrink-0">AI</div>
+              <div class="flex-1">
+                <div class="flex items-baseline justify-between">
+                  <span class="text-xs font-semibold text-gray-900">Research Agent</span>
+                  <span class="text-[10px] text-gray-500">1h ago</span>
+                </div>
+                <p class="text-xs text-gray-700 mt-1">Hybrid approaches did emerge. For example, Convolutional Transformers (CvT) reintroduced convolutions into the Transformer architecture for vision tasks to improve performance and efficiency. <span class="text-indigo-600 hover:underline cursor-pointer">[Wu et al., 2021]</span></p>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center gap-2">
+              <input class="flex-1 text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-8" placeholder="Reply…" type="text"/>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comment 2 -->
+        <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden border-l-4 border-l-blue-400 cursor-pointer hover:border-gray-300 hover:border-l-blue-400 transition-colors">
+          <div class="bg-gray-50 p-3 text-xs text-gray-600 border-b border-gray-100 italic border-l-2 border-l-blue-400 ml-3 mt-3 mr-3 rounded-r">
+            "Recurrent models typically factor computation along the symbol positions of the input and output sequences."
+          </div>
+          <div class="p-3">
+            <div class="flex items-start gap-3">
+              <div class="w-7 h-7 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-bold shrink-0">MS</div>
+              <div class="flex-1">
+                <div class="flex items-baseline justify-between">
+                  <span class="text-sm font-semibold text-gray-900">Mark Smith</span>
+                  <span class="text-[10px] text-gray-500">1d ago</span>
+                </div>
+                <p class="text-sm text-gray-700 mt-1">The sequential bottleneck is exactly what limits scaling on modern GPUs.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes (hidden) -->
+    <div class="flex-1 overflow-y-auto bg-gray-50/50 panel-content hidden p-4" id="content-notes">
+      <p class="text-sm text-gray-500 italic mb-4">Linked notes for this paper.</p>
+      <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+        <p class="text-xs font-semibold text-gray-700 mb-1">📌 Core thesis</p>
+        <p class="text-xs text-gray-600">Transformer architecture eliminates recurrence entirely via multi-head self-attention. Check hybrid models (CvT) as a counterpoint.</p>
+      </div>
+    </div>
+
+    <!-- AI Assistant (hidden) -->
+    <div class="flex-1 overflow-y-auto bg-gray-50/50 panel-content hidden p-4 flex flex-col gap-3" id="content-ai">
+      <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+        <p class="text-xs font-semibold text-purple-700 mb-1 flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">auto_awesome</span> AI Summary</p>
+        <p class="text-xs text-gray-700">This paper introduces the Transformer — an architecture based entirely on attention mechanisms, removing the need for recurrence or convolutions. Key innovation: multi-head self-attention allows full parallelism across sequence positions.</p>
+      </div>
+      <div class="mt-auto">
+        <div class="flex gap-2">
+          <input class="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="Ask about this paper…" type="text"/>
+          <button class="bg-indigo-600 text-white px-3 rounded-lg hover:bg-indigo-700"><span class="material-symbols-outlined text-sm">send</span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comment composer -->
+    <div class="p-4 border-t border-[var(--border-color)] bg-white" id="comment-composer">
+      <div class="flex items-start gap-2">
+        <div class="w-8 h-8 rounded-full bg-indigo-100 text-[var(--primary-color)] flex items-center justify-center font-semibold text-sm shrink-0">DR</div>
+        <div class="flex-1 border border-gray-300 rounded-lg overflow-hidden focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-shadow bg-white">
+          <textarea class="w-full border-none resize-none text-sm p-2 focus:ring-0 block" placeholder="Add a general comment to the document…" rows="2"></textarea>
+          <div class="bg-gray-50 px-2 py-1.5 flex justify-between items-center border-t border-gray-200">
+            <div class="flex gap-1">
+              <button class="p-1 text-gray-500 hover:text-gray-700 rounded"><span class="material-symbols-outlined text-sm">format_bold</span></button>
+              <button class="p-1 text-gray-500 hover:text-gray-700 rounded"><span class="material-symbols-outlined text-sm">alternate_email</span></button>
+            </div>
+            <button class="bg-[var(--primary-color)] hover:bg-[var(--primary-hover)] text-white px-3 py-1 rounded text-xs font-medium transition-colors">Post</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Panel tab switching
+  function switchToTab(tab) {
+    document.querySelectorAll('.panel-tab').forEach(btn => {
+      btn.classList.remove('active-tab');
+      btn.classList.add('inactive-tab');
+    });
+    document.querySelectorAll('.panel-content').forEach(c => c.classList.add('hidden'));
+
+    const activeBtn = document.getElementById('tab-' + tab);
+    if (activeBtn) {
+      activeBtn.classList.add('active-tab');
+      activeBtn.classList.remove('inactive-tab');
+    }
+    const content = document.getElementById('content-' + tab);
+    if (content) content.classList.remove('hidden');
+
+    // Show/hide comment composer
+    const composer = document.getElementById('comment-composer');
+    composer.style.display = tab === 'comments' ? '' : 'none';
+  }
+
+  // View toggle (split / reader-only)
+  function setView(mode) {
+    const panel = document.getElementById('side-panel');
+    if (mode === 'reader') {
+      panel.classList.add('hidden');
+      document.getElementById('view-reader').classList.add('bg-white', 'shadow-sm');
+      document.getElementById('view-split').classList.remove('bg-white', 'shadow-sm');
+    } else {
+      panel.classList.remove('hidden');
+      document.getElementById('view-split').classList.add('bg-white', 'shadow-sm');
+      document.getElementById('view-reader').classList.remove('bg-white', 'shadow-sm');
+    }
+  }
+
+  // Page navigation
+  let currentPage = 1;
+  const totalPages = 15;
+  function changePage(delta) {
+    currentPage = Math.max(1, Math.min(totalPages, currentPage + delta));
+    document.getElementById('page-input').value = currentPage;
+  }
+  function goToPage(val) {
+    currentPage = Math.max(1, Math.min(totalPages, parseInt(val) || 1));
+    document.getElementById('page-input').value = currentPage;
+  }
+
+  // Zoom controls
+  const zoomLevels = [75, 100, 125, 150];
+  let currentZoom = 150;
+  function adjustZoom(delta) {
+    const next = zoomLevels.reduce((prev, z) => {
+      if (delta > 0 && z > currentZoom) return prev === currentZoom ? z : prev;
+      if (delta < 0 && z < currentZoom) return z;
+      return prev;
+    }, currentZoom);
+    currentZoom = next;
+    document.getElementById('pdf-viewport').style.zoom = (currentZoom / 100);
+  }
+</script>
+</body></html>

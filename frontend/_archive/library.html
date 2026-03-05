@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ResearchOS — Library</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style type="text/tailwindcss">
+    :root {
+        --bg-primary: #f9fafb;
+        --bg-secondary: #ffffff;
+        --bg-tertiary: #f3f4f6;
+        --border-color: #e5e7eb;
+        --text-primary: #111827;
+        --text-secondary: #4b5563;
+        --text-tertiary: #9ca3af;
+        --accent-color: #3b82f6;
+        --accent-hover: #2563eb;
+        --row-hover: #f8fafc;
+        --row-selected: #eff6ff;
+    }
+    body { font-family: 'Inter', sans-serif; background-color: var(--bg-primary); color: var(--text-primary); }
+    .pane-scroll { overflow-y: auto; }
+    .pane-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .pane-scroll::-webkit-scrollbar-track { background: transparent; }
+    .pane-scroll::-webkit-scrollbar-thumb { background-color: #d1d5db; border-radius: 20px; }
+    .material-symbols-outlined { font-size: 20px; }
+</style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-sm">
+
+<!-- Top header -->
+<header class="bg-[var(--bg-secondary)] border-b border-[var(--border-color)] h-14 flex items-center justify-between px-4 shrink-0">
+  <div class="flex items-center gap-4">
+    <a href="home.html" class="flex items-center gap-2 font-semibold text-lg hover:opacity-80 transition-opacity">
+      <span class="material-symbols-outlined text-[var(--accent-color)] !text-2xl">account_tree</span>
+      ResearchOS
+    </a>
+    <nav class="hidden md:flex ml-4 space-x-1">
+      <a href="library.html" class="px-3 py-1.5 rounded-md bg-[var(--bg-tertiary)] font-medium text-[var(--text-primary)]">Library</a>
+      <a href="agents.html" class="px-3 py-1.5 rounded-md hover:bg-[var(--bg-tertiary)] font-medium text-[var(--text-secondary)]">Workflows</a>
+      <a href="proposals.html" class="px-3 py-1.5 rounded-md hover:bg-[var(--bg-tertiary)] font-medium text-[var(--text-secondary)]">Proposals
+        <span class="ml-1 bg-purple-100 text-purple-700 text-xs px-1.5 py-0.5 rounded-full font-bold">3</span>
+      </a>
+    </nav>
+  </div>
+  <div class="flex items-center gap-3">
+    <div class="relative">
+      <span class="material-symbols-outlined absolute left-2.5 top-1.5 text-[var(--text-tertiary)]">search</span>
+      <input id="search-input" oninput="filterRows()" class="pl-9 pr-4 py-1.5 rounded-md border border-[var(--border-color)] bg-[var(--bg-primary)] text-sm focus:outline-none focus:ring-1 focus:ring-[var(--accent-color)] w-64" placeholder="Search library…" type="text"/>
+    </div>
+    <button class="p-1.5 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
+      <span class="material-symbols-outlined">notifications</span>
+    </button>
+    <a href="home.html" class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white font-medium ml-2 cursor-pointer">DR</a>
+  </div>
+</header>
+
+<main class="flex flex-1 overflow-hidden">
+
+  <!-- Collections sidebar -->
+  <aside class="w-64 bg-[var(--bg-secondary)] border-r border-[var(--border-color)] flex flex-col shrink-0">
+    <div class="p-3 border-b border-[var(--border-color)] flex justify-between items-center">
+      <span class="font-medium text-[var(--text-secondary)] text-xs uppercase tracking-wider">Collections</span>
+      <button class="p-1 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
+        <span class="material-symbols-outlined !text-lg">add</span>
+      </button>
+    </div>
+    <div class="p-2 flex-1 pane-scroll">
+      <div class="space-y-0.5 mb-4">
+        <a href="library.html" class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)]">
+          <span class="material-symbols-outlined !text-base text-[var(--text-secondary)]">inbox</span>
+          Inbox
+          <span class="ml-auto text-xs bg-[var(--bg-tertiary)] px-1.5 py-0.5 rounded text-[var(--text-secondary)]">12</span>
+        </a>
+        <a href="library.html" class="flex items-center gap-2 px-2 py-1.5 rounded-md bg-[var(--row-selected)] text-[var(--accent-hover)] font-medium">
+          <span class="material-symbols-outlined !text-base text-[var(--accent-color)]">library_books</span>
+          All Papers
+        </a>
+        <a href="home.html" class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)]">
+          <span class="material-symbols-outlined !text-base text-[var(--text-secondary)]">home</span>
+          Dashboard
+        </a>
+      </div>
+      <div class="space-y-0.5">
+        <!-- Agentic Frameworks collection (expanded) -->
+        <div>
+          <div class="flex items-center gap-1 px-1 py-1.5 rounded-md hover:bg-[var(--bg-tertiary)] group cursor-pointer" onclick="toggleCollection('af-children', this)">
+            <span class="material-symbols-outlined !text-sm text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)]">expand_more</span>
+            <span class="material-symbols-outlined !text-base text-yellow-500">folder</span>
+            <span class="text-[var(--text-primary)] truncate">Agentic Frameworks</span>
+          </div>
+          <div id="af-children" class="ml-5 space-y-0.5 mt-0.5 border-l border-[var(--border-color)] pl-1">
+            <a href="library.html" class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)]">
+              <span class="material-symbols-outlined !text-base text-[var(--text-secondary)]">list_alt</span>
+              Tool Use
+            </a>
+            <a href="library.html" class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)]">
+              <span class="material-symbols-outlined !text-base text-[var(--text-secondary)]">list_alt</span>
+              Multi-Agent Systems
+            </a>
+          </div>
+        </div>
+        <!-- RAG Optimization (collapsed) -->
+        <div>
+          <div class="flex items-center gap-1 px-1 py-1.5 rounded-md hover:bg-[var(--bg-tertiary)] group cursor-pointer" onclick="toggleCollection('rag-children', this)">
+            <span class="material-symbols-outlined !text-sm text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)]">chevron_right</span>
+            <span class="material-symbols-outlined !text-base text-yellow-500">folder</span>
+            <span class="text-[var(--text-primary)] truncate">RAG Optimization</span>
+          </div>
+          <div id="rag-children" class="ml-5 space-y-0.5 mt-0.5 border-l border-[var(--border-color)] pl-1 hidden">
+            <a href="library.html" class="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)]">
+              <span class="material-symbols-outlined !text-base text-[var(--text-secondary)]">list_alt</span>
+              Hybrid Search
+            </a>
+          </div>
+        </div>
+
+        <!-- Agent Outputs -->
+        <div class="mt-4">
+          <div class="flex items-center gap-1 px-1 py-1.5">
+            <span class="font-medium text-[var(--text-secondary)] text-xs uppercase tracking-wider ml-1">Agent Outputs</span>
+          </div>
+          <div>
+            <a href="proposals.html" class="flex items-center gap-1 px-1 py-1.5 rounded-md hover:bg-[var(--bg-tertiary)] cursor-pointer">
+              <span class="material-symbols-outlined !text-sm text-[var(--text-tertiary)]">chevron_right</span>
+              <span class="material-symbols-outlined !text-base text-purple-500">smart_toy</span>
+              <span class="text-[var(--text-primary)] truncate">Run #42: Lit Review</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="p-3 border-t border-[var(--border-color)] flex gap-2 justify-center">
+      <button class="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)]" title="Import">
+        <span class="material-symbols-outlined">publish</span>
+      </button>
+      <a href="agents.html" class="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)]" title="Run Agent Workflow">
+        <span class="material-symbols-outlined">play_arrow</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Paper table -->
+  <section class="flex-1 flex flex-col bg-[var(--bg-secondary)] overflow-hidden">
+    <!-- Toolbar -->
+    <div class="h-14 border-b border-[var(--border-color)] flex items-center justify-between px-4 shrink-0 bg-[var(--bg-primary)]">
+      <div class="flex items-center gap-3">
+        <div class="flex bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md p-0.5" id="filter-tabs">
+          <button onclick="setFilter(this, 'all')" class="px-3 py-1 rounded bg-[var(--bg-tertiary)] text-[var(--text-primary)] font-medium text-xs filter-tab active-filter">All</button>
+          <button onclick="setFilter(this, 'inbox')" class="px-3 py-1 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] font-medium text-xs filter-tab">Inbox</button>
+          <button onclick="setFilter(this, 'to-read')" class="px-3 py-1 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] font-medium text-xs filter-tab">To Read</button>
+          <button onclick="setFilter(this, 'read')" class="px-3 py-1 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)] font-medium text-xs filter-tab">Read</button>
+        </div>
+        <div class="h-4 w-px bg-[var(--border-color)]"></div>
+        <button class="flex items-center gap-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-medium">
+          <span class="material-symbols-outlined !text-sm">filter_list</span>
+          Filter
+        </button>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
+          <span class="material-symbols-outlined !text-xl">view_list</span>
+        </button>
+        <button class="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
+          <span class="material-symbols-outlined !text-xl">grid_view</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="flex-1 overflow-auto pane-scroll relative">
+      <table class="w-full text-left border-collapse">
+        <thead class="sticky top-0 bg-[var(--bg-primary)] border-b border-[var(--border-color)] shadow-sm z-10">
+          <tr>
+            <th class="w-8 p-3 text-center"><input class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" type="checkbox" id="select-all" onchange="toggleAll(this)"/></th>
+            <th class="p-3 font-medium text-[var(--text-secondary)] text-xs uppercase tracking-wider">Status</th>
+            <th class="p-3 font-medium text-[var(--text-secondary)] text-xs uppercase tracking-wider">Title</th>
+            <th class="p-3 font-medium text-[var(--text-secondary)] text-xs uppercase tracking-wider">Authors</th>
+            <th class="p-3 font-medium text-[var(--text-secondary)] text-xs uppercase tracking-wider w-16">Year</th>
+            <th class="p-3 font-medium text-[var(--text-secondary)] text-xs uppercase tracking-wider">Venue</th>
+            <th class="p-3 font-medium text-[var(--text-secondary)] text-xs uppercase tracking-wider">Source</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[var(--border-color)]" id="paper-rows">
+          <tr class="hover:bg-[var(--row-hover)] cursor-pointer group paper-row" data-status="to-read" onclick="window.location='paper.html'">
+            <td class="w-8 p-3 text-center"><input class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 opacity-0 group-hover:opacity-100" type="checkbox" onclick="event.stopPropagation()"/></td>
+            <td class="p-3"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">To Read</span></td>
+            <td class="p-3 font-medium text-[var(--text-primary)]">ReAct: Synergizing Reasoning and Acting in Language Models</td>
+            <td class="p-3 text-[var(--text-secondary)] truncate max-w-[200px]">Yao et al.</td>
+            <td class="p-3 text-[var(--text-secondary)]">2022</td>
+            <td class="p-3 text-[var(--text-secondary)]">ICLR</td>
+            <td class="p-3"><div class="flex items-center gap-1 text-xs text-[var(--text-tertiary)]"><span class="material-symbols-outlined !text-sm">language</span> arXiv</div></td>
+          </tr>
+          <tr class="bg-[var(--row-selected)] border-l-2 border-l-[var(--accent-color)] cursor-pointer paper-row" data-status="inbox" onclick="window.location='paper.html'">
+            <td class="w-8 p-3 text-center"><input class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" type="checkbox" onclick="event.stopPropagation()"/></td>
+            <td class="p-3"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">Inbox</span></td>
+            <td class="p-3 font-medium text-[var(--text-primary)]">Agentic Workflow Orchestration in Scientific Research</td>
+            <td class="p-3 text-[var(--text-secondary)] truncate max-w-[200px]">Chen, Doe, Smith</td>
+            <td class="p-3 text-[var(--text-secondary)]">2024</td>
+            <td class="p-3 text-[var(--text-secondary)]">Nature Machine Intel.</td>
+            <td class="p-3">
+              <a href="proposals.html" onclick="event.stopPropagation()" class="flex items-center gap-1 text-xs text-purple-600 font-medium bg-purple-50 px-2 py-0.5 rounded inline-flex hover:bg-purple-100">
+                <span class="material-symbols-outlined !text-sm">smart_toy</span> Run #42
+              </a>
+            </td>
+          </tr>
+          <tr class="hover:bg-[var(--row-hover)] cursor-pointer group paper-row" data-status="read" onclick="window.location='paper.html'">
+            <td class="w-8 p-3 text-center"><input class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 opacity-0 group-hover:opacity-100" type="checkbox" onclick="event.stopPropagation()"/></td>
+            <td class="p-3"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Read</span></td>
+            <td class="p-3 font-medium text-[var(--text-primary)]">Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</td>
+            <td class="p-3 text-[var(--text-secondary)] truncate max-w-[200px]">Lewis et al.</td>
+            <td class="p-3 text-[var(--text-secondary)]">2020</td>
+            <td class="p-3 text-[var(--text-secondary)]">NeurIPS</td>
+            <td class="p-3"><div class="flex items-center gap-1 text-xs text-[var(--text-tertiary)]"><span class="material-symbols-outlined !text-sm">link</span> Crossref</div></td>
+          </tr>
+          <tr class="hover:bg-[var(--row-hover)] cursor-pointer group paper-row" data-status="read" onclick="window.location='paper.html'">
+            <td class="w-8 p-3 text-center"><input class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 opacity-0 group-hover:opacity-100" type="checkbox" onclick="event.stopPropagation()"/></td>
+            <td class="p-3"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Read</span></td>
+            <td class="p-3 font-medium text-[var(--text-primary)]">Toolformer: Language Models Can Teach Themselves to Use Tools</td>
+            <td class="p-3 text-[var(--text-secondary)] truncate max-w-[200px]">Schick et al.</td>
+            <td class="p-3 text-[var(--text-secondary)]">2023</td>
+            <td class="p-3 text-[var(--text-secondary)]">NeurIPS</td>
+            <td class="p-3"><div class="flex items-center gap-1 text-xs text-[var(--text-tertiary)]"><span class="material-symbols-outlined !text-sm">upload_file</span> Manual PDF</div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="h-10 border-t border-[var(--border-color)] bg-[var(--bg-primary)] flex items-center justify-between px-4 shrink-0 text-xs text-[var(--text-secondary)]">
+      <span id="row-count">4 items</span>
+      <div class="flex items-center gap-2">
+        <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded disabled:opacity-50"><span class="material-symbols-outlined !text-lg">chevron_left</span></button>
+        <span>Page 1 of 1</span>
+        <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded disabled:opacity-50"><span class="material-symbols-outlined !text-lg">chevron_right</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Detail panel -->
+  <aside class="w-80 bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col shrink-0 shadow-[-4px_0_15px_rgba(0,0,0,0.03)] z-20">
+    <div class="p-4 border-b border-[var(--border-color)] flex flex-col gap-3">
+      <div class="flex justify-between items-start">
+        <div class="flex gap-2 text-xs font-medium">
+          <span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded">Article</span>
+          <span class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded flex items-center gap-1">
+            <span class="material-symbols-outlined !text-[14px]">smart_toy</span> Suggested
+          </span>
+        </div>
+        <button class="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <h2 class="text-base font-bold text-[var(--text-primary)] leading-tight">Agentic Workflow Orchestration in Scientific Research</h2>
+      <p class="text-[var(--text-secondary)]">Chen A., Doe J., Smith R.</p>
+      <div class="flex gap-2 mt-1">
+        <a href="paper.html" class="flex-1 bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white py-1.5 rounded-md flex items-center justify-center gap-2 font-medium transition-colors">
+          <span class="material-symbols-outlined !text-[18px]">picture_as_pdf</span>
+          View PDF
+        </a>
+        <button class="p-1.5 border border-[var(--border-color)] rounded-md hover:bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
+          <span class="material-symbols-outlined">more_horiz</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Detail tabs -->
+    <div class="flex border-b border-[var(--border-color)]" id="detail-tabs">
+      <button onclick="setDetailTab(this, 'info')" class="flex-1 py-2 text-center text-sm font-medium border-b-2 border-[var(--accent-color)] text-[var(--accent-color)] detail-tab">Info</button>
+      <button onclick="setDetailTab(this, 'notes')" class="flex-1 py-2 text-center text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] detail-tab">Notes</button>
+      <button onclick="setDetailTab(this, 'graph')" class="flex-1 py-2 text-center text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] detail-tab">Graph</button>
+    </div>
+
+    <div class="flex-1 pane-scroll p-4 space-y-6" id="detail-info">
+      <section>
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-3">Metadata</h3>
+        <div class="space-y-2">
+          <div class="grid grid-cols-3 text-sm"><span class="text-[var(--text-tertiary)]">Year</span><span class="col-span-2 text-[var(--text-primary)]">2024</span></div>
+          <div class="grid grid-cols-3 text-sm"><span class="text-[var(--text-tertiary)]">Venue</span><span class="col-span-2 text-[var(--text-primary)]">Nature Machine Intelligence</span></div>
+          <div class="grid grid-cols-3 text-sm"><span class="text-[var(--text-tertiary)]">DOI</span><span class="col-span-2 text-[var(--accent-color)] hover:underline cursor-pointer">10.1038/s42256-024-0000-x</span></div>
+        </div>
+      </section>
+
+      <section class="bg-purple-50 p-3 rounded-lg border border-purple-100">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-purple-800 mb-2 flex items-center gap-1">
+          <span class="material-symbols-outlined !text-[14px]">history</span> Provenance
+        </h3>
+        <p class="text-xs text-purple-900 mb-2">Added by <strong>Research Planner Agent</strong> during Run #42</p>
+        <div class="text-[11px] text-purple-700 bg-white p-2 rounded border border-purple-200 font-mono">
+          Prompt context: "Find recent literature on integrating LLM tool use with durable execution frameworks."
+        </div>
+        <a href="proposals.html" class="mt-2 block text-xs text-purple-700 font-medium hover:underline">View Workflow Run →</a>
+      </section>
+
+      <section>
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-2">Abstract</h3>
+        <p class="text-xs text-[var(--text-primary)] leading-relaxed line-clamp-4 relative group cursor-pointer">
+          We present a novel architecture for orchestrating autonomous research agents using durable execution frameworks. Unlike reactive chat-based agents, our system treats multi-step reasoning and tool use as stateful, recoverable workflows. By integrating a collaborative reference manager directly into the agent's execution plane, we demonstrate…
+          <span class="absolute bottom-0 right-0 bg-gradient-to-l from-white pl-8 group-hover:hidden text-[var(--accent-color)] font-medium">Read more</span>
+        </p>
+      </section>
+
+      <section>
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Tags</h3>
+          <button class="text-[var(--accent-color)] hover:underline text-xs"><span class="material-symbols-outlined !text-[14px] align-middle">add</span></button>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)] group cursor-pointer hover:bg-gray-200">
+            durable-execution <span class="material-symbols-outlined !text-[12px] ml-1 opacity-0 group-hover:opacity-100">close</span>
+          </span>
+          <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)] group cursor-pointer hover:bg-gray-200">
+            agent-orchestration <span class="material-symbols-outlined !text-[12px] ml-1 opacity-0 group-hover:opacity-100">close</span>
+          </span>
+          <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-purple-100 text-purple-800 group cursor-pointer border border-purple-200">auto-tagged</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- Notes tab content (hidden) -->
+    <div class="flex-1 pane-scroll p-4 hidden" id="detail-notes">
+      <p class="text-sm text-[var(--text-secondary)] italic">No notes yet. Select text in the PDF viewer to add a note.</p>
+      <a href="paper.html" class="mt-4 inline-flex items-center gap-1 text-xs text-[var(--accent-color)] font-medium hover:underline">
+        <span class="material-symbols-outlined !text-sm">open_in_new</span> Open in PDF reader
+      </a>
+    </div>
+
+    <!-- Graph tab content (hidden) -->
+    <div class="flex-1 pane-scroll p-4 hidden" id="detail-graph">
+      <p class="text-sm text-[var(--text-secondary)] italic">Citation graph coming soon.</p>
+    </div>
+  </aside>
+</main>
+
+<script>
+  // Filter tabs
+  function setFilter(btn, status) {
+    document.querySelectorAll('.filter-tab').forEach(b => {
+      b.classList.remove('bg-[var(--bg-tertiary)]', 'text-[var(--text-primary)]');
+      b.classList.add('text-[var(--text-secondary)]');
+    });
+    btn.classList.add('bg-[var(--bg-tertiary)]', 'text-[var(--text-primary)]');
+    btn.classList.remove('text-[var(--text-secondary)]');
+
+    const rows = document.querySelectorAll('.paper-row');
+    let visible = 0;
+    rows.forEach(row => {
+      const show = status === 'all' || row.dataset.status === status;
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    document.getElementById('row-count').textContent = visible + ' item' + (visible !== 1 ? 's' : '');
+  }
+
+  // Detail tabs
+  function setDetailTab(btn, tab) {
+    document.querySelectorAll('.detail-tab').forEach(b => {
+      b.classList.remove('border-b-2', 'border-[var(--accent-color)]', 'text-[var(--accent-color)]');
+      b.classList.add('text-[var(--text-secondary)]');
+    });
+    btn.classList.add('border-b-2', 'border-[var(--accent-color)]', 'text-[var(--accent-color)]');
+    btn.classList.remove('text-[var(--text-secondary)]');
+    ['info', 'notes', 'graph'].forEach(t => {
+      document.getElementById('detail-' + t).classList.toggle('hidden', t !== tab);
+    });
+  }
+
+  // Collection expand/collapse
+  function toggleCollection(childrenId, el) {
+    const children = document.getElementById(childrenId);
+    const arrow = el.querySelector('.material-symbols-outlined');
+    const collapsed = children.classList.contains('hidden');
+    children.classList.toggle('hidden', !collapsed);
+    arrow.textContent = collapsed ? 'expand_more' : 'chevron_right';
+  }
+
+  // Select all
+  function toggleAll(cb) {
+    document.querySelectorAll('#paper-rows input[type=checkbox]').forEach(c => c.checked = cb.checked);
+  }
+
+  // Search filter
+  function filterRows() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    const rows = document.querySelectorAll('.paper-row');
+    let visible = 0;
+    rows.forEach(row => {
+      const text = row.textContent.toLowerCase();
+      const show = text.includes(q);
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    document.getElementById('row-count').textContent = visible + ' item' + (visible !== 1 ? 's' : '');
+  }
+</script>
+</body></html>

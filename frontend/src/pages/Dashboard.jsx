@@ -1,0 +1,174 @@
+import { Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { activityApi, runsApi } from '../services/api'
+
+function Icon({ name, className = '' }) {
+  return <span className={`material-symbols-outlined ${className}`}>{name}</span>
+}
+
+function StatCard({ icon, label, value, sub, pulse }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5">
+      <div className="flex items-start justify-between mb-3">
+        <div className="p-2 bg-blue-50 rounded-lg">
+          <Icon name={icon} className="text-blue-500 text-[22px]" />
+        </div>
+        {pulse && (
+          <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            Live
+          </span>
+        )}
+      </div>
+      <p className="text-2xl font-bold text-slate-900">{value}</p>
+      <p className="text-sm text-slate-500 mt-0.5">{label}</p>
+      {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+    </div>
+  )
+}
+
+function ActivityItem({ item }) {
+  return (
+    <div className="flex gap-3 py-4 border-b border-slate-100 last:border-0">
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${item.iconBg}`}>
+        <Icon name={item.icon} className={`text-[16px] ${item.iconColor}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-medium text-slate-800">{item.title}</p>
+          <span className="text-xs text-slate-400 flex-shrink-0">{item.time}</span>
+        </div>
+        {item.detail && <p className="text-sm text-slate-500 mt-0.5">{item.detail}</p>}
+        {item.badges && (
+          <div className="flex gap-1.5 mt-1.5">
+            {item.badges.map(b => (
+              <span key={b} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{b}</span>
+            ))}
+          </div>
+        )}
+        {item.running && (
+          <div className="mt-2 space-y-1">
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>{item.currentStep}</span>
+              <span>{item.progress}%</span>
+            </div>
+            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all"
+                style={{ width: `${item.progress}%` }}
+              />
+            </div>
+          </div>
+        )}
+        {item.action && (
+          <Link
+            to={item.action.href}
+            className="inline-flex items-center gap-1 mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
+          >
+            {item.action.label}
+            <Icon name="arrow_forward" className="text-[14px]" />
+          </Link>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4 px-5 py-4">
+      {[1, 2, 3].map(i => (
+        <div key={i} className="flex gap-3">
+          <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 bg-slate-200 rounded w-3/4" />
+            <div className="h-3 bg-slate-200 rounded w-1/2" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function Dashboard() {
+  const [tab, setTab] = useState('all')
+  const [activity, setActivity] = useState([])
+  const [runs, setRuns] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    Promise.all([activityApi.list(), runsApi.list()])
+      .then(([activityData, runsData]) => {
+        setActivity(activityData)
+        setRuns(runsData)
+      })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const filtered = tab === 'all' ? activity : activity.filter(a => a.type === tab)
+  const runningCount = runs.filter(r => r.status === 'running').length
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+        <p className="text-slate-500 mt-1">Your research activity at a glance.</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <StatCard icon="collections_bookmark" label="Total Papers" value="1,248" sub="Across 8 collections" />
+        <StatCard
+          icon="smart_toy"
+          label="Active Workflows"
+          value={runningCount}
+          pulse={runningCount > 0}
+          sub={runningCount > 0 ? `${runningCount} running now` : 'None running'}
+        />
+      </div>
+
+      {/* Activity Feed */}
+      <div className="bg-white rounded-xl border border-slate-200">
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
+          <h2 className="text-base font-semibold text-slate-800">Recent Activity</h2>
+          <div className="flex bg-slate-100 rounded-lg p-0.5 text-sm">
+            {['all', 'agents', 'human'].map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-3 py-1 rounded-md font-medium transition-colors capitalize ${
+                  tab === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t === 'agents' ? 'Agents' : t === 'human' ? 'Human' : 'All'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div className="px-5 py-4 text-sm text-red-600 bg-red-50 border-b border-red-100">
+            Failed to load activity: {error}
+          </div>
+        )}
+
+        <div className="px-5 divide-y divide-slate-100">
+          {loading ? (
+            <LoadingSkeleton />
+          ) : filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-400">No activity to show.</p>
+          ) : (
+            filtered.map(item => <ActivityItem key={item.id} item={item} />)
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

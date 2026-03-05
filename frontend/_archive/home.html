@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ResearchOS — Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<style type="text/tailwindcss">
+    :root {
+        --primary-bg: #f8fafc;
+        --sidebar-bg: #1e293b;
+        --sidebar-hover: #334155;
+        --sidebar-text: #cbd5e1;
+        --sidebar-text-active: #ffffff;
+        --accent-color: #3b82f6;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+        --agent-color: #8b5cf6;
+    }
+    body { font-family: 'Inter', sans-serif; background-color: var(--primary-bg); color: var(--text-main); }
+    .icon-sm { font-size: 18px; }
+    .icon-md { font-size: 20px; }
+    .icon-lg { font-size: 24px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: #64748b; }
+</style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex bg-slate-50">
+
+<!-- Sidebar -->
+<aside class="w-64 bg-[var(--sidebar-bg)] text-[var(--sidebar-text)] flex flex-col h-full flex-shrink-0 border-r border-slate-700">
+  <div class="h-16 flex items-center px-4 border-b border-slate-700">
+    <span class="material-symbols-outlined text-[var(--accent-color)] mr-2 icon-lg">account_tree</span>
+    <span class="font-semibold text-lg text-white tracking-wide">ResearchOS</span>
+  </div>
+
+  <div class="flex-1 overflow-y-auto custom-scrollbar py-4 px-3 flex flex-col gap-6">
+
+    <!-- Library -->
+    <div>
+      <div class="flex items-center justify-between px-2 mb-2 group">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Library</span>
+        <button class="text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+          <span class="material-symbols-outlined icon-sm">add</span>
+        </button>
+      </div>
+      <ul class="space-y-1">
+        <li>
+          <a href="home.html" class="flex items-center px-2 py-1.5 rounded bg-[var(--sidebar-hover)] text-[var(--sidebar-text-active)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-blue-400">home</span>
+            <span class="text-sm font-medium">Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a href="library.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-yellow-400">library_books</span>
+            <span class="text-sm">My Library</span>
+          </a>
+        </li>
+        <li>
+          <div id="ml-folder" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)] cursor-pointer" onclick="toggleFolder()">
+            <span id="ml-arrow" class="material-symbols-outlined icon-sm mr-1 text-slate-400 transition-transform">arrow_drop_down</span>
+            <span class="material-symbols-outlined icon-sm mr-2 text-blue-400">folder</span>
+            <span class="text-sm">Machine Learning</span>
+          </div>
+          <ul id="ml-children" class="pl-7 space-y-1 mt-1">
+            <li>
+              <a href="library.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+                <span class="material-symbols-outlined icon-sm mr-2 text-slate-400">folder</span>
+                <span class="text-sm">Transformers</span>
+              </a>
+            </li>
+            <li>
+              <a href="library.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+                <span class="material-symbols-outlined icon-sm mr-2 text-slate-400">folder</span>
+                <span class="text-sm">RLHF</span>
+              </a>
+            </li>
+          </ul>
+        </li>
+        <li>
+          <a href="library.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)] pl-7">
+            <span class="material-symbols-outlined icon-sm mr-2 text-emerald-400">folder</span>
+            <span class="text-sm">Neuroscience</span>
+          </a>
+        </li>
+        <li>
+          <a href="library.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)] pl-7">
+            <span class="material-symbols-outlined icon-sm mr-2 text-rose-400">folder</span>
+            <span class="text-sm">To Read</span>
+            <span class="ml-auto bg-slate-700 text-xs px-1.5 py-0.5 rounded-full">12</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Agent Workflows -->
+    <div>
+      <div class="flex items-center justify-between px-2 mb-2 group">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Agent Workflows</span>
+        <button class="text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+          <span class="material-symbols-outlined icon-sm">add</span>
+        </button>
+      </div>
+      <ul class="space-y-1">
+        <li>
+          <a href="agents.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-[var(--agent-color)]">smart_toy</span>
+            <span class="text-sm">Workflow Catalog</span>
+          </a>
+        </li>
+        <li>
+          <a href="proposals.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-[var(--agent-color)]">pending_actions</span>
+            <span class="text-sm">Agent Proposals</span>
+            <span class="ml-auto bg-slate-700 text-xs px-1.5 py-0.5 rounded-full text-purple-300">3</span>
+          </a>
+        </li>
+        <li>
+          <a href="agents.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-[var(--agent-color)]">memory</span>
+            <span class="text-sm">Daily arXiv Scanner</span>
+            <span class="ml-auto w-2 h-2 rounded-full bg-green-500"></span>
+          </a>
+        </li>
+        <li>
+          <a href="agents.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-[var(--agent-color)]">psychology</span>
+            <span class="text-sm">Experiment Planner</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Tags -->
+    <div>
+      <div class="flex items-center justify-between px-2 mb-2 group">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tags</span>
+      </div>
+      <div class="px-2 flex flex-wrap gap-2">
+        <a href="library.html" class="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-600">#survey</a>
+        <a href="library.html" class="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-600">#important</a>
+        <a href="library.html" class="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-600">#methods</a>
+        <a href="library.html" class="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-600">#dataset</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- User profile -->
+  <div class="p-4 border-t border-slate-700 hover:bg-[var(--sidebar-hover)] cursor-pointer transition-colors">
+    <div class="flex items-center">
+      <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm mr-3">DR</div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-white truncate">Dr. Researcher</p>
+        <p class="text-xs text-slate-400 truncate">Workspace: Lab Alpha</p>
+      </div>
+      <span class="material-symbols-outlined icon-sm text-slate-400">more_vert</span>
+    </div>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="flex-1 flex flex-col h-full min-w-0">
+  <!-- Header -->
+  <header class="h-16 bg-white border-b border-[var(--border-color)] flex items-center justify-between px-6 shrink-0 z-10">
+    <div class="flex items-center text-sm font-medium text-[var(--text-muted)] hidden md:flex">
+      <span class="material-symbols-outlined icon-sm mr-1">home</span>
+      <span class="mx-2">/</span>
+      <span class="text-[var(--text-main)]">Dashboard</span>
+    </div>
+    <div class="flex-1 max-w-2xl mx-4">
+      <div class="relative group">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <span class="material-symbols-outlined text-slate-400 icon-md group-focus-within:text-[var(--accent-color)]">search</span>
+        </div>
+        <input class="block w-full pl-10 pr-12 py-2 border border-slate-300 rounded-lg leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)] sm:text-sm transition-all" placeholder="Search library lexically or semantically…" type="text"/>
+        <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
+          <span class="text-xs font-semibold text-slate-400 border border-slate-200 rounded px-1.5 py-0.5 bg-white">⌘K</span>
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button class="text-slate-500 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100 transition-colors relative">
+        <span class="material-symbols-outlined icon-md">notifications</span>
+        <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+      </button>
+      <div class="relative inline-block text-left">
+        <button class="inline-flex items-center justify-center rounded-md border border-transparent bg-[var(--accent-color)] px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" type="button">
+          <span class="material-symbols-outlined icon-sm mr-1.5">add</span>
+          Quick Add
+          <span class="material-symbols-outlined icon-sm ml-1 -mr-1">arrow_drop_down</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Body -->
+  <div class="flex-1 overflow-auto p-6">
+    <div class="max-w-5xl mx-auto space-y-6">
+
+      <!-- Page title + stats -->
+      <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900">Dashboard</h1>
+          <p class="text-sm text-[var(--text-muted)] mt-1">Overview of your library and agent activities.</p>
+        </div>
+        <div class="flex gap-4">
+          <a href="library.html" class="bg-white px-4 py-2 rounded-lg border border-[var(--border-color)] shadow-sm hover:shadow-md transition-shadow">
+            <div class="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wide">Total Papers</div>
+            <div class="text-xl font-bold text-slate-800">1,248</div>
+          </a>
+          <a href="agents.html" class="bg-white px-4 py-2 rounded-lg border border-[var(--border-color)] shadow-sm hover:shadow-md transition-shadow">
+            <div class="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wide">Active Workflows</div>
+            <div class="text-xl font-bold text-[var(--agent-color)] flex items-center">
+              2
+              <span class="relative flex h-2.5 w-2.5 ml-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-purple-500"></span>
+              </span>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <!-- Activity feed -->
+      <div class="bg-white rounded-xl border border-[var(--border-color)] shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-slate-50/50">
+          <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+            <span class="material-symbols-outlined icon-md mr-2 text-slate-500">history</span>
+            Recent Activity
+          </h2>
+          <div class="flex gap-2 text-sm" id="activity-tabs">
+            <button onclick="setActivityTab(this, 'all')" class="px-3 py-1 bg-white border border-slate-200 rounded-md text-slate-600 font-medium hover:bg-slate-50 tab-btn active-tab-btn">All</button>
+            <button onclick="setActivityTab(this, 'agents')" class="px-3 py-1 bg-transparent text-slate-500 font-medium hover:text-slate-700 tab-btn">Agents</button>
+            <button onclick="setActivityTab(this, 'human')" class="px-3 py-1 bg-transparent text-slate-500 font-medium hover:text-slate-700 tab-btn">Human</button>
+          </div>
+        </div>
+
+        <div class="divide-y divide-[var(--border-color)]">
+
+          <!-- Agent run completion -->
+          <div class="p-5 hover:bg-slate-50 transition-colors activity-item" data-source="agents">
+            <div class="flex gap-4">
+              <div class="mt-0.5 shrink-0">
+                <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center border border-purple-200">
+                  <span class="material-symbols-outlined text-[var(--agent-color)]">smart_toy</span>
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-start mb-1">
+                  <p class="text-sm font-medium text-slate-900">
+                    <a href="agents.html" class="font-bold text-[var(--agent-color)] hover:underline">Daily arXiv Scanner</a> completed run
+                  </p>
+                  <span class="text-xs text-slate-500 whitespace-nowrap ml-2">10 mins ago</span>
+                </div>
+                <p class="text-sm text-slate-600 mb-2">
+                  Scanned 142 new preprints matching "LLM alignment". Proposed 3 new papers to add to <span class="text-slate-800 font-medium bg-slate-100 px-1.5 py-0.5 rounded text-xs">RLHF</span> collection.
+                </p>
+                <div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm mt-3">
+                  <div class="flex justify-between items-center mb-2">
+                    <h4 class="text-xs font-semibold uppercase text-slate-500 tracking-wider">Proposed Additions (3)</h4>
+                    <div class="flex gap-2">
+                      <button class="text-xs font-medium text-red-600 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">Reject All</button>
+                      <a href="proposals.html" class="text-xs font-medium text-white bg-[var(--agent-color)] hover:bg-purple-600 px-3 py-1 rounded shadow-sm">Review &amp; Approve</a>
+                    </div>
+                  </div>
+                  <ul class="space-y-2">
+                    <li class="flex items-start gap-2 text-sm">
+                      <span class="material-symbols-outlined icon-sm text-green-500 mt-0.5 shrink-0">add_circle</span>
+                      <div>
+                        <a href="paper.html" class="font-medium text-blue-600 hover:underline">Direct Preference Optimization: Your Language Model is Secretly a Reward Model</a>
+                        <span class="text-slate-500 text-xs block mt-0.5">Rafailov et al., 2023 • arXiv:2305.18290</span>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Human added paper -->
+          <div class="p-5 hover:bg-slate-50 transition-colors activity-item" data-source="human">
+            <div class="flex gap-4">
+              <div class="mt-0.5 shrink-0">
+                <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center border border-blue-200">
+                  <span class="material-symbols-outlined text-blue-600">person</span>
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-start mb-1">
+                  <p class="text-sm font-medium text-slate-900">
+                    <span class="font-bold">You</span> added a paper via DOI
+                  </p>
+                  <span class="text-xs text-slate-500 whitespace-nowrap ml-2">2 hours ago</span>
+                </div>
+                <div class="mt-2 flex items-start gap-3 bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+                  <div class="shrink-0 pt-1">
+                    <span class="material-symbols-outlined text-slate-400">article</span>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <a href="paper.html" class="text-sm font-semibold text-slate-900 hover:text-blue-600 hover:underline">Attention Is All You Need</a>
+                    <p class="text-xs text-slate-500 mt-0.5 truncate">Vaswani et al. • NIPS 2017</p>
+                    <div class="flex gap-2 mt-2">
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                        <span class="material-symbols-outlined text-[10px] mr-1">check</span> PDF Extracted
+                      </span>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                        <span class="material-symbols-outlined text-[10px] mr-1">search</span> Metadata enriched (Crossref)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Agent running -->
+          <div class="p-5 hover:bg-slate-50 transition-colors activity-item" data-source="agents">
+            <div class="flex gap-4">
+              <div class="mt-0.5 shrink-0">
+                <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center border border-amber-200 relative">
+                  <span class="material-symbols-outlined text-amber-600 animate-spin" style="animation-duration: 3s;">settings</span>
+                  <span class="absolute -bottom-1 -right-1 flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-amber-500 border-2 border-white"></span>
+                  </span>
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-start mb-1">
+                  <p class="text-sm font-medium text-slate-900">
+                    <a href="agents.html" class="font-bold text-amber-600 hover:underline">Lit Review Generator</a> is running
+                  </p>
+                  <span class="text-xs text-slate-500 whitespace-nowrap ml-2">Started 45 mins ago</span>
+                </div>
+                <p class="text-sm text-slate-600 mb-2">
+                  Generating literature review draft for "Prompt Engineering Techniques 2023-2024".
+                </p>
+                <div class="mt-3 space-y-2">
+                  <div class="flex items-center text-xs text-slate-500">
+                    <span class="material-symbols-outlined icon-sm text-green-500 mr-2">check_circle</span>
+                    Step 1: Generated 15 search queries
+                  </div>
+                  <div class="flex items-center text-xs text-slate-500">
+                    <span class="material-symbols-outlined icon-sm text-green-500 mr-2">check_circle</span>
+                    Step 2: Retrieved 240 candidate papers (OpenAlex)
+                  </div>
+                  <div class="flex items-center text-xs font-medium text-slate-800">
+                    <span class="material-symbols-outlined icon-sm text-amber-500 mr-2 animate-pulse">hourglass_bottom</span>
+                    Step 3: Screening abstracts against constraints… (65% complete)
+                  </div>
+                  <div class="w-full bg-slate-200 rounded-full h-1.5 mt-2">
+                    <div class="bg-amber-500 h-1.5 rounded-full" style="width: 65%"></div>
+                  </div>
+                </div>
+                <div class="mt-3 text-right">
+                  <a href="proposals.html" class="text-xs text-[var(--agent-color)] font-medium hover:underline">View Workflow Run →</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="px-6 py-3 border-t border-[var(--border-color)] bg-slate-50 text-center">
+          <a href="library.html" class="text-sm font-medium text-[var(--accent-color)] hover:text-blue-700">View All Activity</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<script>
+  // Folder expand/collapse
+  function toggleFolder() {
+    const children = document.getElementById('ml-children');
+    const arrow = document.getElementById('ml-arrow');
+    const collapsed = children.style.display === 'none';
+    children.style.display = collapsed ? '' : 'none';
+    arrow.textContent = collapsed ? 'arrow_drop_down' : 'arrow_right';
+  }
+
+  // Activity tab filter
+  function setActivityTab(btn, source) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.remove('bg-white', 'border', 'border-slate-200', 'text-slate-600');
+      b.classList.add('text-slate-500');
+    });
+    btn.classList.add('bg-white', 'border', 'border-slate-200', 'text-slate-600');
+    btn.classList.remove('text-slate-500');
+
+    document.querySelectorAll('.activity-item').forEach(item => {
+      item.style.display = (source === 'all' || item.dataset.source === source) ? '' : 'none';
+    });
+  }
+</script>
+</body></html>

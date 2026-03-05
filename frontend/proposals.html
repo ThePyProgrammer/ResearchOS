@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ResearchOS — Agent Proposals</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style type="text/tailwindcss">
+    :root {
+        --primary-bg: #f8fafc;
+        --sidebar-bg: #1e293b;
+        --sidebar-hover: #334155;
+        --sidebar-text: #cbd5e1;
+        --sidebar-text-active: #ffffff;
+        --border-color: #e2e8f0;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --accent-blue: #3b82f6;
+        --accent-green: #10b981;
+        --accent-red: #ef4444;
+        --accent-purple: #8b5cf6;
+    }
+    body { font-family: 'Inter', sans-serif; background-color: var(--primary-bg); color: var(--text-main); }
+    .icon-sm { font-size: 18px; }
+    .icon-lg { font-size: 24px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    .paper-rejected { opacity: 0.55; }
+    .paper-rejected td { text-decoration: line-through; text-decoration-color: #9ca3af; }
+    .paper-approved { background-color: #f0fdf4; }
+</style>
+</head>
+<body class="h-screen flex overflow-hidden text-sm">
+
+<!-- Dark sidebar -->
+<aside class="w-64 bg-[var(--sidebar-bg)] text-[var(--sidebar-text)] flex flex-col h-full flex-shrink-0 border-r border-slate-700">
+  <div class="h-16 flex items-center px-4 border-b border-slate-700">
+    <span class="material-symbols-outlined text-[var(--accent-blue)] mr-2 icon-lg">account_tree</span>
+    <span class="font-semibold text-lg text-white tracking-wide">ResearchOS</span>
+  </div>
+  <div class="flex-1 overflow-y-auto custom-scrollbar py-4 px-3 flex flex-col gap-6">
+
+    <!-- Library -->
+    <div>
+      <div class="px-2 mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Library</span>
+      </div>
+      <ul class="space-y-1">
+        <li>
+          <a href="home.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-blue-400">home</span>
+            <span class="text-sm">Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a href="library.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-yellow-400">library_books</span>
+            <span class="text-sm">All Papers</span>
+          </a>
+        </li>
+        <li>
+          <a href="library.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-slate-400">folder</span>
+            <span class="text-sm">LLM Reasoning</span>
+          </a>
+        </li>
+        <li>
+          <a href="library.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-slate-400">folder</span>
+            <span class="text-sm">Multi-Agent Systems</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Agents -->
+    <div>
+      <div class="flex items-center justify-between px-2 mb-2 group">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Agent Workflows</span>
+      </div>
+      <ul class="space-y-1">
+        <li>
+          <a href="agents.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-[var(--accent-purple)]">smart_toy</span>
+            <span class="text-sm">Workflow Catalog</span>
+          </a>
+        </li>
+        <li>
+          <a href="proposals.html" class="flex items-center px-2 py-1.5 rounded bg-[var(--sidebar-hover)] text-[var(--sidebar-text-active)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-[var(--accent-purple)]">pending_actions</span>
+            <span class="text-sm font-medium">Agent Proposals</span>
+            <span class="ml-auto bg-slate-600 text-xs px-1.5 py-0.5 rounded-full text-purple-300" id="badge-count">3</span>
+          </a>
+        </li>
+        <li>
+          <a href="agents.html" class="flex items-center px-2 py-1.5 rounded hover:bg-[var(--sidebar-hover)] text-[var(--sidebar-text)]">
+            <span class="material-symbols-outlined icon-sm mr-2 text-[var(--accent-purple)]">history</span>
+            <span class="text-sm">Run History</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Tags -->
+    <div>
+      <div class="px-2 mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tags</span>
+      </div>
+      <div class="px-2 flex flex-wrap gap-2">
+        <a href="library.html" class="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-600">#survey</a>
+        <a href="library.html" class="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-600">#important</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- User -->
+  <div class="p-4 border-t border-slate-700 hover:bg-[var(--sidebar-hover)] cursor-pointer transition-colors">
+    <div class="flex items-center">
+      <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm mr-3">DR</div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-white truncate">Dr. Researcher</p>
+        <p class="text-xs text-slate-400 truncate">Lab Admin</p>
+      </div>
+      <span class="material-symbols-outlined icon-sm text-slate-400">more_vert</span>
+    </div>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="flex-1 flex flex-col h-full overflow-hidden relative">
+  <header class="h-16 bg-white border-b border-[var(--border-color)] flex items-center justify-between px-6 shrink-0">
+    <div>
+      <h1 class="text-xl font-semibold flex items-center">
+        Review Proposal:
+        <span class="text-[var(--text-muted)] font-normal ml-2">Literature Sweep for "Multi-Agent Systems"</span>
+      </h1>
+      <p class="text-xs text-[var(--text-muted)] mt-0.5">Run ID: wrk_7a9b2c • Generated 2 hours ago by Agent Researcher</p>
+    </div>
+    <div class="flex items-center space-x-3">
+      <button onclick="rejectAll()" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 text-gray-700 transition-colors">
+        Reject All
+      </button>
+      <button onclick="approveAll()" class="px-4 py-2 bg-[var(--accent-blue)] text-white rounded-md text-sm font-medium hover:bg-blue-600 transition-colors shadow-sm flex items-center">
+        <span class="material-symbols-outlined text-[18px] mr-1">done_all</span>
+        Approve Batch (<span id="approve-count">12</span>)
+      </button>
+    </div>
+  </header>
+
+  <div class="flex-1 overflow-y-auto p-6 flex gap-6">
+
+    <!-- Proposals list -->
+    <div class="flex-1 flex flex-col space-y-4 max-w-4xl">
+
+      <!-- Toast notification (hidden) -->
+      <div id="toast" class="hidden fixed top-4 right-4 bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 text-sm font-medium">
+        <span class="material-symbols-outlined text-[18px]">check_circle</span>
+        <span id="toast-msg">Changes saved</span>
+      </div>
+
+      <div class="bg-white rounded-lg border border-[var(--border-color)] shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-[var(--border-color)] bg-gray-50 flex justify-between items-center">
+          <div class="flex items-center">
+            <span class="material-symbols-outlined text-[var(--accent-purple)] mr-2">difference</span>
+            <h2 class="font-medium text-sm text-gray-800">Proposed Diff: <span id="diff-count">+12</span> Papers</h2>
+          </div>
+          <div class="text-xs text-[var(--text-muted)] flex items-center gap-4">
+            <label class="flex items-center space-x-1 cursor-pointer">
+              <input id="select-all-cb" checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" type="checkbox" onchange="toggleSelectAll(this)"/>
+              <span>Select All</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="divide-y divide-[var(--border-color)]" id="proposals-list">
+
+          <!-- Paper 1: AutoGen -->
+          <div class="p-4 hover:bg-gray-50 transition-colors flex gap-4 proposal-item" id="paper-1" data-state="pending">
+            <div class="pt-1">
+              <input checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-1 row-checkbox" type="checkbox" onchange="updateCount()"/>
+            </div>
+            <div class="flex-1">
+              <div class="flex justify-between items-start mb-1">
+                <h3 class="text-base font-medium text-gray-900 leading-snug">AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation</h3>
+                <div class="flex gap-2 shrink-0 ml-4 action-btns">
+                  <button onclick="rejectPaper('paper-1')" class="text-[var(--accent-red)] hover:bg-red-50 p-1.5 rounded-md transition-colors" title="Reject">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                  </button>
+                  <button onclick="approvePaper('paper-1')" class="text-[var(--accent-green)] hover:bg-green-50 p-1.5 rounded-md transition-colors" title="Approve">
+                    <span class="material-symbols-outlined text-[20px]">check</span>
+                  </button>
+                </div>
+                <span class="hidden shrink-0 ml-4 state-badge"></span>
+              </div>
+              <p class="text-sm text-gray-600 mb-2">Qingyun Wu, Gagan Bansal, Jieyu Zhang, et al. • arXiv 2023</p>
+              <div class="bg-blue-50 rounded-md p-3 mb-3 border border-blue-100">
+                <div class="flex items-center mb-1">
+                  <span class="material-symbols-outlined text-[16px] text-[var(--accent-blue)] mr-1">psychology</span>
+                  <span class="text-xs font-semibold text-[var(--accent-blue)] uppercase tracking-wide">Agent Reasoning</span>
+                  <span class="ml-auto text-xs font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Relevance Score: 98/100</span>
+                </div>
+                <p class="text-sm text-gray-700 mt-1">
+                  Foundational paper for multi-agent LLM frameworks. Directly addresses the prompt's focus on "agent orchestration and conversation patterns." High citation count (1,200+) validates importance in the target domain.
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2 text-xs">
+                <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded-md border border-gray-200">DOI: 10.48550/arXiv.2308.08155</span>
+                <span class="px-2 py-1 bg-green-50 text-green-700 rounded-md border border-green-200 flex items-center"><span class="material-symbols-outlined text-[14px] mr-1">lock_open</span> Open Access PDF available</span>
+                <span class="px-2 py-1 bg-purple-50 text-purple-700 rounded-md border border-purple-200 flex items-center"><span class="material-symbols-outlined text-[14px] mr-1">sell</span> Proposed Tags: LLM, framework</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Paper 2: ChatDev -->
+          <div class="p-4 hover:bg-gray-50 transition-colors flex gap-4 proposal-item" id="paper-2" data-state="pending">
+            <div class="pt-1">
+              <input checked class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-1 row-checkbox" type="checkbox" onchange="updateCount()"/>
+            </div>
+            <div class="flex-1">
+              <div class="flex justify-between items-start mb-1">
+                <h3 class="text-base font-medium text-gray-900 leading-snug">ChatDev: Communicative Agents for Software Development</h3>
+                <div class="flex gap-2 shrink-0 ml-4 action-btns">
+                  <button onclick="rejectPaper('paper-2')" class="text-[var(--accent-red)] hover:bg-red-50 p-1.5 rounded-md transition-colors" title="Reject">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                  </button>
+                  <button onclick="approvePaper('paper-2')" class="text-[var(--accent-green)] hover:bg-green-50 p-1.5 rounded-md transition-colors" title="Approve">
+                    <span class="material-symbols-outlined text-[20px]">check</span>
+                  </button>
+                </div>
+                <span class="hidden shrink-0 ml-4 state-badge"></span>
+              </div>
+              <p class="text-sm text-gray-600 mb-2">Chen Qian, Xin Cong, Cheng Yang, et al. • ACL 2024</p>
+              <div class="bg-blue-50 rounded-md p-3 mb-3 border border-blue-100">
+                <div class="flex items-center mb-1">
+                  <span class="material-symbols-outlined text-[16px] text-[var(--accent-blue)] mr-1">psychology</span>
+                  <span class="text-xs font-semibold text-[var(--accent-blue)] uppercase tracking-wide">Agent Reasoning</span>
+                  <span class="ml-auto text-xs font-medium bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Relevance Score: 92/100</span>
+                </div>
+                <p class="text-sm text-gray-700 mt-1">
+                  Excellent practical implementation of role-playing agents in a specific domain (software). Illustrates the "waterfall model" mapped to agent workflows, providing a concrete architecture pattern useful for the current collection.
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2 text-xs">
+                <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded-md border border-gray-200">DOI: 10.18653/v1/2024.acl-long.412</span>
+                <span class="px-2 py-1 bg-green-50 text-green-700 rounded-md border border-green-200 flex items-center"><span class="material-symbols-outlined text-[14px] mr-1">lock_open</span> Open Access PDF available</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Paper 3: Generative Agents (pre-rejected) -->
+          <div class="p-4 hover:bg-gray-50 transition-colors flex gap-4 proposal-item" id="paper-3" data-state="rejected">
+            <div class="pt-1">
+              <input class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-1 row-checkbox" type="checkbox" onchange="updateCount()" disabled/>
+            </div>
+            <div class="flex-1 opacity-60">
+              <div class="flex justify-between items-start mb-1">
+                <h3 class="text-base font-medium text-gray-900 leading-snug line-through">Generative Agents: Interactive Simulacra of Human Behavior</h3>
+                <div class="hidden action-btns"></div>
+                <div class="shrink-0 ml-4 flex items-center gap-2">
+                  <span class="text-xs font-medium bg-red-100 text-red-800 px-2 py-1 rounded-md state-badge">Rejected</span>
+                  <button onclick="undoPaper('paper-3')" class="text-xs text-gray-500 hover:text-gray-700 underline">Undo</button>
+                </div>
+              </div>
+              <p class="text-sm text-gray-600 mb-2">Joon Sung Park, Joseph C. O'Brien, Carrie J. Cai, et al. • UIST 2023</p>
+              <div class="bg-gray-100 rounded-md p-3 mb-3 border border-gray-200">
+                <div class="flex items-center mb-1">
+                  <span class="material-symbols-outlined text-[16px] text-gray-500 mr-1">psychology</span>
+                  <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Agent Reasoning</span>
+                  <span class="ml-auto text-xs font-medium bg-gray-200 text-gray-800 px-2 py-0.5 rounded-full">Relevance Score: 85/100</span>
+                </div>
+                <p class="text-sm text-gray-600 mt-1">
+                  Highly cited paper on simulating social behaviors using LLM agents. Relevant to the broader concept of multi-agent interactions, though focuses more on simulation than task-oriented orchestration.
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="p-4 border-t border-[var(--border-color)] bg-gray-50 text-center">
+          <button class="text-sm font-medium text-[var(--accent-blue)] hover:text-blue-700">Show 9 more proposed papers…</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel: Run Details + Budget + Trace -->
+    <div class="w-80 shrink-0 flex flex-col space-y-4">
+
+      <!-- Run details -->
+      <div class="bg-white rounded-lg border border-[var(--border-color)] shadow-sm p-4">
+        <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center border-b border-[var(--border-color)] pb-2">
+          <span class="material-symbols-outlined text-[18px] mr-2 text-gray-500">info</span> Run Details
+        </h3>
+        <div class="space-y-3 text-sm">
+          <div>
+            <span class="text-[var(--text-muted)] block text-xs">Prompt Trigger</span>
+            <span class="font-medium text-gray-800">"Find recent papers (2023+) on multi-agent frameworks for task orchestration."</span>
+          </div>
+          <div>
+            <span class="text-[var(--text-muted)] block text-xs">Target Collection</span>
+            <a href="library.html" class="font-medium text-gray-800 flex items-center mt-0.5 hover:text-blue-600">
+              <span class="material-symbols-outlined text-[16px] mr-1 text-gray-400">folder</span>
+              Multi-Agent Systems
+            </a>
+          </div>
+          <div>
+            <span class="text-[var(--text-muted)] block text-xs">Constraints Applied</span>
+            <ul class="list-disc pl-4 mt-1 text-gray-700 text-xs space-y-0.5">
+              <li>Year &ge; 2023</li>
+              <li>Citation count &gt; 10</li>
+              <li>Must have DOI or arXiv ID</li>
+            </ul>
+          </div>
+          <div class="pt-2 border-t border-[var(--border-color)]">
+            <a href="agents.html" class="text-xs text-[var(--accent-blue)] font-medium hover:underline flex items-center gap-1">
+              <span class="material-symbols-outlined text-[14px]">arrow_back</span> Back to Workflow Catalog
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Budget & API Usage -->
+      <div class="bg-white rounded-lg border border-[var(--border-color)] shadow-sm p-4">
+        <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center border-b border-[var(--border-color)] pb-2">
+          <span class="material-symbols-outlined text-[18px] mr-2 text-gray-500">account_balance_wallet</span> Budget &amp; API Usage
+        </h3>
+        <div class="space-y-4 text-sm">
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-[var(--text-muted)]">LLM Tokens (GPT-4o)</span>
+              <span class="font-medium text-gray-800">$0.14</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-1.5">
+              <div class="bg-[var(--accent-purple)] h-1.5 rounded-full" style="width: 25%"></div>
+            </div>
+            <div class="text-[10px] text-gray-500 mt-1 text-right">~14,200 tokens</div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-[var(--text-muted)]">OpenAlex API</span>
+              <span class="font-medium text-gray-800">$0.02</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-1.5">
+              <div class="bg-blue-500 h-1.5 rounded-full" style="width: 15%"></div>
+            </div>
+            <div class="text-[10px] text-gray-500 mt-1 flex justify-between">
+              <span>150 list/search calls</span>
+              <span>Daily limit: $1.00</span>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-[var(--text-muted)]">Unpaywall Lookups</span>
+              <span class="font-medium text-gray-800">Free</span>
+            </div>
+            <div class="text-[10px] text-gray-500">45 items checked</div>
+          </div>
+          <div class="pt-2 border-t border-[var(--border-color)] flex justify-between items-center font-medium">
+            <span class="text-gray-900">Total Run Cost</span>
+            <span class="text-[var(--accent-green)]">$0.16</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Run Trace -->
+      <div class="bg-white rounded-lg border border-[var(--border-color)] shadow-sm p-4 flex-1">
+        <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center border-b border-[var(--border-color)] pb-2">
+          <span class="material-symbols-outlined text-[18px] mr-2 text-gray-500">history</span> Run Trace
+        </h3>
+        <div class="relative pl-4 space-y-4 mt-4 before:absolute before:inset-y-0 before:left-1.5 before:w-0.5 before:bg-gray-200">
+          <div class="relative text-xs">
+            <span class="absolute -left-5 top-1 h-2 w-2 rounded-full bg-green-500 border-2 border-white"></span>
+            <span class="font-medium text-gray-800 block">Query Generation</span>
+            <span class="text-gray-500">Agent formulated 3 search queries.</span>
+          </div>
+          <div class="relative text-xs">
+            <span class="absolute -left-5 top-1 h-2 w-2 rounded-full bg-green-500 border-2 border-white"></span>
+            <span class="font-medium text-gray-800 block">OpenAlex Search</span>
+            <span class="text-gray-500">Retrieved 45 candidate papers.</span>
+          </div>
+          <div class="relative text-xs">
+            <span class="absolute -left-5 top-1 h-2 w-2 rounded-full bg-green-500 border-2 border-white"></span>
+            <span class="font-medium text-gray-800 block">LLM Screening</span>
+            <span class="text-gray-500">Filtered to 12 highly relevant papers.</span>
+          </div>
+          <div class="relative text-xs">
+            <span class="absolute -left-5 top-1 h-2 w-2 rounded-full bg-[var(--accent-blue)] border-2 border-white"></span>
+            <span class="font-medium text-[var(--accent-blue)] block">Awaiting Approval</span>
+            <span class="text-gray-500">Pending user review to merge into library.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  // Per-paper actions
+  function approvePaper(id) {
+    const item = document.getElementById(id);
+    item.dataset.state = 'approved';
+    item.classList.add('paper-approved');
+    item.classList.remove('paper-rejected');
+    item.querySelectorAll('.action-btns').forEach(el => el.classList.add('hidden'));
+    const badge = item.querySelector('.state-badge');
+    badge.classList.remove('hidden');
+    badge.className = 'shrink-0 ml-4 state-badge text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-md';
+    badge.textContent = 'Approved';
+    // Add undo button
+    addUndoBtn(item, id);
+    syncCount();
+    showToast('Paper approved and queued for library merge');
+  }
+
+  function rejectPaper(id) {
+    const item = document.getElementById(id);
+    item.dataset.state = 'rejected';
+    item.classList.add('paper-rejected');
+    item.classList.remove('paper-approved');
+    item.querySelectorAll('.action-btns').forEach(el => el.classList.add('hidden'));
+    const badge = item.querySelector('.state-badge');
+    badge.classList.remove('hidden');
+    badge.className = 'shrink-0 ml-4 state-badge text-xs font-medium bg-red-100 text-red-800 px-2 py-1 rounded-md';
+    badge.textContent = 'Rejected';
+    const cb = item.querySelector('.row-checkbox');
+    if (cb) { cb.checked = false; cb.disabled = true; }
+    // Add undo button
+    addUndoBtn(item, id);
+    updateCount();
+    showToast('Paper rejected');
+  }
+
+  function undoPaper(id) {
+    const item = document.getElementById(id);
+    item.dataset.state = 'pending';
+    item.classList.remove('paper-approved', 'paper-rejected');
+    item.querySelectorAll('.action-btns').forEach(el => el.classList.remove('hidden'));
+    const badge = item.querySelector('.state-badge');
+    badge.classList.add('hidden');
+    const cb = item.querySelector('.row-checkbox');
+    if (cb) { cb.checked = true; cb.disabled = false; }
+    // Remove undo btn
+    const undoBtn = item.querySelector('.undo-btn');
+    if (undoBtn) undoBtn.remove();
+    syncCount();
+  }
+
+  function addUndoBtn(item, id) {
+    const existing = item.querySelector('.undo-btn');
+    if (existing) existing.remove();
+    // Find badge container and append undo
+    const badgeParent = item.querySelector('.state-badge').parentElement;
+    const undo = document.createElement('button');
+    undo.className = 'undo-btn text-xs text-gray-500 hover:text-gray-700 underline ml-1';
+    undo.textContent = 'Undo';
+    undo.onclick = () => undoPaper(id);
+    badgeParent.appendChild(undo);
+  }
+
+  function approveAll() {
+    document.querySelectorAll('.proposal-item').forEach(item => {
+      if (item.dataset.state === 'pending') approvePaper(item.id);
+    });
+    showToast('All pending papers approved');
+  }
+
+  function rejectAll() {
+    document.querySelectorAll('.proposal-item').forEach(item => {
+      if (item.dataset.state === 'pending') rejectPaper(item.id);
+    });
+    showToast('All pending papers rejected');
+  }
+
+  function toggleSelectAll(cb) {
+    document.querySelectorAll('.row-checkbox:not(:disabled)').forEach(c => c.checked = cb.checked);
+    updateCount();
+  }
+
+  function updateCount() {
+    const checked = document.querySelectorAll('.row-checkbox:checked').length;
+    document.getElementById('approve-count').textContent = checked;
+  }
+
+  function syncCount() {
+    const pending = document.querySelectorAll('.proposal-item[data-state="pending"]').length;
+    document.getElementById('badge-count').textContent = pending;
+    document.getElementById('approve-count').textContent = pending;
+    document.getElementById('diff-count').textContent = '+' + pending;
+  }
+
+  // Toast
+  let toastTimer;
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toast-msg').textContent = msg;
+    toast.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.add('hidden'), 3000);
+  }
+</script>
+</body></html>
