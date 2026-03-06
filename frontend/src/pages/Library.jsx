@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, collectionsApi, searchApi } from '../services/api'
 
 function Icon({ name, className = '' }) {
@@ -608,6 +608,7 @@ export default function Library() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
 
   const urlQuery = searchParams.get('q') || ''
   const urlMode = searchParams.get('mode') || 'lexical'
@@ -639,7 +640,7 @@ export default function Library() {
       .then(data => setPapers(data))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }, [activeCollection, filterTab, urlQuery, urlMode])
+  }, [activeCollection, filterTab, urlQuery, urlMode, location.key])
 
   const handleStatusChange = (paperId, newStatus) => {
     setPapers(prev => prev.map(p => p.id === paperId ? { ...p, status: newStatus } : p))
