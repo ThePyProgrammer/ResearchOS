@@ -219,7 +219,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
 }
 
 export default function Library() {
-  const { activeLibraryId, refreshCollections } = useLibrary() // derived from ?lib= URL param
+  const { activeLibraryId, refreshCollections } = useLibrary()
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedPaper, setSelectedPaper] = useState(null)
   const [papers, setPapers] = useState([])
@@ -238,12 +238,9 @@ export default function Library() {
   const filterTab = searchParams.get('status') || 'all'
   const urlQuery = searchParams.get('q') || ''
   const urlMode = searchParams.get('mode') || 'lexical'
-  const libParam = searchParams.get('lib')
-
   // Helper: build next params preserving fields we want to keep
   function navParams({ col, status, q, mode } = {}) {
     const p = {}
-    if (libParam) p.lib = libParam
     const nextCol = col !== undefined ? col : activeCollection
     const nextStatus = status !== undefined ? status : filterTab
     if (nextCol && nextCol !== 'all') p.col = nextCol

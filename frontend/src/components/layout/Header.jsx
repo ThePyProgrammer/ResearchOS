@@ -272,7 +272,7 @@ export default function Header() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const activeCollectionId = searchParams.get('col') || null
-  const activeLibraryId = searchParams.get('lib') || null
+  const { activeLibraryId } = useLibrary()
 
   // Debounced lexical search → quick dropdown (no API key needed)
   useEffect(() => {
@@ -440,11 +440,7 @@ export default function Header() {
         onClose={() => setQuickAddOpen(false)}
         onAdded={() => {
           refreshCollections()
-          const params = new URLSearchParams()
-          if (activeLibraryId) params.set('lib', activeLibraryId)
-          if (activeCollectionId) params.set('col', activeCollectionId)
-          const qs = params.toString()
-          navigate(qs ? `/library?${qs}` : '/library')
+          navigate(activeCollectionId ? `/library?col=${activeCollectionId}` : '/library')
         }}
         collectionId={activeCollectionId}
         libraryId={activeLibraryId}

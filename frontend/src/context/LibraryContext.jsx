@@ -1,27 +1,37 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { librariesApi, collectionsApi } from '../services/api'
 
 const LibraryContext = createContext(null)
+const STORAGE_KEY = 'researchos_active_library'
 
 export function LibraryProvider({ children }) {
-  const [searchParams] = useSearchParams()
   const [libraries, setLibraries] = useState([])
   const [collections, setCollections] = useState([])
   const [loading, setLoading] = useState(true)
-
-  // Active library is purely URL-driven; falls back to first library
-  const urlLibId = searchParams.get('lib')
+  const [activeLibraryId, setActiveLibraryId] = useState(() => localStorage.getItem(STORAGE_KEY) || null)
 
   useEffect(() => {
     librariesApi.list()
-      .then(setLibraries)
+      .then(libs => {
+        setLibraries(libs)
+        // Validate stored ID; fall back to first library if missing/deleted
+        setActiveLibraryId(prev => {
+          const valid = libs.find(l => l.id === prev)
+          const resolved = valid?.id ?? libs[0]?.id ?? null
+          if (resolved) localStorage.setItem(STORAGE_KEY, resolved)
+          return resolved
+        })
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
-  const activeLibraryId = urlLibId || (libraries[0]?.id ?? null)
   const activeLibrary = libraries.find(l => l.id === activeLibraryId) ?? null
+
+  const switchLibrary = useCallback((id) => {
+    setActiveLibraryId(id)
+    localStorage.setItem(STORAGE_KEY, id)
+  }, [])
 
   useEffect(() => {
     if (loading) return
@@ -45,8 +55,17 @@ export function LibraryProvider({ children }) {
 
   const deleteLibrary = useCallback(async (id) => {
     await librariesApi.remove(id)
-    setLibraries(prev => prev.filter(l => l.id !== id))
-  }, [])
+    setLibraries(prev => {
+      const remaining = prev.filter(l => l.id !== id)
+      if (activeLibraryId === id) {
+        const next = remaining[0]?.id ?? null
+        setActiveLibraryId(next)
+        if (next) localStorage.setItem(STORAGE_KEY, next)
+        else localStorage.removeItem(STORAGE_KEY)
+      }
+      return remaining
+    })
+  }, [activeLibraryId])
 
   const createCollection = useCallback(async ({ name, parentId }) => {
     const created = await collectionsApi.create({
@@ -82,7 +101,7 @@ export function LibraryProvider({ children }) {
 
   return (
     <LibraryContext.Provider value={{
-      libraries, activeLibrary, activeLibraryId,
+      libraries, activeLibrary, activeLibraryId, switchLibrary,
       collections, createLibrary, updateLibrary, deleteLibrary,
       createCollection, deleteCollection, refreshCollections,
       loading,

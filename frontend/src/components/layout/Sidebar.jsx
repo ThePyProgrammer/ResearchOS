@@ -141,7 +141,7 @@ function LibrarySettingsModal({ library, onClose, onSaved, onDeleted }) {
 }
 
 function LibrarySwitcher({ collapsed }) {
-  const { libraries, activeLibrary, createLibrary } = useLibrary()
+  const { libraries, activeLibrary, createLibrary, switchLibrary } = useLibrary()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -149,9 +149,10 @@ function LibrarySwitcher({ collapsed }) {
   const [settingsLib, setSettingsLib] = useState(null)
   const ref = useRef(null)
 
-  function switchLibrary(id) {
+  function handleSwitch(id) {
     setOpen(false)
-    navigate(`/library?lib=${id}`)
+    switchLibrary(id)
+    navigate('/library')
   }
 
   useEffect(() => {
@@ -169,7 +170,7 @@ function LibrarySwitcher({ collapsed }) {
     const lib = await createLibrary(newName.trim())
     setNewName('')
     setCreating(false)
-    switchLibrary(lib.id)
+    handleSwitch(lib.id)
   }
 
   if (collapsed) {
@@ -217,7 +218,7 @@ function LibrarySwitcher({ collapsed }) {
             {libraries.map(lib => (
               <button
                 key={lib.id}
-                onClick={() => switchLibrary(lib.id)}
+                onClick={() => handleSwitch(lib.id)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${
                   lib.id === activeLibrary?.id
                     ? 'bg-blue-600/20 text-blue-300'
@@ -340,7 +341,6 @@ function LibraryTree() {
   const { collections, createCollection, deleteCollection, activeLibraryId } = useLibrary()
   const [searchParams] = useSearchParams()
   const activeCollection = searchParams.get('col') || 'all'
-  const libParam = activeLibraryId ? `lib=${activeLibraryId}` : ''
   const [expanded, setExpanded] = useState({ c1: true })
   const [ctxMenu, setCtxMenu] = useState(null)
   const [modal, setModal] = useState(null)
@@ -358,8 +358,8 @@ function LibraryTree() {
 
   const navigate = useNavigate()
   function select(id) {
-    if (id === 'all') navigate(libParam ? `/library?${libParam}` : '/library')
-    else navigate(libParam ? `/library?${libParam}&col=${id}` : `/library?col=${id}`)
+    if (id === 'all') navigate('/library')
+    else navigate(`/library?col=${id}`)
   }
 
   async function handleCreate(name) {
@@ -375,7 +375,7 @@ function LibraryTree() {
   async function handleDelete(col) {
     setCtxMenu(m => ({ ...m, deleting: true }))
     const deletedIds = await deleteCollection(col)
-    if (deletedIds.includes(activeCollection)) navigate(libParam ? `/library?${libParam}` : '/library')
+    if (deletedIds.includes(activeCollection)) navigate('/library')
     setCtxMenu(null)
   }
 
@@ -536,7 +536,6 @@ function LibraryTree() {
 
 export default function Sidebar({ collapsed, onToggle }) {
   const navigate = useNavigate()
-  const { activeLibraryId } = useLibrary()
   const [pendingCount, setPendingCount] = useState(null)
 
   useEffect(() => {
@@ -578,7 +577,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       <nav className={`flex-1 space-y-1 ${collapsed ? 'p-2 pt-3' : 'p-3'}`}>
         {/* Dashboard */}
         <div className="space-y-0.5">
-          <SidebarLink to={activeLibraryId ? `/dashboard?lib=${activeLibraryId}` : '/dashboard'} icon="dashboard" label="Dashboard" collapsed={collapsed} />
+          <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" collapsed={collapsed} />
         </div>
 
         {/* Library tree (Quick Access + Collections) */}
