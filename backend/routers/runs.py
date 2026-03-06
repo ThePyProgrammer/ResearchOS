@@ -39,8 +39,8 @@ def _get_workflow_fn(workflow_id: str) -> Optional[WorkflowFn]:
 # ---------------------------------------------------------------------------
 
 @router.get("")
-async def list_runs():
-    runs = run_service.list_runs()
+async def list_runs(library_id: Optional[str] = None):
+    runs = run_service.list_runs(library_id=library_id)
     return JSONResponse([r.model_dump(by_alias=True) for r in runs])
 
 

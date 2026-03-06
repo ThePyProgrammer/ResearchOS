@@ -129,7 +129,13 @@ export default function Dashboard() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    Promise.all([activityApi.list(), runsApi.list(), papersApi.list(), collectionsApi.list()])
+    const lib = activeLibrary?.id ? { library_id: activeLibrary.id } : {}
+    Promise.all([
+      activityApi.list(lib),
+      runsApi.list(lib),
+      papersApi.list(lib),
+      collectionsApi.list(lib),
+    ])
       .then(([activityData, runsData, papersData, collectionsData]) => {
         setActivity(activityData)
         setRuns(runsData)
@@ -138,9 +144,9 @@ export default function Dashboard() {
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }, [])
+  }, [activeLibrary?.id])
 
-  // activity `type` values in DB: "agent" | "human"
+  // Filter locally — data is already scoped to the active library
   const filtered = tab === 'all' ? activity : activity.filter(a => a.type === tab)
   const runningCount = runs.filter(r => r.status === 'running').length
 

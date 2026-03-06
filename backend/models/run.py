@@ -31,6 +31,7 @@ class Run(CamelModel):
     logs: Optional[list[RunLog]] = None
     cost: Optional[dict[str, Any]] = None
     trace: Optional[list[TraceStep]] = None
+    library_id: Optional[str] = None
 
 
 class RunCreate(CamelModel):
@@ -38,3 +39,4 @@ class RunCreate(CamelModel):
     prompt: Optional[str] = None
     target_collection: Optional[str] = None
     constraints: Optional[list[str]] = None
+    library_id: Optional[str] = None

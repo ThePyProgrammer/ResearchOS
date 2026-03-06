@@ -43,6 +43,7 @@ async def create_paper(data: PaperCreate):
         detail=", ".join(paper.authors[:2]) + (" et al." if len(paper.authors) > 2 else "") if paper.authors else None,
         action_label="View paper",
         action_href=f"/library/paper/{paper.id}",
+        library_id=paper.library_id,
     )
     return JSONResponse(paper.model_dump(by_alias=True), status_code=201)
 
@@ -128,6 +129,7 @@ async def import_paper(data: ImportRequest):
         detail=", ".join(paper.authors[:2]) + (" et al." if len(paper.authors) > 2 else "") if paper.authors else None,
         action_label="View paper",
         action_href=f"/library/paper/{paper.id}",
+        library_id=paper.library_id,
     )
     return JSONResponse(
         {**paper.model_dump(by_alias=True), "already_exists": False},

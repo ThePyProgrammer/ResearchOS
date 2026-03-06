@@ -32,6 +32,7 @@ async def create_collection(data: CollectionCreate):
         detail=f"Subcollection of parent" if col.parent_id else None,
         action_label="Open library",
         action_href=f"/library?col={col.id}",
+        library_id=col.library_id,
     )
     return JSONResponse(col.model_dump(by_alias=True), status_code=201)
 

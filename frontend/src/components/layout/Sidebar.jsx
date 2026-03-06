@@ -409,6 +409,7 @@ function LibraryTree() {
 
 export default function Sidebar({ collapsed, onToggle }) {
   const navigate = useNavigate()
+  const { activeLibraryId } = useLibrary()
   const [pendingCount, setPendingCount] = useState(null)
 
   useEffect(() => {
@@ -450,7 +451,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       <nav className={`flex-1 space-y-1 ${collapsed ? 'p-2 pt-3' : 'p-3'}`}>
         {/* Dashboard */}
         <div className="space-y-0.5">
-          <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" collapsed={collapsed} />
+          <SidebarLink to={activeLibraryId ? `/dashboard?lib=${activeLibraryId}` : '/dashboard'} icon="dashboard" label="Dashboard" collapsed={collapsed} />
         </div>
 
         {/* Library tree (Quick Access + Collections) */}

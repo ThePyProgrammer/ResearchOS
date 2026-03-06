@@ -11,10 +11,12 @@ logger = logging.getLogger(__name__)
 _TABLE = "activity"
 
 
-def list_activity(type_filter: Optional[str] = None) -> list[ActivityItem]:
+def list_activity(type_filter: Optional[str] = None, library_id: Optional[str] = None) -> list[ActivityItem]:
     query = get_client().table(_TABLE).select("*")
     if type_filter:
         query = query.eq("type", type_filter)
+    if library_id:
+        query = query.eq("library_id", library_id)
     result = query.execute()
     # Reverse so the most recently inserted rows appear first
     return [ActivityItem.model_validate(a) for a in reversed(result.data)]
@@ -31,6 +33,7 @@ def log_activity(
     badges: Optional[list[str]] = None,
     action_label: Optional[str] = None,
     action_href: Optional[str] = None,
+    library_id: Optional[str] = None,
 ) -> ActivityItem:
     """Create a new activity entry and persist it to the database."""
     now = datetime.now(timezone.utc)
@@ -51,6 +54,7 @@ def log_activity(
         badges=badges,
         time=time_str,
         action=action,
+        library_id=library_id,
     )
     row = item.model_dump(by_alias=False)
     # Serialize nested action dict for JSONB

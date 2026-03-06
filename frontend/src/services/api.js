@@ -74,7 +74,12 @@ export const workflowsApi = {
 }
 
 export const runsApi = {
-  list: () => apiFetch('/runs'),
+  list: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    ).toString()
+    return apiFetch(`/runs${qs ? `?${qs}` : ''}`)
+  },
   get: (id) => apiFetch(`/runs/${id}`),
   start: (data) => apiFetch('/runs', { method: 'POST', body: data }),
 }
@@ -92,7 +97,12 @@ export const proposalsApi = {
 }
 
 export const activityApi = {
-  list: (type) => apiFetch(`/activity${type ? `?type=${type}` : ''}`),
+  list: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    ).toString()
+    return apiFetch(`/activity${qs ? `?${qs}` : ''}`)
+  },
 }
 
 export const searchApi = {

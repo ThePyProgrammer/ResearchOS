@@ -11,8 +11,11 @@ logger = logging.getLogger(__name__)
 _TABLE = "runs"
 
 
-def list_runs() -> list[Run]:
-    result = get_client().table(_TABLE).select("*").execute()
+def list_runs(library_id: Optional[str] = None) -> list[Run]:
+    query = get_client().table(_TABLE).select("*")
+    if library_id:
+        query = query.eq("library_id", library_id)
+    result = query.execute()
     return [Run.model_validate(r) for r in result.data]
 
 
@@ -42,6 +45,7 @@ def create_run(data: RunCreate, started_by: str = "Dr. Researcher") -> Run:
         status="running",
         progress=0,
         logs=[],
+        library_id=data.library_id,
     )
     get_client().table(_TABLE).insert(run.model_dump(by_alias=False)).execute()
     logger.info("Created run %s for workflow %s", run.id, data.workflow_id)

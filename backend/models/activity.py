@@ -21,3 +21,4 @@ class ActivityItem(CamelModel):
     progress: Optional[int] = None
     current_step: Optional[str] = None
     action: Optional[ActivityAction] = None
+    library_id: Optional[str] = None
