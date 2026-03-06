@@ -38,12 +38,115 @@ function SidebarLink({ to, icon, label, badge, active, collapsed }) {
   )
 }
 
+function LibrarySettingsModal({ library, onClose, onSaved, onDeleted }) {
+  const { updateLibrary, deleteLibrary } = useLibrary()
+  const [name, setName] = useState(library.name)
+  const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  async function handleSave(e) {
+    e.preventDefault()
+    if (!name.trim() || saving) return
+    setSaving(true)
+    try {
+      const updated = await updateLibrary(library.id, { name: name.trim() })
+      onSaved(updated)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await deleteLibrary(library.id)
+      onDeleted()
+    } catch {
+      setDeleting(false)
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-96 p-5" onClick={e => e.stopPropagation()}>
+        <h2 className="text-sm font-semibold text-slate-800 mb-4">Library Settings</h2>
+
+        <form onSubmit={handleSave} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Library name</label>
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-50">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!name.trim() || name === library.name || saving}
+              className="px-3 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-5 pt-4 border-t border-slate-100">
+          {confirmDelete ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-red-700">Delete "{library.name}"?</p>
+              <p className="text-xs text-slate-500">This cannot be undone. Papers and collections in this library will be deleted.</p>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex-1 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting…' : 'Delete library'}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="flex-1 py-1.5 border border-slate-200 text-slate-600 text-xs rounded-lg hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 transition-colors"
+            >
+              <Icon name="delete" className="text-[16px]" />
+              Delete this library
+            </button>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 function LibrarySwitcher({ collapsed }) {
   const { libraries, activeLibrary, createLibrary } = useLibrary()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
+  const [settingsLib, setSettingsLib] = useState(null)
   const ref = useRef(null)
 
   function switchLibrary(id) {
@@ -84,17 +187,29 @@ function LibrarySwitcher({ collapsed }) {
   }
 
   return (
+    <>
     <div className="px-3 py-2 border-b border-white/10 relative" ref={ref}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors group"
-      >
-        <Icon name="library_books" className="text-[18px] text-slate-400 flex-shrink-0" />
-        <span className="flex-1 text-[13px] font-medium text-slate-200 truncate">
-          {activeLibrary?.name ?? 'No library'}
-        </span>
-        <Icon name={open ? 'expand_less' : 'expand_more'} className="text-[18px] text-slate-500 group-hover:text-slate-300" />
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex-1 flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors group min-w-0"
+        >
+          <Icon name="library_books" className="text-[18px] text-slate-400 flex-shrink-0" />
+          <span className="flex-1 text-[13px] font-medium text-slate-200 truncate">
+            {activeLibrary?.name ?? 'No library'}
+          </span>
+          <Icon name={open ? 'expand_less' : 'expand_more'} className="text-[18px] text-slate-500 group-hover:text-slate-300 flex-shrink-0" />
+        </button>
+        {activeLibrary && (
+          <button
+            onClick={() => { setOpen(false); setSettingsLib(activeLibrary) }}
+            title="Library settings"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors flex-shrink-0"
+          >
+            <Icon name="settings" className="text-[16px]" />
+          </button>
+        )}
+      </div>
 
       {open && (
         <div className="absolute left-3 right-3 top-full mt-1 z-50 bg-slate-900 border border-white/10 rounded-xl shadow-xl overflow-hidden">
@@ -155,6 +270,18 @@ function LibrarySwitcher({ collapsed }) {
         </div>
       )}
     </div>
+    {settingsLib && (
+      <LibrarySettingsModal
+        library={settingsLib}
+        onClose={() => setSettingsLib(null)}
+        onSaved={() => setSettingsLib(null)}
+        onDeleted={() => {
+          setSettingsLib(null)
+          navigate('/library')
+        }}
+      />
+    )}
+    </>
   )
 }
 

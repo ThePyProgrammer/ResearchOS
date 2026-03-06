@@ -37,6 +37,17 @@ export function LibraryProvider({ children }) {
     return lib
   }, [])
 
+  const updateLibrary = useCallback(async (id, data) => {
+    const updated = await librariesApi.update(id, data)
+    setLibraries(prev => prev.map(l => l.id === id ? updated : l))
+    return updated
+  }, [])
+
+  const deleteLibrary = useCallback(async (id) => {
+    await librariesApi.remove(id)
+    setLibraries(prev => prev.filter(l => l.id !== id))
+  }, [])
+
   const createCollection = useCallback(async ({ name, parentId }) => {
     const created = await collectionsApi.create({
       name,
@@ -72,7 +83,8 @@ export function LibraryProvider({ children }) {
   return (
     <LibraryContext.Provider value={{
       libraries, activeLibrary, activeLibraryId,
-      collections, createLibrary, createCollection, deleteCollection, refreshCollections,
+      collections, createLibrary, updateLibrary, deleteLibrary,
+      createCollection, deleteCollection, refreshCollections,
       loading,
     }}>
       {children}

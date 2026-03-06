@@ -35,30 +35,16 @@ def update_library(library_id: str, data: LibraryUpdate) -> Optional[Library]:
     updates = data.model_dump(exclude_none=True)
     if not updates:
         return get_library(library_id)
-    result = (
-        get_client()
-        .table(_TABLE)
-        .update(updates)
-        .eq("id", library_id)
-        .select()
-        .execute()
-    )
-    if not result.data:
+    if get_library(library_id) is None:
         return None
+    get_client().table(_TABLE).update(updates).eq("id", library_id).execute()
     logger.info("Updated library %s: %s", library_id, list(updates.keys()))
-    return Library.model_validate(result.data[0])
+    return get_library(library_id)
 
 
 def delete_library(library_id: str) -> bool:
-    result = (
-        get_client()
-        .table(_TABLE)
-        .delete()
-        .eq("id", library_id)
-        .select()
-        .execute()
-    )
-    deleted = bool(result.data)
-    if deleted:
-        logger.info("Deleted library %s", library_id)
-    return deleted
+    if get_library(library_id) is None:
+        return False
+    get_client().table(_TABLE).delete().eq("id", library_id).execute()
+    logger.info("Deleted library %s", library_id)
+    return True
