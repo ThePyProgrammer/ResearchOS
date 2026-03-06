@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { papersApi, searchApi } from '../../services/api'
 
 function Icon({ name, className = '' }) {
@@ -34,7 +34,7 @@ const TYPE_META = {
 // ---------------------------------------------------------------------------
 // Quick-Add modal
 // ---------------------------------------------------------------------------
-function QuickAddModal({ open, onClose, onAdded }) {
+function QuickAddModal({ open, onClose, onAdded, collectionId }) {
   const [input, setInput] = useState('')
   const [state, setState] = useState('idle') // idle | loading | success | duplicate | error
   const [result, setResult] = useState(null)  // paper object on success
@@ -75,6 +75,10 @@ function QuickAddModal({ open, onClose, onAdded }) {
 
     try {
       const paper = await papersApi.import(trimmed)
+      if (!paper.already_exists && collectionId) {
+        await papersApi.update(paper.id, { collections: [collectionId] })
+        paper.collections = [collectionId]
+      }
       setResult(paper)
       setState(paper.already_exists ? 'duplicate' : 'success')
       if (!paper.already_exists) onAdded?.(paper)
@@ -264,6 +268,8 @@ export default function Header() {
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const containerRef = useRef(null)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const activeCollectionId = searchParams.get('col') || null
 
   // Debounced lexical search → quick dropdown (no API key needed)
   useEffect(() => {
@@ -429,7 +435,8 @@ export default function Header() {
       <QuickAddModal
         open={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
-        onAdded={() => navigate('/library')}
+        onAdded={() => navigate(activeCollectionId ? `/library?col=${activeCollectionId}` : '/library')}
+        collectionId={activeCollectionId}
       />
     </>
   )
