@@ -72,7 +72,7 @@ const statusConfig = {
   'inbox': { label: 'Inbox', class: 'bg-blue-100 text-blue-700' },
 }
 
-function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, onCreateCollection, totalCount }) {
+function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, onCreateCollection, totalCount, inboxCount }) {
   const rootCollections = collections.filter(c => c.parentId === null)
   const [expanded, setExpanded] = useState({ c1: true })
   const [ctxMenu, setCtxMenu] = useState(null) // { col, x, y, confirming, deleting }
@@ -207,7 +207,7 @@ function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, 
         Quick Access
       </p>
       {[
-        { id: 'inbox', icon: 'inbox', label: 'Inbox', count: 12 },
+        { id: 'inbox', icon: 'inbox', label: 'Inbox', count: inboxCount },
         { id: 'all', icon: 'collections_bookmark', label: 'All Papers', count: totalCount },
       ].map(item => (
         <button
@@ -600,14 +600,14 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
 }
 
 export default function Library() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [activeCollection, setActiveCollection] = useState('all')
-  const [filterTab, setFilterTab] = useState('all')
+  const [filterTab, setFilterTab] = useState(() => searchParams.get('status') || 'all')
   const [selectedPaper, setSelectedPaper] = useState(null)
   const [papers, setPapers] = useState([])
   const [collections, setCollections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
 
   const urlQuery = searchParams.get('q') || ''
@@ -708,6 +708,7 @@ export default function Library() {
         onDeleteCollection={handleDeleteCollection}
         onCreateCollection={handleCreateCollection}
         totalCount={papers.length}
+        inboxCount={papers.filter(p => p.status === 'inbox').length}
       />
 
       <div className="flex-1 flex flex-col min-w-0">

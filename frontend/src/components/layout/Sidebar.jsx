@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
+import { papersApi, proposalsApi } from '../../services/api'
 import { user } from '../../data/mockData'
 
 function Icon({ name, className = '' }) {
@@ -31,6 +33,13 @@ function SidebarLink({ to, icon, label, badge, active }) {
 
 export default function Sidebar() {
   const navigate = useNavigate()
+  const [toReadCount, setToReadCount] = useState(null)
+  const [pendingCount, setPendingCount] = useState(null)
+
+  useEffect(() => {
+    papersApi.list({ status: 'to-read' }).then(data => setToReadCount(data.length)).catch(() => {})
+    proposalsApi.list().then(data => setPendingCount(data.filter(p => p.status === 'pending').length)).catch(() => {})
+  }, [])
 
   return (
     <aside className="w-60 flex-shrink-0 bg-slate-800 flex flex-col h-screen sticky top-0 dark-scroll overflow-y-auto">
@@ -56,7 +65,7 @@ export default function Sidebar() {
           <div className="space-y-0.5">
             <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" />
             <SidebarLink to="/library" icon="collections_bookmark" label="My Library" />
-            <SidebarLink to="/library?filter=to-read" icon="bookmark" label="To Read" badge="12" />
+            <SidebarLink to="/library?status=to-read" icon="bookmark" label="To Read" badge={toReadCount} />
           </div>
         </div>
 
@@ -67,7 +76,7 @@ export default function Sidebar() {
           </p>
           <div className="space-y-0.5">
             <SidebarLink to="/agents" icon="smart_toy" label="Workflow Catalog" />
-            <SidebarLink to="/proposals" icon="rate_review" label="Agent Proposals" badge="3" />
+            <SidebarLink to="/proposals" icon="rate_review" label="Agent Proposals" badge={pendingCount} />
             <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400">
               <Icon name="sensors" className="text-[18px] text-emerald-400" />
               <span className="flex-1">Daily arXiv Scanner</span>
