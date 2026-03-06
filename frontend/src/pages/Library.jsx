@@ -72,7 +72,7 @@ const statusConfig = {
   'inbox': { label: 'Inbox', class: 'bg-blue-100 text-blue-700' },
 }
 
-function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, onCreateCollection, totalCount, inboxCount }) {
+function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, onCreateCollection, totalCount, inboxCount, unfiledCount }) {
   const rootCollections = collections.filter(c => c.parentId === null)
   const [expanded, setExpanded] = useState({ c1: true })
   const [ctxMenu, setCtxMenu] = useState(null) // { col, x, y, confirming, deleting }
@@ -207,8 +207,9 @@ function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, 
         Quick Access
       </p>
       {[
-        { id: 'inbox', icon: 'inbox', label: 'Inbox', count: inboxCount },
         { id: 'all', icon: 'collections_bookmark', label: 'All Papers', count: totalCount },
+        { id: 'inbox', icon: 'inbox', label: 'Inbox', count: inboxCount },
+        { id: 'unfiled', icon: 'folder_off', label: 'Unfiled', count: unfiledCount },
       ].map(item => (
         <button
           key={item.id}
@@ -606,9 +607,11 @@ export default function Library() {
   const [collections, setCollections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [filterOpen, setFilterOpen] = useState(false)
   const [sourceFilter, setSourceFilter] = useState('all')
-  const [yearFilter, setYearFilter] = useState(null)
+  const [yearFrom, setYearFrom] = useState('')
+  const [yearTo, setYearTo] = useState('')
+  const [titleFilter, setTitleFilter] = useState('')
+  const [venueFilter, setVenueFilter] = useState('')
   const [tagFilters, setTagFilters] = useState(new Set())
   const location = useLocation()
 
@@ -639,10 +642,7 @@ export default function Library() {
     setLoading(true)
     setError(null)
 
-    const baseFetch = papersApi.list({
-      ...(activeCollection !== 'all' && { collection_id: activeCollection }),
-      ...(filterTab !== 'all' && { status: filterTab }),
-    })
+    const baseFetch = papersApi.list()
 
     const fetchPromise = urlQuery
       ? searchApi.query(urlQuery, { mode: urlMode, limit: 50 }).catch(() => {
@@ -656,7 +656,7 @@ export default function Library() {
       .then(data => setPapers(data))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }, [activeCollection, filterTab, urlQuery, urlMode, location.key])
+  }, [urlQuery, urlMode, location.key])
 
   const handleStatusChange = (paperId, newStatus) => {
     setPapers(prev => prev.map(p => p.id === paperId ? { ...p, status: newStatus } : p))
@@ -702,20 +702,32 @@ export default function Library() {
   }
 
   const allTags = useMemo(() => [...new Set(papers.flatMap(p => p.tags))].sort(), [papers])
-  const allYears = useMemo(() => [...new Set(papers.map(p => p.year))].sort((a, b) => b - a), [papers])
-  const activeFilterCount = (sourceFilter !== 'all' ? 1 : 0) + (yearFilter ? 1 : 0) + tagFilters.size
+  const activeFilterCount = (sourceFilter !== 'all' ? 1 : 0)
+    + (yearFrom || yearTo ? 1 : 0)
+    + (titleFilter ? 1 : 0)
+    + (venueFilter ? 1 : 0)
+    + tagFilters.size
 
   const filtered = useMemo(() => {
     let result = urlQuery ? papers : papers.filter(p => filterTab === 'all' || p.status === filterTab)
+    if (activeCollection === 'inbox') result = result.filter(p => p.status === 'inbox')
+    else if (activeCollection === 'unfiled') result = result.filter(p => p.collections.length === 0)
+    else if (activeCollection !== 'all') result = result.filter(p => p.collections.includes(activeCollection))
     if (sourceFilter !== 'all') result = result.filter(p => p.source === sourceFilter)
-    if (yearFilter) result = result.filter(p => p.year === yearFilter)
+    if (titleFilter) result = result.filter(p => p.title.toLowerCase().includes(titleFilter.toLowerCase()))
+    if (venueFilter) result = result.filter(p => p.venue.toLowerCase().includes(venueFilter.toLowerCase()))
+    if (yearFrom) result = result.filter(p => p.year >= Number(yearFrom))
+    if (yearTo) result = result.filter(p => p.year <= Number(yearTo))
     if (tagFilters.size > 0) result = result.filter(p => [...tagFilters].every(t => p.tags.includes(t)))
     return result
-  }, [papers, urlQuery, filterTab, sourceFilter, yearFilter, tagFilters])
+  }, [papers, urlQuery, filterTab, sourceFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters])
 
   function clearFilters() {
     setSourceFilter('all')
-    setYearFilter(null)
+    setYearFrom('')
+    setYearTo('')
+    setTitleFilter('')
+    setVenueFilter('')
     setTagFilters(new Set())
   }
 
@@ -743,13 +755,13 @@ export default function Library() {
         onCreateCollection={handleCreateCollection}
         totalCount={papers.length}
         inboxCount={papers.filter(p => p.status === 'inbox').length}
+        unfiledCount={papers.filter(p => p.collections.length === 0).length}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white">
-          {urlQuery ? (
-            /* Search mode — show chip instead of status tabs */
+          {urlQuery && (
             <div className="flex items-center gap-2">
               <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-medium border ${
                 urlMode === 'semantic'
@@ -773,122 +785,162 @@ export default function Library() {
               </div>
               <span className="text-xs text-slate-400">{papers.length} result{papers.length !== 1 ? 's' : ''}</span>
             </div>
-          ) : (
-            <div className="flex bg-slate-100 rounded-lg p-0.5 text-sm">
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'inbox', label: 'Inbox' },
-                { id: 'to-read', label: 'To Read' },
-                { id: 'read', label: 'Read' },
-              ].map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setSearchParams(navParams({ status: t.id }))}
-                  className={`px-3 py-1 rounded-md font-medium transition-colors ${
-                    filterTab === t.id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
           )}
-          <button
-            onClick={() => setFilterOpen(o => !o)}
-            className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-sm transition-colors ${
-              filterOpen || activeFilterCount > 0
-                ? 'bg-blue-50 border-blue-200 text-blue-700'
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Icon name="filter_list" className="text-[16px]" />
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
         </div>
 
         {/* Filter panel */}
-        {filterOpen && (
-          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 space-y-3">
-            {/* Source */}
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-10 flex-shrink-0">Source</span>
-              <div className="flex gap-1.5">
-                {[
-                  { id: 'all', label: 'All' },
-                  { id: 'human', label: 'Human' },
-                  { id: 'agent', label: 'Agent' },
-                ].map(opt => (
-                  <button
-                    key={opt.id}
-                    onClick={() => setSourceFilter(opt.id)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                      sourceFilter === opt.id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+        <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+
+              {/* Status */}
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Status</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: 'all', label: 'All', count: papers.length },
+                    { id: 'inbox', label: 'Inbox', count: papers.filter(p => p.status === 'inbox').length },
+                    { id: 'to-read', label: 'To Read', count: papers.filter(p => p.status === 'to-read').length },
+                    { id: 'read', label: 'Read', count: papers.filter(p => p.status === 'read').length },
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setSearchParams(navParams({ status: opt.id }))}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        filterTab === opt.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      {opt.label}
+                      <span className={`text-[10px] font-bold px-1 rounded ${
+                        filterTab === opt.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
+                      }`}>{opt.count}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Source */}
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Source</span>
+                <div className="flex gap-1.5">
+                  {[
+                    { id: 'all', label: 'All', count: papers.length },
+                    { id: 'human', label: 'Human', count: papers.filter(p => p.source === 'human').length },
+                    { id: 'agent', label: 'Agent', count: papers.filter(p => p.source === 'agent').length },
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setSourceFilter(opt.id)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        sourceFilter === opt.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      {opt.label}
+                      <span className={`text-[10px] font-bold px-1 rounded ${
+                        sourceFilter === opt.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
+                      }`}>{opt.count}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Title */}
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Title</span>
+                <div className="relative flex-1">
+                  <Icon name="search" className="absolute left-2 top-1/2 -translate-y-1/2 text-[14px] text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={titleFilter}
+                    onChange={e => setTitleFilter(e.target.value)}
+                    placeholder="Filter by title…"
+                    className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                  />
+                  {titleFilter && (
+                    <button onClick={() => setTitleFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
+                      <Icon name="close" className="text-[13px]" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Venue */}
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Venue</span>
+                <div className="relative flex-1">
+                  <Icon name="location_on" className="absolute left-2 top-1/2 -translate-y-1/2 text-[14px] text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={venueFilter}
+                    onChange={e => setVenueFilter(e.target.value)}
+                    placeholder="e.g. NeurIPS, arXiv…"
+                    className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                  />
+                  {venueFilter && (
+                    <button onClick={() => setVenueFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
+                      <Icon name="close" className="text-[13px]" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Year range */}
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Year</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={yearFrom}
+                    onChange={e => setYearFrom(e.target.value)}
+                    placeholder="From"
+                    min="1900" max="2100"
+                    className="w-20 px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                  />
+                  <span className="text-slate-300 text-sm">—</span>
+                  <input
+                    type="number"
+                    value={yearTo}
+                    onChange={e => setYearTo(e.target.value)}
+                    placeholder="To"
+                    min="1900" max="2100"
+                    className="w-20 px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                  />
+                </div>
+              </div>
+
+              {/* Tags */}
+              {allTags.length > 0 && (
+                <div className="flex items-start gap-3">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0 pt-1">Tags</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {allTags.map(tag => (
+                      <button
+                        key={tag}
+                        onClick={() => toggleTag(tag)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          tagFilters.has(tag)
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
 
-            {/* Year */}
-            {allYears.length > 0 && (
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-10 flex-shrink-0">Year</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {allYears.map(y => (
-                    <button
-                      key={y}
-                      onClick={() => setYearFilter(yearFilter === y ? null : y)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                        yearFilter === y
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      {y}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tags */}
-            {allTags.length > 0 && (
-              <div className="flex items-start gap-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-10 flex-shrink-0 pt-1">Tags</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {allTags.map(tag => (
-                    <button
-                      key={tag}
-                      onClick={() => toggleTag(tag)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                        tagFilters.has(tag)
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {activeFilterCount > 0 && (
-              <button onClick={clearFilters} className="text-xs text-slate-400 hover:text-red-500 transition-colors">
+              <button onClick={clearFilters} className="mt-3 text-xs text-slate-400 hover:text-red-500 transition-colors">
                 Clear all filters
               </button>
             )}
           </div>
-        )}
 
         {error && (
           <div className="px-4 py-2 text-sm text-red-600 bg-red-50 border-b border-red-100">

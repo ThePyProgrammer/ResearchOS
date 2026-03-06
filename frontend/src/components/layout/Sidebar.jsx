@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { papersApi, proposalsApi } from '../../services/api'
+import { proposalsApi } from '../../services/api'
 import { user } from '../../data/mockData'
 
 function Icon({ name, className = '' }) {
@@ -34,13 +34,10 @@ function SidebarLink({ to, icon, label, badge, active }) {
 export default function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
-  const isToRead = location.pathname === '/library' && new URLSearchParams(location.search).get('status') === 'to-read'
-  const isMyLibrary = location.pathname === '/library' && !isToRead
-  const [toReadCount, setToReadCount] = useState(null)
+  const isMyLibrary = location.pathname === '/library'
   const [pendingCount, setPendingCount] = useState(null)
 
   useEffect(() => {
-    papersApi.list({ status: 'to-read' }).then(data => setToReadCount(data.length)).catch(() => {})
     proposalsApi.list().then(data => setPendingCount(data.filter(p => p.status === 'pending').length)).catch(() => {})
   }, [])
 
@@ -68,7 +65,6 @@ export default function Sidebar() {
           <div className="space-y-0.5">
             <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" />
             <SidebarLink to="/library" icon="collections_bookmark" label="My Library" active={isMyLibrary} />
-            <SidebarLink to="/library?status=to-read" icon="bookmark" label="To Read" active={isToRead} badge={toReadCount} />
           </div>
         </div>
 
