@@ -1,7 +1,13 @@
-import json
 import logging
 import sys
 from pathlib import Path
+
+# Load .env before any service imports so OPENAI_API_KEY is available
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env")
+except ImportError:
+    pass  # python-dotenv not installed; rely on shell environment
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,8 +16,8 @@ from fastapi.responses import JSONResponse
 # Ensure backend/ is on the path so relative imports work
 sys.path.insert(0, str(Path(__file__).parent))
 
-from routers import papers, collections, workflows, runs, proposals, activity
-from services.storage import DATA_DIR
+from routers import papers, collections, workflows, runs, proposals, activity, search
+from services.db import get_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -32,6 +38,7 @@ app.include_router(workflows.router)
 app.include_router(runs.router)
 app.include_router(proposals.router)
 app.include_router(activity.router)
+app.include_router(search.router)
 
 
 @app.get("/api/user")
@@ -374,13 +381,28 @@ SEED: dict[str, list] = {
 
 
 def seed_data() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    for filename, data in SEED.items():
-        path = DATA_DIR / filename
-        if not path.exists():
-            with path.open("w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            logger.info("Seeded %s", filename)
+    """Seed each Supabase table once if it is empty."""
+    db = get_client()
+    # Order matters: proposals FK → papers + runs
+    table_map = [
+        ("papers",      SEED["papers.json"]),
+        ("collections", SEED["collections.json"]),
+        ("workflows",   SEED["workflows.json"]),
+        ("runs",        SEED["runs.json"]),
+        ("proposals",   SEED["proposals.json"]),
+        ("activity",    SEED["activity.json"]),
+    ]
+    for table, rows in table_map:
+        try:
+            check = db.table(table).select("id", count="exact").limit(1).execute()
+            if (check.count or 0) == 0:
+                # collections table has no paper_count column
+                if table == "collections":
+                    rows = [{k: v for k, v in r.items() if k != "paper_count"} for r in rows]
+                db.table(table).insert(rows).execute()
+                logger.info("Seeded table %s (%d rows)", table, len(rows))
+        except Exception:
+            logger.exception("Failed to seed table %s", table)
 
 
 @app.on_event("startup")
