@@ -6,16 +6,82 @@ function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
 }
 
+function CollectionModal({ parentName, onConfirm, onCancel }) {
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!name.trim() || saving) return
+    setSaving(true)
+    await onConfirm(name.trim())
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl w-80 p-5"
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 className="text-sm font-semibold text-slate-800">
+          {parentName ? `New subcollection in "${parentName}"` : 'New collection'}
+        </h2>
+        <form onSubmit={handleSubmit} className="mt-3 space-y-3">
+          <input
+            autoFocus
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Collection name"
+            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!name.trim() || saving}
+              className="px-3 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saving ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 const statusConfig = {
   'read': { label: 'Read', class: 'bg-emerald-100 text-emerald-700' },
   'to-read': { label: 'To Read', class: 'bg-amber-100 text-amber-700' },
   'inbox': { label: 'Inbox', class: 'bg-blue-100 text-blue-700' },
 }
 
-function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, totalCount }) {
+function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, onCreateCollection, totalCount }) {
   const rootCollections = collections.filter(c => c.parentId === null)
   const [expanded, setExpanded] = useState({ c1: true })
   const [ctxMenu, setCtxMenu] = useState(null) // { col, x, y, confirming, deleting }
+  const [modal, setModal] = useState(null) // { parentId: string|null, parentName: string|null }
+
+  async function handleCreate(name) {
+    await onCreateCollection({ name, parentId: modal.parentId })
+    setModal(null)
+  }
 
   useEffect(() => {
     if (!ctxMenu) return
@@ -113,13 +179,26 @@ function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, 
             </div>
           </div>
         ) : (
-          <button
-            onClick={() => setCtxMenu(m => ({ ...m, confirming: true }))}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-          >
-            <Icon name="delete" className="text-[16px]" />
-            Delete
-          </button>
+          <>
+            <button
+              onClick={() => {
+                setCtxMenu(null)
+                setModal({ parentId: ctxMenu.col.id, parentName: ctxMenu.col.name })
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <Icon name="create_new_folder" className="text-[16px] text-slate-400" />
+              New subcollection
+            </button>
+            <div className="my-1 border-t border-slate-100" />
+            <button
+              onClick={() => setCtxMenu(m => ({ ...m, confirming: true }))}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <Icon name="delete" className="text-[16px]" />
+              Delete
+            </button>
+          </>
         )}
       </div>
     )}
@@ -146,9 +225,16 @@ function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, 
         </button>
       ))}
 
-      <p className="px-2 pt-3 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-        Collections
-      </p>
+      <div className="flex items-center px-2 pt-3 pb-1.5">
+        <p className="flex-1 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Collections</p>
+        <button
+          onClick={() => setModal({ parentId: null, parentName: null })}
+          className="p-0.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          title="New collection"
+        >
+          <Icon name="add" className="text-[16px]" />
+        </button>
+      </div>
       {rootCollections.map(col => (
         <CollectionNode key={col.id} col={col} />
       ))}
@@ -164,6 +250,13 @@ function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, 
         </button>
       </div>
     </aside>
+    {modal && (
+      <CollectionModal
+        parentName={modal.parentName}
+        onConfirm={handleCreate}
+        onCancel={() => setModal(null)}
+      />
+    )}
     </>
   )
 }
@@ -565,6 +658,11 @@ export default function Library() {
     setSelectedPaper(null)
   }
 
+  const handleCreateCollection = async ({ name, parentId }) => {
+    const created = await collectionsApi.create({ name, parent_id: parentId || null, type: 'folder' })
+    setCollections(prev => [...prev, created])
+  }
+
   const handleDeleteCollection = async (col) => {
     // Collect the target + all descendants
     const allCollections = collections
@@ -600,9 +698,14 @@ export default function Library() {
         onSelect={id => {
           setActiveCollection(id)
           setFilterTab('all')
-          if (urlQuery) setSearchParams({})
+          // Keep col in URL so Header's QuickAdd knows which collection is active.
+          // Clear q/mode when switching collections.
+          const params = {}
+          if (id !== 'all' && id !== 'inbox') params.col = id
+          setSearchParams(params)
         }}
         onDeleteCollection={handleDeleteCollection}
+        onCreateCollection={handleCreateCollection}
         totalCount={papers.length}
       />
 
