@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { proposalsApi } from '../../services/api'
 import { user } from '../../data/mockData'
 import { useLibrary } from '../../context/LibraryContext'
@@ -111,7 +111,6 @@ function LibrarySwitcher({ collapsed }) {
               </button>
             ))}
           </div>
-
           <div className="border-t border-white/10">
             {creating ? (
               <form onSubmit={handleCreate} className="flex items-center gap-1.5 px-3 py-2">
@@ -153,10 +152,260 @@ function LibrarySwitcher({ collapsed }) {
   )
 }
 
+function CollectionModal({ parentName, onConfirm, onCancel }) {
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!name.trim() || saving) return
+    setSaving(true)
+    await onConfirm(name.trim())
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onCancel}>
+      <div className="bg-white rounded-xl shadow-xl w-80 p-5" onClick={e => e.stopPropagation()}>
+        <h2 className="text-sm font-semibold text-slate-800">
+          {parentName ? `New subcollection in "${parentName}"` : 'New collection'}
+        </h2>
+        <form onSubmit={handleSubmit} className="mt-3 space-y-3">
+          <input
+            autoFocus
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Collection name"
+            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-50">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!name.trim() || saving}
+              className="px-3 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saving ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function LibraryTree() {
+  const { collections, createCollection, deleteCollection } = useLibrary()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeCollection = searchParams.get('col') || 'all'
+  const [expanded, setExpanded] = useState({ c1: true })
+  const [ctxMenu, setCtxMenu] = useState(null)
+  const [modal, setModal] = useState(null)
+
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => setCtxMenu(null)
+    window.addEventListener('click', close)
+    window.addEventListener('keydown', e => { if (e.key === 'Escape') close() })
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('keydown', e => { if (e.key === 'Escape') close() })
+    }
+  }, [!!ctxMenu])
+
+  function select(id) {
+    const params = {}
+    if (id !== 'all') params.col = id
+    setSearchParams(params)
+  }
+
+  async function handleCreate(name) {
+    await createCollection({ name, parentId: modal.parentId })
+    setModal(null)
+  }
+
+  async function handleDelete(col) {
+    setCtxMenu(m => ({ ...m, deleting: true }))
+    const deletedIds = await deleteCollection(col)
+    if (deletedIds.includes(activeCollection)) setSearchParams({})
+    setCtxMenu(null)
+  }
+
+  function CollectionNode({ col, depth = 0 }) {
+    const children = collections.filter(c => c.parentId === col.id)
+    const isOpen = expanded[col.id]
+    const isActive = activeCollection === col.id
+    const isCtxTarget = ctxMenu?.col.id === col.id
+
+    return (
+      <div>
+        <button
+          onClick={() => {
+            select(col.id)
+            if (children.length) setExpanded(e => ({ ...e, [col.id]: !isOpen }))
+          }}
+          onContextMenu={e => {
+            e.preventDefault()
+            e.stopPropagation()
+            setCtxMenu({ col, x: e.clientX, y: e.clientY, confirming: false, deleting: false })
+          }}
+          title={col.name}
+          className={`w-full flex items-center gap-1.5 py-1.5 rounded-lg text-sm transition-colors ${
+            isCtxTarget
+              ? 'bg-red-900/30 text-red-400'
+              : isActive
+              ? 'bg-white/10 text-white font-medium'
+              : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+          }`}
+          style={{ paddingLeft: `${8 + depth * 12}px`, paddingRight: '8px' }}
+        >
+          {children.length > 0 ? (
+            <Icon name={isOpen ? 'expand_more' : 'chevron_right'} className="text-[13px] flex-shrink-0 opacity-50" />
+          ) : (
+            <span className="w-[13px] flex-shrink-0" />
+          )}
+          <Icon
+            name={col.type === 'agent-output' ? 'smart_toy' : 'folder'}
+            className={`text-[15px] flex-shrink-0 ${col.type === 'agent-output' ? 'text-purple-400' : 'text-slate-500'}`}
+          />
+          <span className="flex-1 truncate text-left text-[13px]">{col.name}</span>
+          <span className="text-[11px] text-slate-600 flex-shrink-0">{col.paperCount}</span>
+        </button>
+        {isOpen && children.map(child => (
+          <CollectionNode key={child.id} col={child} depth={depth + 1} />
+        ))}
+      </div>
+    )
+  }
+
+  const rootCollections = collections.filter(c => c.parentId === null)
+
+  return (
+    <>
+      {/* Context menu */}
+      {ctxMenu && (
+        <div
+          style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 50 }}
+          className="bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-52"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
+            <p className="text-xs text-slate-400 truncate">{ctxMenu.col.name}</p>
+          </div>
+          {ctxMenu.confirming ? (
+            <div className="px-3 py-2">
+              <p className="text-xs text-slate-600 mb-0.5 font-medium">Delete this collection?</p>
+              {collections.some(c => c.parentId === ctxMenu.col.id) && (
+                <p className="text-[11px] text-amber-600 mb-2">Subcollections will also be deleted.</p>
+              )}
+              <div className="flex gap-1.5 mt-2">
+                <button
+                  onClick={() => handleDelete(ctxMenu.col)}
+                  disabled={ctxMenu.deleting}
+                  className="flex-1 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
+                >
+                  {ctxMenu.deleting ? 'Deleting…' : 'Delete'}
+                </button>
+                <button
+                  onClick={() => setCtxMenu(null)}
+                  className="flex-1 py-1.5 border border-slate-200 text-slate-600 text-xs rounded-lg hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={() => { setCtxMenu(null); setModal({ parentId: ctxMenu.col.id, parentName: ctxMenu.col.name }) }}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <Icon name="create_new_folder" className="text-[16px] text-slate-400" />
+                New subcollection
+              </button>
+              <div className="my-1 border-t border-slate-100" />
+              <button
+                onClick={() => setCtxMenu(m => ({ ...m, confirming: true }))}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <Icon name="delete" className="text-[16px]" />
+                Delete
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Quick access */}
+      <p className="px-3 pt-1 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
+        Quick Access
+      </p>
+      {[
+        { id: 'all',    icon: 'collections_bookmark', label: 'All Papers' },
+        { id: 'inbox',  icon: 'inbox',                label: 'Inbox' },
+        { id: 'unfiled',icon: 'folder_off',           label: 'Unfiled' },
+      ].map(item => (
+        <button
+          key={item.id}
+          onClick={() => select(item.id)}
+          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+            activeCollection === item.id
+              ? 'bg-white/10 text-white font-medium'
+              : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+          }`}
+        >
+          <Icon name={item.icon} className="text-[16px] flex-shrink-0" />
+          <span className="flex-1 text-left text-[13px]">{item.label}</span>
+        </button>
+      ))}
+
+      {/* Collections header */}
+      <div className="flex items-center px-3 pt-3 pb-1">
+        <p className="flex-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Collections</p>
+        <button
+          onClick={() => setModal({ parentId: null, parentName: null })}
+          className="p-0.5 rounded text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
+          title="New collection"
+        >
+          <Icon name="add" className="text-[16px]" />
+        </button>
+      </div>
+      {rootCollections.map(col => (
+        <CollectionNode key={col.id} col={col} />
+      ))}
+
+      {/* Run agent shortcut */}
+      <div className="pt-3">
+        <button className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-purple-400 hover:bg-white/5 hover:text-purple-300 transition-colors font-medium">
+          <Icon name="smart_toy" className="text-[16px]" />
+          <span className="text-[13px]">Run Agent Workflow</span>
+        </button>
+      </div>
+
+      {modal && (
+        <CollectionModal
+          parentName={modal.parentName}
+          onConfirm={handleCreate}
+          onCancel={() => setModal(null)}
+        />
+      )}
+    </>
+  )
+}
+
 
 export default function Sidebar({ collapsed, onToggle }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const isLibrary = location.pathname.startsWith('/library')
   const isMyLibrary = location.pathname === '/library'
   const [pendingCount, setPendingCount] = useState(null)
 
@@ -196,22 +445,22 @@ export default function Sidebar({ collapsed, onToggle }) {
       {/* Library switcher */}
       <LibrarySwitcher collapsed={collapsed} />
 
-      <nav className={`flex-1 space-y-5 ${collapsed ? 'p-2 pt-3' : 'p-3'}`}>
-        {/* Library section */}
-        <div>
-          {!collapsed && (
-            <p className="px-3 mb-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
-              Library
-            </p>
-          )}
-          <div className="space-y-0.5">
-            <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" collapsed={collapsed} />
-            <SidebarLink to="/library" icon="collections_bookmark" label="My Library" active={isMyLibrary} collapsed={collapsed} />
-          </div>
+      <nav className={`flex-1 space-y-1 ${collapsed ? 'p-2 pt-3' : 'p-3'}`}>
+        {/* Main nav */}
+        <div className="space-y-0.5">
+          <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" collapsed={collapsed} />
+          <SidebarLink to="/library" icon="collections_bookmark" label="My Library" active={isMyLibrary} collapsed={collapsed} />
         </div>
 
-        {/* Agent Workflows section */}
-        <div>
+        {/* Collection tree — shown expanded when on library pages */}
+        {!collapsed && isLibrary && (
+          <div className="space-y-0.5">
+            <LibraryTree />
+          </div>
+        )}
+
+        {/* Agent Workflows */}
+        <div className={isLibrary && !collapsed ? 'pt-3' : ''}>
           {!collapsed && (
             <p className="px-3 mb-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
               Agent Workflows
@@ -233,8 +482,8 @@ export default function Sidebar({ collapsed, onToggle }) {
           </div>
         </div>
 
-        {/* Tags section — hidden when collapsed */}
-        {!collapsed && (
+        {/* Tags — hidden when collapsed or on library (tree takes up space) */}
+        {!collapsed && !isLibrary && (
           <div>
             <p className="px-3 mb-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
               Tags

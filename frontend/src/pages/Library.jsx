@@ -1,71 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { papersApi, collectionsApi, searchApi } from '../services/api'
+import { papersApi, searchApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
 }
 
-function CollectionModal({ parentName, onConfirm, onCancel }) {
-  const [name, setName] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onCancel() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (!name.trim() || saving) return
-    setSaving(true)
-    await onConfirm(name.trim())
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={onCancel}
-    >
-      <div
-        className="bg-white rounded-xl shadow-xl w-80 p-5"
-        onClick={e => e.stopPropagation()}
-      >
-        <h2 className="text-sm font-semibold text-slate-800">
-          {parentName ? `New subcollection in "${parentName}"` : 'New collection'}
-        </h2>
-        <form onSubmit={handleSubmit} className="mt-3 space-y-3">
-          <input
-            autoFocus
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Collection name"
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-          />
-          <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!name.trim() || saving}
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? 'Creating…' : 'Create'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
 
 const statusConfig = {
   'read': { label: 'Read', class: 'bg-emerald-100 text-emerald-700' },
@@ -73,195 +14,6 @@ const statusConfig = {
   'inbox': { label: 'Inbox', class: 'bg-blue-100 text-blue-700' },
 }
 
-function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, onCreateCollection, totalCount, inboxCount, unfiledCount }) {
-  const rootCollections = collections.filter(c => c.parentId === null)
-  const [expanded, setExpanded] = useState({ c1: true })
-  const [ctxMenu, setCtxMenu] = useState(null) // { col, x, y, confirming, deleting }
-  const [modal, setModal] = useState(null) // { parentId: string|null, parentName: string|null }
-
-  async function handleCreate(name) {
-    await onCreateCollection({ name, parentId: modal.parentId })
-    setModal(null)
-  }
-
-  useEffect(() => {
-    if (!ctxMenu) return
-    const close = () => setCtxMenu(null)
-    window.addEventListener('click', close)
-    window.addEventListener('keydown', e => { if (e.key === 'Escape') close() })
-    return () => {
-      window.removeEventListener('click', close)
-      window.removeEventListener('keydown', e => { if (e.key === 'Escape') close() })
-    }
-  }, [!!ctxMenu])
-
-  async function handleDelete(col) {
-    setCtxMenu(m => ({ ...m, deleting: true }))
-    await onDeleteCollection(col)
-    setCtxMenu(null)
-  }
-
-  function CollectionNode({ col, depth = 0 }) {
-    const children = collections.filter(c => c.parentId === col.id)
-    const isOpen = expanded[col.id]
-    const isCtxTarget = ctxMenu?.col.id === col.id
-
-    return (
-      <div>
-        <button
-          onClick={() => {
-            onSelect(col.id)
-            if (children.length) setExpanded(e => ({ ...e, [col.id]: !isOpen }))
-          }}
-          onContextMenu={e => {
-            e.preventDefault()
-            e.stopPropagation()
-            setCtxMenu({ col, x: e.clientX, y: e.clientY, confirming: false, deleting: false })
-          }}
-          className={`w-full flex items-center gap-2 py-1.5 rounded-lg text-sm transition-colors ${
-            isCtxTarget
-              ? 'bg-red-50 text-red-700'
-              : active === col.id
-              ? 'bg-blue-50 text-blue-700 font-medium'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-          style={{ paddingLeft: `${8 + depth * 12}px`, paddingRight: '8px' }}
-        >
-          {children.length > 0 ? (
-            <Icon name={isOpen ? 'expand_more' : 'chevron_right'} className="text-[14px] text-slate-400" />
-          ) : (
-            <span className="w-[14px]" />
-          )}
-          <Icon
-            name={col.type === 'agent-output' ? 'smart_toy' : 'folder'}
-            className={`text-[16px] ${col.type === 'agent-output' ? 'text-purple-400' : 'text-slate-400'}`}
-          />
-          <span className="flex-1 truncate text-left">{col.name}</span>
-          <span className="text-[11px] text-slate-400">{col.paperCount}</span>
-        </button>
-        {isOpen && children.map(child => (
-          <CollectionNode key={child.id} col={child} depth={depth + 1} />
-        ))}
-      </div>
-    )
-  }
-
-  return (
-    <>
-    {ctxMenu && (
-      <div
-        style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 50 }}
-        className="bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-52"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
-          <p className="text-xs text-slate-400 truncate">{ctxMenu.col.name}</p>
-        </div>
-        {ctxMenu.confirming ? (
-          <div className="px-3 py-2">
-            <p className="text-xs text-slate-600 mb-0.5 font-medium">Delete this collection?</p>
-            {collections.some(c => c.parentId === ctxMenu.col.id) && (
-              <p className="text-[11px] text-amber-600 mb-2">Subcollections will also be deleted.</p>
-            )}
-            <div className="flex gap-1.5 mt-2">
-              <button
-                onClick={() => handleDelete(ctxMenu.col)}
-                disabled={ctxMenu.deleting}
-                className="flex-1 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                {ctxMenu.deleting ? 'Deleting…' : 'Delete'}
-              </button>
-              <button
-                onClick={() => setCtxMenu(null)}
-                className="flex-1 py-1.5 border border-slate-200 text-slate-600 text-xs rounded-lg hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <button
-              onClick={() => {
-                setCtxMenu(null)
-                setModal({ parentId: ctxMenu.col.id, parentName: ctxMenu.col.name })
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              <Icon name="create_new_folder" className="text-[16px] text-slate-400" />
-              New subcollection
-            </button>
-            <div className="my-1 border-t border-slate-100" />
-            <button
-              onClick={() => setCtxMenu(m => ({ ...m, confirming: true }))}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-            >
-              <Icon name="delete" className="text-[16px]" />
-              Delete
-            </button>
-          </>
-        )}
-      </div>
-    )}
-    <aside className="w-52 flex-shrink-0 border-r border-slate-200 bg-white p-3 space-y-1 overflow-y-auto">
-      <p className="px-2 pt-1 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-        Quick Access
-      </p>
-      {[
-        { id: 'all', icon: 'collections_bookmark', label: 'All Papers', count: totalCount },
-        { id: 'inbox', icon: 'inbox', label: 'Inbox', count: inboxCount },
-        { id: 'unfiled', icon: 'folder_off', label: 'Unfiled', count: unfiledCount },
-      ].map(item => (
-        <button
-          key={item.id}
-          onClick={() => onSelect(item.id)}
-          className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            active === item.id
-              ? 'bg-blue-50 text-blue-700 font-medium'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Icon name={item.icon} className="text-[16px]" />
-          <span className="flex-1 text-left">{item.label}</span>
-          <span className="text-[11px] text-slate-400">{item.count}</span>
-        </button>
-      ))}
-
-      <div className="flex items-center px-2 pt-3 pb-1.5">
-        <p className="flex-1 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Collections</p>
-        <button
-          onClick={() => setModal({ parentId: null, parentName: null })}
-          className="p-0.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-          title="New collection"
-        >
-          <Icon name="add" className="text-[16px]" />
-        </button>
-      </div>
-      {rootCollections.map(col => (
-        <CollectionNode key={col.id} col={col} />
-      ))}
-
-      <div className="pt-4 space-y-2">
-        <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-slate-500 hover:bg-slate-100 transition-colors">
-          <Icon name="upload_file" className="text-[16px]" />
-          Import
-        </button>
-        <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-blue-600 hover:bg-blue-50 transition-colors font-medium">
-          <Icon name="smart_toy" className="text-[16px]" />
-          Run Agent Workflow
-        </button>
-      </div>
-    </aside>
-    {modal && (
-      <CollectionModal
-        parentName={modal.parentName}
-        onConfirm={handleCreate}
-        onCancel={() => setModal(null)}
-      />
-    )}
-    </>
-  )
-}
 
 function PaperRow({ paper, selected, onSelect }) {
   const status = statusConfig[paper.status] || statusConfig['inbox']
@@ -606,7 +358,6 @@ export default function Library() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedPaper, setSelectedPaper] = useState(null)
   const [papers, setPapers] = useState([])
-  const [collections, setCollections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -634,10 +385,6 @@ export default function Library() {
     return p
   }
 
-  // Fetch collections whenever the active library changes
-  useEffect(() => {
-    collectionsApi.list(activeLibraryId ? { library_id: activeLibraryId } : {}).then(setCollections).catch(() => {})
-  }, [activeLibraryId])
 
   // Re-fetch papers whenever collection, status filter, URL search query, or active library changes
   useEffect(() => {
@@ -678,31 +425,6 @@ export default function Library() {
     setSelectedPaper(null)
   }
 
-  const handleCreateCollection = async ({ name, parentId }) => {
-    const created = await collectionsApi.create({ name, parent_id: parentId || null, type: 'folder' })
-    setCollections(prev => [...prev, created])
-  }
-
-  const handleDeleteCollection = async (col) => {
-    // Collect the target + all descendants
-    const allCollections = collections
-    const toDelete = []
-    const gather = (parentId) => {
-      allCollections.filter(c => c.id === parentId || c.parentId === parentId).forEach(c => {
-        if (!toDelete.includes(c.id)) {
-          toDelete.push(c.id)
-          gather(c.id)
-        }
-      })
-    }
-    gather(col.id)
-
-    await Promise.all(toDelete.map(id => collectionsApi.remove(id).catch(() => {})))
-    setCollections(prev => prev.filter(c => !toDelete.includes(c.id)))
-    if (toDelete.includes(activeCollection)) {
-      setSearchParams({})
-    }
-  }
 
   const allTags = useMemo(() => [...new Set(papers.flatMap(p => p.tags))].sort(), [papers])
   const activeFilterCount = (sourceFilter !== 'all' ? 1 : 0)
@@ -744,23 +466,6 @@ export default function Library() {
 
   return (
     <div className="flex h-full">
-      <CollectionSidebar
-        collections={collections}
-        active={activeCollection}
-        onSelect={id => {
-          // Write col into URL; 'all' means no col param.
-          // Switching collections resets status filter and clears search.
-          const params = {}
-          if (id !== 'all') params.col = id
-          setSearchParams(params)
-        }}
-        onDeleteCollection={handleDeleteCollection}
-        onCreateCollection={handleCreateCollection}
-        totalCount={papers.length}
-        inboxCount={papers.filter(p => p.status === 'inbox').length}
-        unfiledCount={papers.filter(p => p.collections.length === 0).length}
-      />
-
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white">
