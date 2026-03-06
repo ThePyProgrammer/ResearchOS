@@ -2,6 +2,11 @@ from typing import Optional
 from .base import CamelModel
 
 
+class NamedLink(CamelModel):
+    name: str
+    url: str
+
+
 class AgentRunRef(CamelModel):
     id: str
     name: str
@@ -28,6 +33,7 @@ class Paper(CamelModel):
     pdf_url: Optional[str] = None
     github_url: Optional[str] = None
     website_url: Optional[str] = None
+    links: list[NamedLink] = []
     library_id: Optional[str] = None
     created_at: str
     item_type: str = "paper"
@@ -51,6 +57,7 @@ class PaperCreate(CamelModel):
     pdf_url: Optional[str] = None
     github_url: Optional[str] = None
     website_url: Optional[str] = None
+    links: list[NamedLink] = []
     library_id: Optional[str] = None
 
 
@@ -64,3 +71,4 @@ class PaperUpdate(CamelModel):
     agent_reasoning: Optional[str] = None
     github_url: Optional[str] = None
     website_url: Optional[str] = None
+    links: Optional[list[NamedLink]] = None

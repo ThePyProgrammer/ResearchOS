@@ -1,5 +1,6 @@
 from typing import Optional
 from .base import CamelModel
+from .paper import NamedLink
 
 
 class Website(CamelModel):
@@ -13,6 +14,7 @@ class Website(CamelModel):
     status: str = "inbox"
     source: str = "human"
     github_url: Optional[str] = None
+    links: list[NamedLink] = []
     collections: list[str] = []
     library_id: Optional[str] = None
     created_at: str
@@ -29,6 +31,7 @@ class WebsiteCreate(CamelModel):
     status: str = "inbox"
     source: str = "human"
     github_url: Optional[str] = None
+    links: list[NamedLink] = []
     collections: list[str] = []
     library_id: Optional[str] = None
 
@@ -42,4 +45,5 @@ class WebsiteUpdate(CamelModel):
     tags: Optional[list[str]] = None
     status: Optional[str] = None
     github_url: Optional[str] = None
+    links: Optional[list[NamedLink]] = None
     collections: Optional[list[str]] = None

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, websitesApi, searchApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
-import PaperInfoPanel, { statusConfig } from '../components/PaperInfoPanel'
+import PaperInfoPanel, { statusConfig, NamedLinks } from '../components/PaperInfoPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -411,6 +411,11 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
             <div>
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Links</p>
               <div className="space-y-2">
+                {/* Named links */}
+                <NamedLinks
+                  links={item.links || []}
+                  onSave={links => handleFieldSave('links', links)}
+                />
                 {/* GitHub link field */}
                 {editingGithub ? (
                   <div className="flex gap-1.5 items-center">

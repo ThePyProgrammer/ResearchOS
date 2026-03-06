@@ -29,6 +29,92 @@ export function formatAdded(raw) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+export function NamedLinks({ links = [], onSave }) {
+  const [adding, setAdding] = useState(false)
+  const [editIdx, setEditIdx] = useState(null)
+  const [draft, setDraft] = useState({ name: '', url: '' })
+
+  function startAdd() { setDraft({ name: '', url: '' }); setAdding(true); setEditIdx(null) }
+  function startEdit(i) { setDraft({ ...links[i] }); setEditIdx(i); setAdding(false) }
+  function cancel() { setAdding(false); setEditIdx(null) }
+
+  async function saveAdd() {
+    if (!draft.name.trim() || !draft.url.trim()) return
+    await onSave([...links, { name: draft.name.trim(), url: draft.url.trim() }])
+    setAdding(false)
+  }
+
+  async function saveEdit(i) {
+    if (!draft.name.trim() || !draft.url.trim()) return
+    const next = links.map((l, idx) => idx === i ? { name: draft.name.trim(), url: draft.url.trim() } : l)
+    await onSave(next)
+    setEditIdx(null)
+  }
+
+  async function remove(i) {
+    await onSave(links.filter((_, idx) => idx !== i))
+  }
+
+  const rowForm = (onConfirm) => (
+    <div className="space-y-1.5 pl-1">
+      <input
+        autoFocus
+        type="text"
+        value={draft.name}
+        onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+        onKeyDown={e => { if (e.key === 'Enter') onConfirm(); if (e.key === 'Escape') cancel() }}
+        placeholder="Label (e.g. Project Page)"
+        className="w-full px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+      />
+      <input
+        type="url"
+        value={draft.url}
+        onChange={e => setDraft(d => ({ ...d, url: e.target.value }))}
+        onKeyDown={e => { if (e.key === 'Enter') onConfirm(); if (e.key === 'Escape') cancel() }}
+        placeholder="https://…"
+        className="w-full px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 font-mono"
+      />
+      <div className="flex gap-1.5">
+        <button onClick={onConfirm} className="px-2 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">Save</button>
+        <button onClick={cancel} className="px-2 py-1 text-slate-400 text-xs rounded-lg hover:bg-slate-100">✕</button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="space-y-1.5">
+      {links.map((link, i) => (
+        editIdx === i ? (
+          <div key={i}>{rowForm(() => saveEdit(i))}</div>
+        ) : (
+          <div key={i} className="flex items-center gap-2 group">
+            <Icon name="link" className="text-[14px] text-slate-400 flex-shrink-0" />
+            <a href={link.url} target="_blank" rel="noreferrer"
+              className="flex-1 text-xs text-blue-600 hover:underline truncate"
+              title={link.url}>
+              {link.name}
+            </a>
+            <button onClick={() => startEdit(i)}
+              className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-slate-500 flex-shrink-0 transition-opacity">
+              <Icon name="edit" className="text-[13px]" />
+            </button>
+            <button onClick={() => remove(i)}
+              className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 flex-shrink-0 transition-opacity">
+              <Icon name="close" className="text-[13px]" />
+            </button>
+          </div>
+        )
+      ))}
+      {adding ? rowForm(saveAdd) : (
+        <button onClick={startAdd} className="text-xs text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1">
+          <Icon name="add" className="text-[13px]" />
+          Add link…
+        </button>
+      )}
+    </div>
+  )
+}
+
 function LinkField({ label, icon, value, placeholder, onSave, type }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value || '')
@@ -207,6 +293,10 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
             value={paper.websiteUrl}
             placeholder="https://…"
             onSave={v => handleLinkSave('websiteUrl', v)}
+          />
+          <NamedLinks
+            links={paper.links || []}
+            onSave={links => handleLinkSave('links', links)}
           />
         </div>
       </div>
