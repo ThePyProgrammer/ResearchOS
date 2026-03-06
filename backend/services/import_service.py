@@ -149,9 +149,9 @@ async def _fetch_doi(doi: str) -> dict:
 async def _fetch_arxiv(arxiv_id: str) -> dict:
     """Resolve an arXiv ID to paper metadata via the Atom API."""
     canonical = arxiv_id.rsplit("v", 1)[0] if re.search(r"v\d+$", arxiv_id) else arxiv_id
-    url = f"http://export.arxiv.org/api/query?id_list={canonical}"
+    url = f"https://export.arxiv.org/api/query?id_list={canonical}"
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
         resp = await client.get(url)
         resp.raise_for_status()
         xml_data = resp.content
