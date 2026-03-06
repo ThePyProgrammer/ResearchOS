@@ -162,8 +162,8 @@ export default function Paper() {
         </button>
         <div className="h-4 border-l border-slate-200" />
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Icon name="picture_as_pdf" className="text-[18px] text-red-400 flex-shrink-0" />
-          <span className="text-sm font-medium text-slate-700 truncate">{paper.title}.pdf</span>
+          <Icon name="article" className="text-[18px] text-slate-400 flex-shrink-0" />
+          <span className="text-sm font-medium text-slate-700 truncate">{paper.title}</span>
           {paper.arxivId && (
             <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
               arXiv
@@ -193,12 +193,17 @@ export default function Paper() {
               <Icon name="language" className="text-[18px]" />
             </a>
           )}
-          <button className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
-            <Icon name="share" className="text-[18px]" />
-          </button>
-          <button className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
-            <Icon name="more_vert" className="text-[18px]" />
-          </button>
+          {(paper.arxivId || paper.doi) && (
+            <a
+              href={paper.arxivId ? `https://arxiv.org/abs/${paper.arxivId}` : `https://doi.org/${paper.doi}`}
+              target="_blank"
+              rel="noreferrer"
+              title="Open paper"
+              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors flex items-center"
+            >
+              <Icon name="open_in_new" className="text-[18px]" />
+            </a>
+          )}
         </div>
       </div>
 
