@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { collections, user } from '../../data/mockData'
+import { user } from '../../data/mockData'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -29,38 +28,9 @@ function SidebarLink({ to, icon, label, badge, active }) {
   )
 }
 
-function CollectionItem({ collection, depth = 0 }) {
-  const [open, setOpen] = useState(depth === 0)
-  const children = collections.filter(c => c.parentId === collection.id)
-
-  const iconName = collection.type === 'agent-output' ? 'smart_toy' : 'folder'
-  const iconColor = collection.type === 'agent-output' ? 'text-purple-400' : 'text-slate-400'
-
-  return (
-    <div>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-colors"
-        style={{ paddingLeft: `${12 + depth * 12}px` }}
-      >
-        <Icon
-          name={children.length > 0 ? (open ? 'expand_more' : 'chevron_right') : 'circle'}
-          className={`text-[14px] ${children.length === 0 ? 'opacity-0' : ''}`}
-        />
-        <Icon name={iconName} className={`text-[16px] ${iconColor}`} />
-        <span className="flex-1 truncate text-left">{collection.name}</span>
-        <span className="text-[11px] opacity-50">{collection.paperCount}</span>
-      </button>
-      {open && children.map(child => (
-        <CollectionItem key={child.id} collection={child} depth={depth + 1} />
-      ))}
-    </div>
-  )
-}
 
 export default function Sidebar() {
   const navigate = useNavigate()
-  const rootCollections = collections.filter(c => c.parentId === null)
 
   return (
     <aside className="w-60 flex-shrink-0 bg-slate-800 flex flex-col h-screen sticky top-0 dark-scroll overflow-y-auto">
@@ -86,11 +56,6 @@ export default function Sidebar() {
           <div className="space-y-0.5">
             <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" />
             <SidebarLink to="/library" icon="collections_bookmark" label="My Library" />
-            <div className="mt-1">
-              {rootCollections.map(c => (
-                <CollectionItem key={c.id} collection={c} />
-              ))}
-            </div>
             <SidebarLink to="/library?filter=to-read" icon="bookmark" label="To Read" badge="12" />
           </div>
         </div>
