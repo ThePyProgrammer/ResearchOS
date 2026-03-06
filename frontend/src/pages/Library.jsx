@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, collectionsApi, searchApi } from '../services/api'
 
@@ -608,6 +608,10 @@ export default function Library() {
   const [collections, setCollections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [yearFilter, setYearFilter] = useState(null)
+  const [tagFilters, setTagFilters] = useState(new Set())
   const location = useLocation()
 
   const urlQuery = searchParams.get('q') || ''
@@ -686,10 +690,31 @@ export default function Library() {
     }
   }
 
-  // In search mode, results are already filtered by the backend; otherwise apply status tab
-  const filtered = urlQuery
-    ? papers
-    : papers.filter(p => filterTab === 'all' || p.status === filterTab)
+  const allTags = useMemo(() => [...new Set(papers.flatMap(p => p.tags))].sort(), [papers])
+  const allYears = useMemo(() => [...new Set(papers.map(p => p.year))].sort((a, b) => b - a), [papers])
+  const activeFilterCount = (sourceFilter !== 'all' ? 1 : 0) + (yearFilter ? 1 : 0) + tagFilters.size
+
+  const filtered = useMemo(() => {
+    let result = urlQuery ? papers : papers.filter(p => filterTab === 'all' || p.status === filterTab)
+    if (sourceFilter !== 'all') result = result.filter(p => p.source === sourceFilter)
+    if (yearFilter) result = result.filter(p => p.year === yearFilter)
+    if (tagFilters.size > 0) result = result.filter(p => [...tagFilters].every(t => p.tags.includes(t)))
+    return result
+  }, [papers, urlQuery, filterTab, sourceFilter, yearFilter, tagFilters])
+
+  function clearFilters() {
+    setSourceFilter('all')
+    setYearFilter(null)
+    setTagFilters(new Set())
+  }
+
+  function toggleTag(tag) {
+    setTagFilters(prev => {
+      const next = new Set(prev)
+      next.has(tag) ? next.delete(tag) : next.add(tag)
+      return next
+    })
+  }
 
   return (
     <div className="flex h-full">
@@ -759,21 +784,102 @@ export default function Library() {
               ))}
             </div>
           )}
-          <button className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors ml-auto">
+          <button
+            onClick={() => setFilterOpen(o => !o)}
+            className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-sm transition-colors ${
+              filterOpen || activeFilterCount > 0
+                ? 'bg-blue-50 border-blue-200 text-blue-700'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
             <Icon name="filter_list" className="text-[16px]" />
-            Filter
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
-          <div className="flex gap-0.5">
-            {['view_list', 'grid_view'].map((icon, i) => (
-              <button
-                key={icon}
-                className={`p-1.5 rounded-lg transition-colors ${i === 0 ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:bg-slate-100'}`}
-              >
-                <Icon name={icon} className="text-[18px]" />
-              </button>
-            ))}
-          </div>
         </div>
+
+        {/* Filter panel */}
+        {filterOpen && (
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 space-y-3">
+            {/* Source */}
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-10 flex-shrink-0">Source</span>
+              <div className="flex gap-1.5">
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'human', label: 'Human' },
+                  { id: 'agent', label: 'Agent' },
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setSourceFilter(opt.id)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      sourceFilter === opt.id
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Year */}
+            {allYears.length > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-10 flex-shrink-0">Year</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {allYears.map(y => (
+                    <button
+                      key={y}
+                      onClick={() => setYearFilter(yearFilter === y ? null : y)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        yearFilter === y
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      {y}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tags */}
+            {allTags.length > 0 && (
+              <div className="flex items-start gap-3">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-10 flex-shrink-0 pt-1">Tags</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {allTags.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => toggleTag(tag)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        tagFilters.has(tag)
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeFilterCount > 0 && (
+              <button onClick={clearFilters} className="text-xs text-slate-400 hover:text-red-500 transition-colors">
+                Clear all filters
+              </button>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="px-4 py-2 text-sm text-red-600 bg-red-50 border-b border-red-100">
@@ -829,7 +935,7 @@ export default function Library() {
           <span>
             {urlQuery
               ? `${papers.length} search result${papers.length !== 1 ? 's' : ''} for "${urlQuery}"`
-              : `Showing ${filtered.length} of ${papers.length} papers`}
+              : `Showing ${filtered.length} of ${papers.length} paper${papers.length !== 1 ? 's' : ''}`}
           </span>
           <div className="flex items-center gap-1">
             <button className="px-2 py-1 rounded hover:bg-slate-100 disabled:opacity-40" disabled>
