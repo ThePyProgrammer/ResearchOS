@@ -601,8 +601,6 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
 
 export default function Library() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [activeCollection, setActiveCollection] = useState('all')
-  const [filterTab, setFilterTab] = useState(() => searchParams.get('status') || 'all')
   const [selectedPaper, setSelectedPaper] = useState(null)
   const [papers, setPapers] = useState([])
   const [collections, setCollections] = useState([])
@@ -614,8 +612,22 @@ export default function Library() {
   const [tagFilters, setTagFilters] = useState(new Set())
   const location = useLocation()
 
+  // Derive active filters from URL — URL is the single source of truth
+  const activeCollection = searchParams.get('col') || 'all'
+  const filterTab = searchParams.get('status') || 'all'
   const urlQuery = searchParams.get('q') || ''
   const urlMode = searchParams.get('mode') || 'lexical'
+
+  // Helper: build next params preserving fields we want to keep
+  function navParams({ col, status, q, mode } = {}) {
+    const p = {}
+    const nextCol = col !== undefined ? col : activeCollection
+    const nextStatus = status !== undefined ? status : filterTab
+    if (nextCol && nextCol !== 'all') p.col = nextCol
+    if (nextStatus && nextStatus !== 'all') p.status = nextStatus
+    if (q) { p.q = q; p.mode = mode || 'lexical' }
+    return p
+  }
 
   // Fetch collections once
   useEffect(() => {
@@ -685,8 +697,7 @@ export default function Library() {
     await Promise.all(toDelete.map(id => collectionsApi.remove(id).catch(() => {})))
     setCollections(prev => prev.filter(c => !toDelete.includes(c.id)))
     if (toDelete.includes(activeCollection)) {
-      setActiveCollection('all')
-      setFilterTab('all')
+      setSearchParams({})
     }
   }
 
@@ -722,12 +733,10 @@ export default function Library() {
         collections={collections}
         active={activeCollection}
         onSelect={id => {
-          setActiveCollection(id)
-          setFilterTab('all')
-          // Keep col in URL so Header's QuickAdd knows which collection is active.
-          // Clear q/mode when switching collections.
+          // Write col into URL; 'all' means no col param.
+          // Switching collections resets status filter and clears search.
           const params = {}
-          if (id !== 'all' && id !== 'inbox') params.col = id
+          if (id !== 'all') params.col = id
           setSearchParams(params)
         }}
         onDeleteCollection={handleDeleteCollection}
@@ -755,7 +764,7 @@ export default function Library() {
                   </span>
                 )}
                 <button
-                  onClick={() => setSearchParams({})}
+                  onClick={() => setSearchParams(navParams({ q: undefined }))}
                   className="ml-1 text-slate-400 hover:text-slate-600 transition-colors"
                   title="Clear search"
                 >
@@ -774,7 +783,7 @@ export default function Library() {
               ].map(t => (
                 <button
                   key={t.id}
-                  onClick={() => setFilterTab(t.id)}
+                  onClick={() => setSearchParams(navParams({ status: t.id }))}
                   className={`px-3 py-1 rounded-md font-medium transition-colors ${
                     filterTab === t.id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                   }`}
