@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { activityApi, runsApi, papersApi, collectionsApi } from '../services/api'
 
 function Icon({ name, className = '' }) {
@@ -131,7 +132,7 @@ export default function Dashboard() {
   const [tab, setTab] = useState('all')
   const [activity, setActivity] = useState([])
   const [runs, setRuns] = useState([])
-  const [paperCount, setPaperCount] = useState(null)
+  const [papers, setPapers] = useState([])
   const [collectionCount, setCollectionCount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -143,7 +144,7 @@ export default function Dashboard() {
       .then(([activityData, runsData, papersData, collectionsData]) => {
         setActivity(activityData)
         setRuns(runsData)
-        setPaperCount(papersData.length)
+        setPapers(papersData)
         setCollectionCount(collectionsData.length)
       })
       .catch(err => setError(err.message))
@@ -153,6 +154,26 @@ export default function Dashboard() {
   // activity `type` values in DB: "agent" | "human"
   const filtered = tab === 'all' ? activity : activity.filter(a => a.type === tab)
   const runningCount = runs.filter(r => r.status === 'running').length
+
+  // Build cumulative "papers added over time" chart data grouped by month
+  const chartData = useMemo(() => {
+    if (!papers.length) return []
+    const counts = {}
+    for (const p of papers) {
+      const d = new Date(p.createdAt)
+      if (isNaN(d)) continue
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      counts[key] = (counts[key] || 0) + 1
+    }
+    const sorted = Object.keys(counts).sort()
+    let cumulative = 0
+    return sorted.map(key => {
+      cumulative += counts[key]
+      const [year, month] = key.split('-')
+      const label = new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'short', year: '2-digit' })
+      return { label, added: counts[key], total: cumulative }
+    })
+  }, [papers])
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -166,7 +187,7 @@ export default function Dashboard() {
         <StatCard
           icon="collections_bookmark"
           label="Total Papers"
-          value={paperCount === null ? '—' : paperCount.toLocaleString()}
+          value={loading ? '—' : papers.length.toLocaleString()}
           sub={collectionCount === null ? null : `Across ${collectionCount} collection${collectionCount === 1 ? '' : 's'}`}
         />
         <StatCard
@@ -177,6 +198,38 @@ export default function Dashboard() {
           sub={runningCount > 0 ? `${runningCount} running now` : 'None running'}
         />
       </div>
+
+      {/* Papers over time */}
+      {chartData.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800">Papers Added Over Time</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Cumulative library growth by month</p>
+            </div>
+            <span className="text-xs text-slate-400">{papers.length} total</span>
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="paperGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                formatter={(value, name) => [value, name === 'total' ? 'Total' : 'Added']}
+                labelStyle={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}
+              />
+              <Area type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} fill="url(#paperGradient)" dot={{ r: 3, fill: '#3b82f6', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Activity Feed */}
       <div className="bg-white rounded-xl border border-slate-200">
