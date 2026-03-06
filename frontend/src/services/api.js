@@ -32,6 +32,19 @@ export const papersApi = {
   /** Resolve a DOI, arXiv ID, or URL and add to the library. */
   import: (identifier) =>
     apiFetch('/papers/import', { method: 'POST', body: { identifier } }),
+  /** Upload a PDF file (File object) and store it in Supabase Storage. */
+  uploadPdf: async (id, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`${BASE}/papers/${id}/pdf`, { method: 'POST', body: formData })
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`
+      try { const err = await res.json(); detail = err.detail || detail } catch (_) {}
+      throw new Error(detail)
+    }
+    return res.json()
+  },
+  removePdf: (id) => apiFetch(`/papers/${id}/pdf`, { method: 'DELETE' }),
 }
 
 export const collectionsApi = {
@@ -67,4 +80,10 @@ export const proposalsApi = {
 
 export const activityApi = {
   list: (type) => apiFetch(`/activity${type ? `?type=${type}` : ''}`),
+}
+
+export const searchApi = {
+  /** Quick search — returns papers with a `score` field appended. */
+  query: (q, { mode = 'lexical', limit = 10 } = {}) =>
+    apiFetch(`/search?q=${encodeURIComponent(q)}&mode=${mode}&limit=${limit}`),
 }

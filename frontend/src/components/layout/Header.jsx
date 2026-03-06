@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { papersApi } from '../../services/api'
+import { papersApi, searchApi } from '../../services/api'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -257,26 +257,155 @@ function QuickAddModal({ open, onClose, onAdded }) {
 // Header
 // ---------------------------------------------------------------------------
 export default function Header() {
-  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const containerRef = useRef(null)
   const navigate = useNavigate()
+
+  // Debounced lexical search → quick dropdown (no API key needed)
+  useEffect(() => {
+    if (query.length < 2) {
+      setResults([])
+      setDropdownOpen(false)
+      return
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const data = await searchApi.query(query, { mode: 'lexical', limit: 5 })
+        setResults(data)
+        setDropdownOpen(true)
+      } catch (_) {
+        setResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function onMouseDown(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [])
+
+  const commitSearch = (q = query, mode = 'lexical') => {
+    const trimmed = q.trim()
+    if (!trimmed) return
+    setDropdownOpen(false)
+    setQuery('')
+    navigate(`/library?q=${encodeURIComponent(trimmed)}&mode=${mode}`)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') { setDropdownOpen(false); setQuery('') }
+    if (e.key === 'Enter') commitSearch()
+  }
+
+  const handleSelectPaper = (paper) => {
+    setDropdownOpen(false)
+    setQuery('')
+    navigate(`/library/paper/${paper.id}`)
+  }
 
   return (
     <>
       <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-4">
-        {/* Search */}
-        <div className="flex-1 max-w-xl relative">
-          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]" />
+        {/* Search with live dropdown */}
+        <div ref={containerRef} className="flex-1 max-w-xl relative">
+          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] pointer-events-none" />
           <input
             type="text"
             placeholder="Search library lexically or semantically…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={() => query.length >= 2 && setDropdownOpen(true)}
             className="w-full pl-9 pr-16 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
           />
-          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono">
-            ⌘K
-          </kbd>
+          {query ? (
+            <button
+              onClick={() => { setQuery(''); setDropdownOpen(false) }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <Icon name="close" className="text-[16px]" />
+            </button>
+          ) : (
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono pointer-events-none">
+              ⌘K
+            </kbd>
+          )}
+
+          {/* Dropdown */}
+          {dropdownOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+              {searching && (
+                <div className="px-4 py-3 text-sm text-slate-400 flex items-center gap-2">
+                  <span className="animate-spin inline-block w-3 h-3 border-2 border-slate-200 border-t-blue-500 rounded-full" />
+                  Searching…
+                </div>
+              )}
+
+              {!searching && results.length === 0 && (
+                <div className="px-4 py-3 text-sm text-slate-400">
+                  No results for "<span className="text-slate-600 font-medium">{query}</span>"
+                </div>
+              )}
+
+              {!searching && results.map((paper, i) => (
+                <button
+                  key={paper.id}
+                  onClick={() => handleSelectPaper(paper)}
+                  className={`w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors ${
+                    i < results.length - 1 ? 'border-b border-slate-100' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-slate-800 truncate flex-1">
+                      {paper.title}
+                    </span>
+                    {paper.source === 'agent' && paper.agentRun && (
+                      <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
+                        Run #{paper.agentRun.runNumber}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5 truncate">
+                    {paper.authors?.slice(0, 2).join(', ')}
+                    {paper.authors?.length > 2 ? ' et al.' : ''}
+                    {' · '}{paper.venue} {paper.year}
+                  </p>
+                </button>
+              ))}
+
+              {/* Footer: lexical all + semantic */}
+              <div className="border-t border-slate-100 grid grid-cols-2 divide-x divide-slate-100">
+                <button
+                  onClick={() => commitSearch(query, 'lexical')}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  <Icon name="format_list_bulleted" className="text-[14px] text-slate-400" />
+                  All lexical results
+                </button>
+                <button
+                  onClick={() => commitSearch(query, 'semantic')}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 transition-colors font-medium"
+                >
+                  <Icon name="auto_awesome" className="text-[14px]" />
+                  Semantic search
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 ml-auto">
@@ -300,10 +429,7 @@ export default function Header() {
       <QuickAddModal
         open={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
-        onAdded={(paper) => {
-          // Navigate to library so the user can see the new paper
-          navigate('/library')
-        }}
+        onAdded={() => navigate('/library')}
       />
     </>
   )

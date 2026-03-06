@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { papersApi } from '../services/api'
 
@@ -169,6 +169,58 @@ export default function Paper() {
   const [commentsTab, setCommentsTab] = useState('comments')
   const [zoom, setZoom] = useState(100)
   const [aiQuestion, setAiQuestion] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+  const [pdfBlobUrl, setPdfBlobUrl] = useState(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const fileInputRef = useRef(null)
+
+  useEffect(() => {
+    let objectUrl = null
+    if (!paper?.pdfUrl) {
+      setPdfBlobUrl(null)
+      return
+    }
+    setPdfLoading(true)
+    fetch(paper.pdfUrl)
+      .then(r => r.blob())
+      .then(blob => {
+        objectUrl = URL.createObjectURL(blob)
+        setPdfBlobUrl(objectUrl)
+      })
+      .catch(() => setPdfBlobUrl(paper.pdfUrl)) // fall back to direct URL
+      .finally(() => setPdfLoading(false))
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [paper?.pdfUrl])
+
+  async function handleUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const updated = await papersApi.uploadPdf(id, file)
+      setPaper(updated)
+    } catch (err) {
+      setUploadError(err.message)
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handleRemovePdf() {
+    setUploading(true)
+    setUploadError(null)
+    try {
+      await papersApi.removePdf(id)
+      setPaper(p => ({ ...p, pdfUrl: null }))
+    } catch (err) {
+      setUploadError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -234,9 +286,28 @@ export default function Paper() {
           )}
         </div>
         <div className="flex items-center gap-1.5 ml-auto">
-          <button className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
-            <Icon name="search" className="text-[18px]" />
-          </button>
+          {paper.githubUrl && (
+            <a
+              href={paper.githubUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="GitHub repository"
+              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors flex items-center"
+            >
+              <Icon name="code" className="text-[18px]" />
+            </a>
+          )}
+          {paper.websiteUrl && (
+            <a
+              href={paper.websiteUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="Project website"
+              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors flex items-center"
+            >
+              <Icon name="language" className="text-[18px]" />
+            </a>
+          )}
           <button className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
             <Icon name="share" className="text-[18px]" />
           </button>
@@ -251,56 +322,88 @@ export default function Paper() {
         <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-200">
           {/* PDF Toolbar */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 bg-white text-sm">
-            <button className="p-1 rounded hover:bg-slate-100 text-slate-500">
-              <Icon name="first_page" className="text-[18px]" />
-            </button>
-            <button className="p-1 rounded hover:bg-slate-100 text-slate-500">
-              <Icon name="navigate_before" className="text-[18px]" />
-            </button>
-            <input
-              type="text"
-              defaultValue="1"
-              className="w-10 text-center border border-slate-200 rounded py-0.5 text-xs"
-            />
-            <span className="text-slate-400 text-xs">/ {pdfPages.length}</span>
-            <button className="p-1 rounded hover:bg-slate-100 text-slate-500">
-              <Icon name="navigate_next" className="text-[18px]" />
-            </button>
-            <div className="h-4 border-l border-slate-200 mx-1" />
-            <button
-              onClick={() => setZoom(z => Math.max(50, z - 25))}
-              className="p-1 rounded hover:bg-slate-100 text-slate-500"
-            >
-              <Icon name="remove" className="text-[18px]" />
-            </button>
-            <span className="text-xs text-slate-500 w-10 text-center">{zoom}%</span>
-            <button
-              onClick={() => setZoom(z => Math.min(200, z + 25))}
-              className="p-1 rounded hover:bg-slate-100 text-slate-500"
-            >
-              <Icon name="add" className="text-[18px]" />
-            </button>
-            <div className="h-4 border-l border-slate-200 mx-1" />
-            <button className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-100 text-amber-700 text-xs font-medium">
-              <Icon name="ink_highlighter" className="text-[14px]" />
-              Highlight
-            </button>
-            <button className="p-1 rounded hover:bg-slate-100 text-slate-500">
-              <Icon name="comment" className="text-[18px]" />
-            </button>
-            <button className="p-1 rounded hover:bg-slate-100 text-slate-500">
-              <Icon name="crop_square" className="text-[18px]" />
-            </button>
+            {paper.pdfUrl ? (
+              <>
+                <a
+                  href={paper.pdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-medium"
+                >
+                  <Icon name="open_in_new" className="text-[14px]" />
+                  Open
+                </a>
+                <button
+                  onClick={handleRemovePdf}
+                  disabled={uploading}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-red-600 hover:bg-red-50 text-xs font-medium disabled:opacity-50"
+                >
+                  <Icon name="delete" className="text-[14px]" />
+                  Remove PDF
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Icon name="upload_file" className="text-[14px]" />
+                  {uploading ? 'Uploading…' : 'Upload PDF'}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={handleUpload}
+                />
+                <div className="h-4 border-l border-slate-200 mx-1" />
+                <button
+                  onClick={() => setZoom(z => Math.max(50, z - 25))}
+                  className="p-1 rounded hover:bg-slate-100 text-slate-500"
+                >
+                  <Icon name="remove" className="text-[18px]" />
+                </button>
+                <span className="text-xs text-slate-500 w-10 text-center">{zoom}%</span>
+                <button
+                  onClick={() => setZoom(z => Math.min(200, z + 25))}
+                  className="p-1 rounded hover:bg-slate-100 text-slate-500"
+                >
+                  <Icon name="add" className="text-[18px]" />
+                </button>
+              </>
+            )}
+            {uploadError && (
+              <span className="ml-auto text-xs text-red-500">{uploadError}</span>
+            )}
           </div>
 
           {/* PDF Content */}
-          <div className="flex-1 overflow-y-auto bg-slate-200 p-6">
-            <div style={{ zoom: `${zoom}%` }}>
-              {pdfPages.map(page => (
-                <PdfPage key={page.page} page={page} />
-              ))}
+          {paper.pdfUrl ? (
+            <div className="flex-1 overflow-hidden">
+              {pdfLoading ? (
+                <div className="flex items-center justify-center h-full text-slate-400 text-sm">
+                  Loading PDF…
+                </div>
+              ) : (
+                <iframe
+                  src={pdfBlobUrl}
+                  title={paper.title}
+                  className="w-full h-full border-0"
+                />
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto bg-slate-200 p-6">
+              <div style={{ zoom: `${zoom}%` }}>
+                {pdfPages.map(page => (
+                  <PdfPage key={page.page} page={page} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Comments Panel */}

@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -131,3 +131,33 @@ async def delete_paper(paper_id: str):
     deleted = paper_service.delete_paper(paper_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
+
+
+@router.post("/{paper_id}/pdf", status_code=200)
+async def upload_pdf(paper_id: str, file: UploadFile = File(...)):
+    """Upload a PDF file for a paper and store it in Supabase Storage."""
+    paper = paper_service.get_paper(paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    if file.content_type not in ("application/pdf", "application/octet-stream"):
+        raise HTTPException(status_code=422, detail="Only PDF files are accepted")
+
+    from services.pdf_service import upload_pdf as _upload
+    file_bytes = await file.read()
+    pdf_url = _upload(paper_id, file_bytes)
+    paper_service.set_pdf_url(paper_id, pdf_url)
+
+    updated = paper_service.get_paper(paper_id)
+    return JSONResponse(updated.model_dump(by_alias=True))
+
+
+@router.delete("/{paper_id}/pdf", status_code=204)
+async def delete_pdf(paper_id: str):
+    """Remove a paper's PDF from Supabase Storage and clear its url."""
+    paper = paper_service.get_paper(paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+
+    from services.pdf_service import delete_pdf as _delete
+    _delete(paper_id)
+    paper_service.set_pdf_url(paper_id, None)

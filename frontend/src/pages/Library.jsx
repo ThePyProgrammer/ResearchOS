@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { papersApi, collectionsApi } from '../services/api'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { papersApi, collectionsApi, searchApi } from '../services/api'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -148,8 +148,64 @@ function PaperRow({ paper, selected, onSelect }) {
   )
 }
 
-function PaperDetail({ paper, onClose, onStatusChange }) {
+function LinkField({ label, icon, value, placeholder, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value || '')
+
+  function startEdit() { setDraft(value || ''); setEditing(true) }
+  function cancel() { setEditing(false) }
+  async function save() {
+    await onSave(draft.trim() || null)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="space-y-1">
+        <p className="text-xs font-semibold text-slate-500">{label}</p>
+        <div className="flex gap-1.5">
+          <input
+            autoFocus
+            type="url"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
+            placeholder={placeholder}
+            className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+          />
+          <button onClick={save} className="px-2 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">Save</button>
+          <button onClick={cancel} className="px-2 py-1 text-slate-500 text-xs rounded-lg hover:bg-slate-100">✕</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Icon name={icon} className="text-[15px] text-slate-400 flex-shrink-0" />
+      {value ? (
+        <>
+          <a href={value} target="_blank" rel="noreferrer" className="flex-1 text-xs text-blue-600 hover:underline truncate">{value}</a>
+          <button onClick={startEdit} className="text-slate-300 hover:text-slate-500 flex-shrink-0">
+            <Icon name="edit" className="text-[13px]" />
+          </button>
+          <button onClick={() => onSave(null)} className="text-slate-300 hover:text-red-400 flex-shrink-0">
+            <Icon name="close" className="text-[13px]" />
+          </button>
+        </>
+      ) : (
+        <button onClick={startEdit} className="text-xs text-slate-400 hover:text-blue-600">
+          Add {label.toLowerCase()}…
+        </button>
+      )}
+    </div>
+  )
+}
+
+function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }) {
   const [tab, setTab] = useState('info')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const navigate = useNavigate()
 
   const statusOptions = ['inbox', 'to-read', 'read']
@@ -163,6 +219,27 @@ function PaperDetail({ paper, onClose, onStatusChange }) {
     }
   }
 
+  const handleLinkSave = async (field, value) => {
+    try {
+      const updated = await papersApi.update(paper.id, { [field]: value })
+      onPaperUpdate(updated)
+    } catch (err) {
+      console.error('Failed to update link:', err)
+    }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await papersApi.remove(paper.id)
+      onDelete(paper.id)
+    } catch (err) {
+      console.error('Failed to delete paper:', err)
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
+
   return (
     <aside className="w-80 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
@@ -172,10 +249,41 @@ function PaperDetail({ paper, onClose, onStatusChange }) {
             <span className="text-[11px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">Agent-sourced</span>
           )}
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-          <Icon name="close" className="text-[18px]" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+            title="Delete paper"
+          >
+            <Icon name="delete" className="text-[16px]" />
+          </button>
+          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-600">
+            <Icon name="close" className="text-[18px]" />
+          </button>
+        </div>
       </div>
+
+      {confirmDelete && (
+        <div className="mx-4 mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
+          <p className="text-red-700 font-medium mb-1">Delete this paper?</p>
+          <p className="text-red-600 text-xs mb-3">This cannot be undone.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex-1 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="flex-1 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 border-b border-slate-100">
@@ -223,6 +331,23 @@ function PaperDetail({ paper, onClose, onStatusChange }) {
                   <a href="#" className="text-blue-600 hover:underline text-sm break-all">{paper.doi}</a>
                 </div>
               )}
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <LinkField
+                label="GitHub"
+                icon="code"
+                value={paper.githubUrl}
+                placeholder="https://github.com/…"
+                onSave={v => handleLinkSave('githubUrl', v)}
+              />
+              <LinkField
+                label="Website"
+                icon="language"
+                value={paper.websiteUrl}
+                placeholder="https://…"
+                onSave={v => handleLinkSave('websiteUrl', v)}
+              />
             </div>
 
             <div>
@@ -319,38 +444,39 @@ export default function Library() {
   const [collections, setCollections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  const fetchPapers = (collectionId = activeCollection) => {
-    const params = {}
-    if (collectionId !== 'all') params.collection_id = collectionId
-    if (filterTab !== 'all') params.status = filterTab
-    return papersApi.list(params).then(setPapers)
-  }
+  const urlQuery = searchParams.get('q') || ''
+  const urlMode = searchParams.get('mode') || 'lexical'
 
+  // Fetch collections once
+  useEffect(() => {
+    collectionsApi.list().then(setCollections).catch(() => {})
+  }, [])
+
+  // Re-fetch papers whenever collection, status filter, or URL search query changes
   useEffect(() => {
     setLoading(true)
     setError(null)
-    Promise.all([
-      papersApi.list(
-        activeCollection !== 'all' ? { collection_id: activeCollection } : {}
-      ),
-      collectionsApi.list(),
-    ])
-      .then(([papersData, collectionsData]) => {
-        setPapers(papersData)
-        setCollections(collectionsData)
-      })
+
+    const baseFetch = papersApi.list({
+      ...(activeCollection !== 'all' && { collection_id: activeCollection }),
+      ...(filterTab !== 'all' && { status: filterTab }),
+    })
+
+    const fetchPromise = urlQuery
+      ? searchApi.query(urlQuery, { mode: urlMode, limit: 50 }).catch(() => {
+          // Search endpoint unavailable — clear the query and fall back to full list
+          setSearchParams({})
+          return baseFetch
+        })
+      : baseFetch
+
+    fetchPromise
+      .then(data => setPapers(data))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }, [activeCollection])
-
-  useEffect(() => {
-    if (loading) return
-    const params = {}
-    if (activeCollection !== 'all') params.collection_id = activeCollection
-    if (filterTab !== 'all') params.status = filterTab
-    papersApi.list(params).then(setPapers).catch(err => setError(err.message))
-  }, [filterTab])
+  }, [activeCollection, filterTab, urlQuery, urlMode])
 
   const handleStatusChange = (paperId, newStatus) => {
     setPapers(prev => prev.map(p => p.id === paperId ? { ...p, status: newStatus } : p))
@@ -359,41 +485,82 @@ export default function Library() {
     }
   }
 
-  const filtered = papers.filter(p => {
-    if (filterTab === 'all') return true
-    return p.status === filterTab
-  })
+  const handlePaperUpdate = (updated) => {
+    setPapers(prev => prev.map(p => p.id === updated.id ? updated : p))
+    if (selectedPaper?.id === updated.id) setSelectedPaper(updated)
+  }
+
+  const handleDelete = (paperId) => {
+    setPapers(prev => prev.filter(p => p.id !== paperId))
+    setSelectedPaper(null)
+  }
+
+  // In search mode, results are already filtered by the backend; otherwise apply status tab
+  const filtered = urlQuery
+    ? papers
+    : papers.filter(p => filterTab === 'all' || p.status === filterTab)
 
   return (
     <div className="flex h-full">
       <CollectionSidebar
         collections={collections}
         active={activeCollection}
-        onSelect={id => { setActiveCollection(id); setFilterTab('all') }}
+        onSelect={id => {
+          setActiveCollection(id)
+          setFilterTab('all')
+          if (urlQuery) setSearchParams({})
+        }}
         totalCount={papers.length}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white">
-          <div className="flex bg-slate-100 rounded-lg p-0.5 text-sm">
-            {[
-              { id: 'all', label: 'All' },
-              { id: 'inbox', label: 'Inbox' },
-              { id: 'to-read', label: 'To Read' },
-              { id: 'read', label: 'Read' },
-            ].map(t => (
-              <button
-                key={t.id}
-                onClick={() => setFilterTab(t.id)}
-                className={`px-3 py-1 rounded-md font-medium transition-colors ${
-                  filterTab === t.id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          {urlQuery ? (
+            /* Search mode — show chip instead of status tabs */
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-medium border ${
+                urlMode === 'semantic'
+                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : 'bg-slate-100 border-slate-200 text-slate-700'
+              }`}>
+                <Icon name={urlMode === 'semantic' ? 'auto_awesome' : 'search'} className="text-[14px]" />
+                <span>"{urlQuery}"</span>
+                {urlMode === 'semantic' && (
+                  <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-semibold ml-1">
+                    Semantic
+                  </span>
+                )}
+                <button
+                  onClick={() => setSearchParams({})}
+                  className="ml-1 text-slate-400 hover:text-slate-600 transition-colors"
+                  title="Clear search"
+                >
+                  <Icon name="close" className="text-[14px]" />
+                </button>
+              </div>
+              <span className="text-xs text-slate-400">{papers.length} result{papers.length !== 1 ? 's' : ''}</span>
+            </div>
+          ) : (
+            <div className="flex bg-slate-100 rounded-lg p-0.5 text-sm">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'inbox', label: 'Inbox' },
+                { id: 'to-read', label: 'To Read' },
+                { id: 'read', label: 'Read' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setFilterTab(t.id)}
+                  className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                    filterTab === t.id ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
           <button className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors ml-auto">
             <Icon name="filter_list" className="text-[16px]" />
             Filter
@@ -461,7 +628,11 @@ export default function Library() {
 
         {/* Pagination */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-white text-sm text-slate-500">
-          <span>Showing {filtered.length} of {papers.length} papers</span>
+          <span>
+            {urlQuery
+              ? `${papers.length} search result${papers.length !== 1 ? 's' : ''} for "${urlQuery}"`
+              : `Showing ${filtered.length} of ${papers.length} papers`}
+          </span>
           <div className="flex items-center gap-1">
             <button className="px-2 py-1 rounded hover:bg-slate-100 disabled:opacity-40" disabled>
               <Icon name="chevron_left" className="text-[18px]" />
@@ -479,6 +650,8 @@ export default function Library() {
           paper={selectedPaper}
           onClose={() => setSelectedPaper(null)}
           onStatusChange={handleStatusChange}
+          onPaperUpdate={handlePaperUpdate}
+          onDelete={handleDelete}
         />
       )}
     </div>
