@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { papersApi } from '../services/api'
 import PaperInfoPanel from '../components/PaperInfoPanel'
+import NotesPanel from '../components/NotesPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -297,7 +298,7 @@ export default function Paper() {
         </div>
 
         {/* Side Panel */}
-        <div className="w-80 flex-shrink-0 flex flex-col bg-white border-l border-slate-200">
+        <div className={`${sideTab === 'notes' ? 'w-[560px]' : 'w-80'} flex-shrink-0 flex flex-col bg-white border-l border-slate-200 transition-all duration-200`}>
           <div className="flex border-b border-slate-100">
             {[
               { id: 'details', label: 'Details' },
@@ -325,11 +326,7 @@ export default function Paper() {
               />
             )}
             {sideTab === 'notes' && (
-              <div className="p-4 text-center py-8">
-                <Icon name="note_add" className="text-[40px] text-slate-300 mb-3" />
-                <p className="text-sm text-slate-400">No notes yet.</p>
-                <button className="mt-2 text-sm text-blue-600 hover:underline font-medium">Add a note</button>
-              </div>
+              <NotesPanel paperId={id} />
             )}
             {sideTab === 'ai' && (
               <div className="p-4 space-y-4">

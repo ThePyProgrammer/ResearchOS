@@ -120,6 +120,13 @@ export const activityApi = {
   },
 }
 
+export const notesApi = {
+  list: (paperId) => apiFetch(`/papers/${paperId}/notes`),
+  create: (paperId, data) => apiFetch(`/papers/${paperId}/notes`, { method: 'POST', body: data }),
+  update: (noteId, data) => apiFetch(`/notes/${noteId}`, { method: 'PATCH', body: data }),
+  remove: (noteId) => apiFetch(`/notes/${noteId}`, { method: 'DELETE' }),
+}
+
 export const searchApi = {
   /** Quick search — returns papers with a `score` field appended. */
   query: (q, { mode = 'lexical', limit = 10 } = {}) =>
