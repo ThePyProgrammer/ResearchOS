@@ -28,6 +28,7 @@ class Paper(CamelModel):
     pdf_url: Optional[str] = None
     github_url: Optional[str] = None
     website_url: Optional[str] = None
+    library_id: Optional[str] = None
     created_at: str
 
 
@@ -49,6 +50,7 @@ class PaperCreate(CamelModel):
     pdf_url: Optional[str] = None
     github_url: Optional[str] = None
     website_url: Optional[str] = None
+    library_id: Optional[str] = None
 
 
 class PaperUpdate(CamelModel):

@@ -47,8 +47,21 @@ export const papersApi = {
   removePdf: (id) => apiFetch(`/papers/${id}/pdf`, { method: 'DELETE' }),
 }
 
+export const librariesApi = {
+  list: () => apiFetch('/libraries'),
+  get: (id) => apiFetch(`/libraries/${id}`),
+  create: (data) => apiFetch('/libraries', { method: 'POST', body: data }),
+  update: (id, data) => apiFetch(`/libraries/${id}`, { method: 'PATCH', body: data }),
+  remove: (id) => apiFetch(`/libraries/${id}`, { method: 'DELETE' }),
+}
+
 export const collectionsApi = {
-  list: () => apiFetch('/collections'),
+  list: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    ).toString()
+    return apiFetch(`/collections${qs ? `?${qs}` : ''}`)
+  },
   get: (id) => apiFetch(`/collections/${id}`),
   create: (data) => apiFetch('/collections', { method: 'POST', body: data }),
   update: (id, data) => apiFetch(`/collections/${id}`, { method: 'PATCH', body: data }),

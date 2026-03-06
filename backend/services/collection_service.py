@@ -20,8 +20,11 @@ def _compute_paper_counts(collections: list[Collection]) -> list[Collection]:
     return [c.model_copy(update={"paper_count": counts.get(c.id, 0)}) for c in collections]
 
 
-def list_collections() -> list[Collection]:
-    result = get_client().table(_TABLE).select("*").execute()
+def list_collections(library_id: Optional[str] = None) -> list[Collection]:
+    query = get_client().table(_TABLE).select("*")
+    if library_id:
+        query = query.eq("library_id", library_id)
+    result = query.execute()
     collections = [Collection.model_validate(c) for c in result.data]
     return _compute_paper_counts(collections)
 

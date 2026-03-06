@@ -5,9 +5,11 @@ import Library from './pages/Library'
 import Paper from './pages/Paper'
 import Agents from './pages/Agents'
 import Proposals from './pages/Proposals'
+import { LibraryProvider } from './context/LibraryContext'
 
 export default function App() {
   return (
+    <LibraryProvider>
     <BrowserRouter>
       <Routes>
         {/* Pages that use the global search/action Header */}
@@ -25,5 +27,6 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </LibraryProvider>
   )
 }

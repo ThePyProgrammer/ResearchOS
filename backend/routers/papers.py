@@ -20,11 +20,13 @@ async def list_papers(
     collection_id: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    library_id: Optional[str] = None,
 ):
     papers = paper_service.list_papers(
         collection_id=collection_id,
         status=status,
         search=search,
+        library_id=library_id,
     )
     return JSONResponse([p.model_dump(by_alias=True) for p in papers])
 

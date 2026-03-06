@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -14,8 +15,8 @@ NOT_FOUND = {"error": "not_found", "detail": "Collection not found"}
 
 
 @router.get("")
-async def list_collections():
-    collections = collection_service.list_collections()
+async def list_collections(library_id: Optional[str] = None):
+    collections = collection_service.list_collections(library_id=library_id)
     return JSONResponse([c.model_dump(by_alias=True) for c in collections])
 
 

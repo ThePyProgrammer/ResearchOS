@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { proposalsApi } from '../../services/api'
 import { user } from '../../data/mockData'
+import { useLibrary } from '../../context/LibraryContext'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -33,6 +34,122 @@ function SidebarLink({ to, icon, label, badge, active, collapsed }) {
         <span className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full" />
       )}
     </NavLink>
+  )
+}
+
+function LibrarySwitcher({ collapsed }) {
+  const { libraries, activeLibrary, setActiveLibraryId, createLibrary } = useLibrary()
+  const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState('')
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    if (!newName.trim()) return
+    const lib = await createLibrary(newName.trim())
+    setActiveLibraryId(lib.id)
+    setNewName('')
+    setCreating(false)
+    setOpen(false)
+  }
+
+  if (collapsed) {
+    return (
+      <div className="px-1 py-2 border-b border-white/10">
+        <button
+          title={activeLibrary?.name ?? 'No library'}
+          onClick={() => setOpen(o => !o)}
+          className="w-full flex justify-center py-1.5 rounded-lg hover:bg-white/5 transition-colors text-slate-400"
+        >
+          <Icon name="library_books" className="text-[18px]" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-3 py-2 border-b border-white/10 relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors group"
+      >
+        <Icon name="library_books" className="text-[16px] text-slate-400 flex-shrink-0" />
+        <span className="flex-1 text-[13px] font-medium text-slate-200 truncate">
+          {activeLibrary?.name ?? 'No library'}
+        </span>
+        <Icon name={open ? 'expand_less' : 'expand_more'} className="text-[16px] text-slate-500 group-hover:text-slate-300" />
+      </button>
+
+      {open && (
+        <div className="absolute left-3 right-3 top-full mt-1 z-50 bg-slate-900 border border-white/10 rounded-xl shadow-xl overflow-hidden">
+          <div className="max-h-48 overflow-y-auto">
+            {libraries.map(lib => (
+              <button
+                key={lib.id}
+                onClick={() => { setActiveLibraryId(lib.id); setOpen(false) }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${
+                  lib.id === activeLibrary?.id
+                    ? 'bg-blue-600/20 text-blue-300'
+                    : 'text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                <Icon name="library_books" className="text-[15px] flex-shrink-0" />
+                <span className="flex-1 truncate">{lib.name}</span>
+                {lib.id === activeLibrary?.id && (
+                  <Icon name="check" className="text-[15px] text-blue-400" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="border-t border-white/10">
+            {creating ? (
+              <form onSubmit={handleCreate} className="flex items-center gap-1.5 px-3 py-2">
+                <input
+                  autoFocus
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Library name…"
+                  className="flex-1 bg-slate-800 text-slate-200 text-xs px-2 py-1 rounded border border-white/10 focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!newName.trim()}
+                  className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
+                >
+                  Create
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCreating(false); setNewName('') }}
+                  className="text-xs px-2 py-1 text-slate-400 hover:text-slate-200"
+                >
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <button
+                onClick={() => setCreating(true)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+              >
+                <Icon name="add" className="text-[16px]" />
+                New library
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -76,7 +193,10 @@ export default function Sidebar({ collapsed, onToggle }) {
         </button>
       </div>
 
-      <nav className={`flex-1 p-2 space-y-5 ${collapsed ? 'pt-3' : 'p-3'}`}>
+      {/* Library switcher */}
+      <LibrarySwitcher collapsed={collapsed} />
+
+      <nav className={`flex-1 space-y-5 ${collapsed ? 'p-2 pt-3' : 'p-3'}`}>
         {/* Library section */}
         <div>
           {!collapsed && (

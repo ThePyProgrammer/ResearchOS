@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 # Ensure backend/ is on the path so relative imports work
 sys.path.insert(0, str(Path(__file__).parent))
 
-from routers import papers, collections, workflows, runs, proposals, activity, search
+from routers import papers, collections, workflows, runs, proposals, activity, search, libraries
 from services.db import get_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -32,6 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(libraries.router)
 app.include_router(papers.router)
 app.include_router(collections.router)
 app.include_router(workflows.router)
@@ -60,6 +61,14 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # ---------------------------------------------------------------------------
 
 SEED: dict[str, list] = {
+    "libraries.json": [
+        {
+            "id": "lib_default",
+            "name": "My Library",
+            "description": "Default research library",
+            "created_at": "2024-01-01T00:00:00Z",
+        },
+    ],
     "papers.json": [
         {
             "id": "p1",
@@ -79,6 +88,7 @@ SEED: dict[str, list] = {
             "rejected": False,
             "collections": ["c1", "c2"],
             "pdf_url": None,
+            "library_id": "lib_default",
             "created_at": "2024-01-01T00:00:00Z",
         },
         {
@@ -99,6 +109,7 @@ SEED: dict[str, list] = {
             "rejected": False,
             "collections": ["c3"],
             "pdf_url": None,
+            "library_id": "lib_default",
             "created_at": "2024-01-02T00:00:00Z",
         },
         {
@@ -119,6 +130,7 @@ SEED: dict[str, list] = {
             "rejected": False,
             "collections": ["c3"],
             "pdf_url": None,
+            "library_id": "lib_default",
             "created_at": "2024-01-03T00:00:00Z",
         },
         {
@@ -139,6 +151,7 @@ SEED: dict[str, list] = {
             "rejected": True,
             "collections": [],
             "pdf_url": None,
+            "library_id": "lib_default",
             "created_at": "2024-01-04T00:00:00Z",
         },
         {
@@ -159,6 +172,7 @@ SEED: dict[str, list] = {
             "rejected": False,
             "collections": ["c2"],
             "pdf_url": None,
+            "library_id": "lib_default",
             "created_at": "2024-01-05T00:00:00Z",
         },
         {
@@ -179,15 +193,16 @@ SEED: dict[str, list] = {
             "rejected": False,
             "collections": ["c1"],
             "pdf_url": None,
+            "library_id": "lib_default",
             "created_at": "2024-01-06T00:00:00Z",
         },
     ],
     "collections.json": [
-        {"id": "c1", "name": "ML / Transformers", "parent_id": None, "type": "folder", "paper_count": 0},
-        {"id": "c2", "name": "RLHF", "parent_id": "c1", "type": "folder", "paper_count": 0},
-        {"id": "c3", "name": "Multi-Agent Systems", "parent_id": None, "type": "folder", "paper_count": 0},
-        {"id": "c4", "name": "RAG Optimization", "parent_id": None, "type": "folder", "paper_count": 0},
-        {"id": "c5", "name": "Run #42: Lit Review", "parent_id": None, "type": "agent-output", "paper_count": 0},
+        {"id": "c1", "name": "ML / Transformers", "parent_id": None, "type": "folder", "paper_count": 0, "library_id": "lib_default"},
+        {"id": "c2", "name": "RLHF", "parent_id": "c1", "type": "folder", "paper_count": 0, "library_id": "lib_default"},
+        {"id": "c3", "name": "Multi-Agent Systems", "parent_id": None, "type": "folder", "paper_count": 0, "library_id": "lib_default"},
+        {"id": "c4", "name": "RAG Optimization", "parent_id": None, "type": "folder", "paper_count": 0, "library_id": "lib_default"},
+        {"id": "c5", "name": "Run #42: Lit Review", "parent_id": None, "type": "agent-output", "paper_count": 0, "library_id": "lib_default"},
     ],
     "workflows.json": [
         {
@@ -385,6 +400,7 @@ def seed_data() -> None:
     db = get_client()
     # Order matters: proposals FK → papers + runs
     table_map = [
+        ("libraries",   SEED["libraries.json"]),
         ("papers",      SEED["papers.json"]),
         ("collections", SEED["collections.json"]),
         ("workflows",   SEED["workflows.json"]),

@@ -15,9 +15,14 @@ def list_papers(
     collection_id: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    library_id: Optional[str] = None,
 ) -> list[Paper]:
-    result = get_client().table(_TABLE).select("*").execute()
+    query = get_client().table(_TABLE).select("*")
+    if library_id:
+        query = query.eq("library_id", library_id)
+    result = query.execute()
     papers = [Paper.model_validate(p) for p in result.data]
+
 
     if collection_id == "inbox":
         papers = [p for p in papers if p.status == "inbox"]

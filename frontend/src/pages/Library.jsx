@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, collectionsApi, searchApi } from '../services/api'
+import { useLibrary } from '../context/LibraryContext'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -601,6 +602,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
 }
 
 export default function Library() {
+  const { activeLibraryId } = useLibrary()
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedPaper, setSelectedPaper] = useState(null)
   const [papers, setPapers] = useState([])
@@ -632,17 +634,18 @@ export default function Library() {
     return p
   }
 
-  // Fetch collections once
+  // Fetch collections whenever the active library changes
   useEffect(() => {
-    collectionsApi.list().then(setCollections).catch(() => {})
-  }, [])
+    collectionsApi.list(activeLibraryId ? { library_id: activeLibraryId } : {}).then(setCollections).catch(() => {})
+  }, [activeLibraryId])
 
-  // Re-fetch papers whenever collection, status filter, or URL search query changes
+  // Re-fetch papers whenever collection, status filter, URL search query, or active library changes
   useEffect(() => {
     setLoading(true)
     setError(null)
 
-    const baseFetch = papersApi.list()
+    const listParams = activeLibraryId ? { library_id: activeLibraryId } : {}
+    const baseFetch = papersApi.list(listParams)
 
     const fetchPromise = urlQuery
       ? searchApi.query(urlQuery, { mode: urlMode, limit: 50 }).catch(() => {
@@ -656,7 +659,7 @@ export default function Library() {
       .then(data => setPapers(data))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }, [urlQuery, urlMode, location.key])
+  }, [urlQuery, urlMode, location.key, activeLibraryId])
 
   const handleStatusChange = (paperId, newStatus) => {
     setPapers(prev => prev.map(p => p.id === paperId ? { ...p, status: newStatus } : p))

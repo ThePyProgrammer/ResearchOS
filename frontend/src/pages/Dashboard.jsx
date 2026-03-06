@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { activityApi, runsApi, papersApi, collectionsApi } from '../services/api'
+import { useLibrary } from '../context/LibraryContext'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -116,6 +117,7 @@ function LoadingSkeleton() {
 }
 
 export default function Dashboard() {
+  const { activeLibrary } = useLibrary()
   const [tab, setTab] = useState('all')
   const [activity, setActivity] = useState([])
   const [runs, setRuns] = useState([])
@@ -165,7 +167,7 @@ export default function Dashboard() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{activeLibrary?.name ?? 'Dashboard'}</h1>
         <p className="text-slate-500 mt-1">Your research activity at a glance.</p>
       </div>
 
