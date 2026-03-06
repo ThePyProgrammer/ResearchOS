@@ -34,9 +34,9 @@ def log_activity(
 ) -> ActivityItem:
     """Create a new activity entry and persist it to the database."""
     now = datetime.now(timezone.utc)
-    # Format as "Jun 5, 14:32" — used for display since time is a plain string field
-    day = str(now.day)
-    time_str = now.strftime(f"%b {day}, %H:%M")
+    # Store as ISO 8601 with millisecond precision — 6-digit microseconds aren't
+    # part of the ECMAScript date spec and may parse as Invalid Date in some browsers
+    time_str = now.isoformat(timespec="milliseconds")
 
     action = ActivityAction(label=action_label, href=action_href) if action_label and action_href else None
 

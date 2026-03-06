@@ -6,6 +6,40 @@ function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
 }
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+function localTimeStr(date) {
+  // getHours/getMinutes always return LOCAL time — never UTC — regardless of browser/OS quirks
+  const h = date.getHours()
+  const m = date.getMinutes().toString().padStart(2, '0')
+  // Respect locale 12h/24h preference
+  const use12h = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12
+  if (use12h) {
+    const hour = h % 12 || 12
+    return `${hour}:${m} ${h >= 12 ? 'PM' : 'AM'}`
+  }
+  return `${h.toString().padStart(2, '0')}:${m}`
+}
+
+function formatTime(raw) {
+  if (!raw) return ''
+  // Truncate microseconds so all JS engines parse the ISO string correctly
+  const normalized = raw.replace(/(\.\d{3})\d+/, '$1')
+  const date = new Date(normalized)
+  if (isNaN(date.getTime())) return raw  // legacy string — show as-is
+
+  const diffMs = Math.max(0, Date.now() - date.getTime())
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin} min ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr} hr${diffHr === 1 ? '' : 's'} ago`
+
+  // Older than 24 h — "Jun 5, 12:55 PM" using guaranteed-local getters
+  const datePart = `${MONTHS[date.getMonth()]} ${date.getDate()}`
+  return `${datePart}, ${localTimeStr(date)}`
+}
+
 function StatCard({ icon, label, value, sub, pulse }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -39,7 +73,7 @@ function ActivityItem({ item }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-medium text-slate-800">{item.title}</p>
-          <span className="text-xs text-slate-400 flex-shrink-0">{item.time}</span>
+          <span className="text-xs text-slate-400 flex-shrink-0">{formatTime(item.time)}</span>
         </div>
         {item.detail && <p className="text-sm text-slate-500 mt-0.5">{item.detail}</p>}
         {item.badges && (
