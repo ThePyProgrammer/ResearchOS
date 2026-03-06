@@ -1,60 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { papersApi } from '../services/api'
+import PaperInfoPanel from '../components/PaperInfoPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
 }
-
-const mockHighlights = [
-  {
-    id: 'h1',
-    color: 'yellow',
-    text: 'The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder.',
-    page: 1,
-  },
-  {
-    id: 'h2',
-    color: 'blue',
-    text: 'We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.',
-    page: 1,
-  },
-]
-
-const mockComments = [
-  {
-    id: 'c1',
-    highlightId: 'h1',
-    color: 'yellow',
-    author: 'Dr. Researcher',
-    avatar: 'DR',
-    avatarBg: 'bg-blue-500',
-    time: '2 days ago',
-    text: 'This framing really nails the motivation. CNNs were doing better than pure RNNs at this point but still had fundamental limitations with long-range dependencies.',
-    replies: [
-      {
-        id: 'r1',
-        author: 'Research Agent',
-        avatar: 'RA',
-        avatarBg: 'bg-purple-500',
-        isAgent: true,
-        time: '2 days ago',
-        text: 'Note: the attention mechanism used here differs from Bahdanau (2015) in that it operates on all positions simultaneously rather than sequentially.',
-      },
-    ],
-  },
-  {
-    id: 'c2',
-    highlightId: 'h2',
-    color: 'blue',
-    author: 'Mark Smith',
-    avatar: 'MS',
-    avatarBg: 'bg-emerald-500',
-    time: '1 day ago',
-    text: 'The "solely on attention mechanisms" claim is strong — worth noting that positional encoding is still a non-attention component.',
-    replies: [],
-  },
-]
 
 function buildPdfPages(paper) {
   if (!paper) return []
@@ -71,72 +22,6 @@ function buildPdfPages(paper) {
   ]
 }
 
-function Comment({ comment }) {
-  const [showReply, setShowReply] = useState(false)
-
-  return (
-    <div className="border-b border-slate-100 last:border-0 pb-4 mb-4">
-      <div className={`mb-3 px-3 py-2 rounded-lg border-l-4 text-xs text-slate-600 leading-relaxed italic ${
-        comment.color === 'yellow'
-          ? 'bg-amber-50 border-amber-400'
-          : 'bg-blue-50 border-blue-400'
-      }`}>
-        "{comment.text.slice(0, 120)}…"
-      </div>
-
-      <div className="flex gap-2.5">
-        <div className={`w-7 h-7 rounded-full ${comment.avatarBg} flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0`}>
-          {comment.avatar}
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm font-semibold text-slate-800">{comment.author}</span>
-            <span className="text-xs text-slate-400">{comment.time}</span>
-          </div>
-          <p className="text-sm text-slate-600 leading-relaxed">{comment.text}</p>
-          <button
-            onClick={() => setShowReply(!showReply)}
-            className="mt-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Reply
-          </button>
-        </div>
-      </div>
-
-      {comment.replies.map(reply => (
-        <div key={reply.id} className="flex gap-2.5 mt-3 ml-9">
-          <div className={`w-6 h-6 rounded-full ${reply.avatarBg} flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0`}>
-            {reply.avatar}
-          </div>
-          <div className="flex-1 bg-slate-50 rounded-lg px-3 py-2.5">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-slate-700">{reply.author}</span>
-              {reply.isAgent && (
-                <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 rounded font-medium">Agent</span>
-              )}
-              <span className="text-[11px] text-slate-400">{reply.time}</span>
-            </div>
-            <p className="text-xs text-slate-600 leading-relaxed">{reply.text}</p>
-          </div>
-        </div>
-      ))}
-
-      {showReply && (
-        <div className="mt-3 ml-9">
-          <textarea
-            placeholder="Write a reply…"
-            className="w-full p-2.5 text-sm border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-            rows={2}
-          />
-          <div className="flex justify-end gap-2 mt-1.5">
-            <button onClick={() => setShowReply(false)} className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700">Cancel</button>
-            <button className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Post</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 function PdfPage({ page }) {
   return (
@@ -166,7 +51,7 @@ export default function Paper() {
   const [paper, setPaper] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [commentsTab, setCommentsTab] = useState('comments')
+  const [sideTab, setSideTab] = useState('details')
   const [zoom, setZoom] = useState(100)
   const [aiQuestion, setAiQuestion] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -406,48 +291,47 @@ export default function Paper() {
           )}
         </div>
 
-        {/* Comments Panel */}
-        <div className="w-80 flex-shrink-0 flex flex-col bg-white">
+        {/* Side Panel */}
+        <div className="w-80 flex-shrink-0 flex flex-col bg-white border-l border-slate-200">
           <div className="flex border-b border-slate-100">
             {[
-              { id: 'comments', label: 'Comments', count: mockComments.length },
-              { id: 'notes', label: 'Notes' },
-              { id: 'ai', label: 'AI Assistant' },
+              { id: 'details', label: 'Details' },
+              { id: 'notes',   label: 'Notes' },
+              { id: 'ai',      label: 'AI' },
             ].map(t => (
               <button
                 key={t.id}
-                onClick={() => setCommentsTab(t.id)}
-                className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                  commentsTab === t.id ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-700'
+                onClick={() => setSideTab(t.id)}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-colors tracking-wide capitalize ${
+                  sideTab === t.id ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
                 {t.label}
-                {t.count && (
-                  <span className="ml-1.5 text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">
-                    {t.count}
-                  </span>
-                )}
               </button>
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4">
-            {commentsTab === 'comments' && (
-              mockComments.map(c => <Comment key={c.id} comment={c} />)
+          <div className="flex-1 overflow-y-auto">
+            {sideTab === 'details' && (
+              <PaperInfoPanel
+                paper={paper}
+                onStatusChange={(_, newStatus) => setPaper(p => ({ ...p, status: newStatus }))}
+                onPaperUpdate={setPaper}
+              />
             )}
-            {commentsTab === 'notes' && (
-              <div className="text-center py-8">
+            {sideTab === 'notes' && (
+              <div className="p-4 text-center py-8">
                 <Icon name="note_add" className="text-[40px] text-slate-300 mb-3" />
                 <p className="text-sm text-slate-400">No notes yet.</p>
                 <button className="mt-2 text-sm text-blue-600 hover:underline font-medium">Add a note</button>
               </div>
             )}
-            {commentsTab === 'ai' && (
-              <div className="space-y-4">
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+            {sideTab === 'ai' && (
+              <div className="p-4 space-y-4">
+                <div className="bg-purple-50 border border-purple-100 rounded-xl p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <Icon name="smart_toy" className="text-purple-500 text-[16px]" />
-                    <span className="text-sm font-semibold text-purple-800">AI Summary</span>
+                    <span className="text-xs font-semibold text-purple-800 uppercase tracking-wide">AI Summary</span>
                   </div>
                   <p className="text-xs text-purple-700 leading-relaxed">
                     {paper.abstract
@@ -456,43 +340,21 @@ export default function Paper() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 mb-2">Ask a question</p>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Ask a question</p>
                   <textarea
                     value={aiQuestion}
                     onChange={e => setAiQuestion(e.target.value)}
                     placeholder="e.g. How does multi-head attention work?"
-                    className="w-full p-2.5 text-sm border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    className="w-full p-2.5 text-xs border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                     rows={3}
                   />
-                  <button className="mt-2 w-full py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                  <button className="mt-2 w-full py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors">
                     Ask AI
                   </button>
                 </div>
               </div>
             )}
           </div>
-
-          {commentsTab === 'comments' && (
-            <div className="border-t border-slate-100 p-3">
-              <textarea
-                placeholder="Add a comment or highlight text to annotate…"
-                className="w-full p-2.5 text-sm border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                rows={2}
-              />
-              <div className="flex items-center justify-between mt-2">
-                <div className="flex gap-1">
-                  {['format_bold', 'format_italic', 'alternate_email'].map(icon => (
-                    <button key={icon} className="p-1 rounded hover:bg-slate-100 text-slate-400">
-                      <Icon name={icon} className="text-[16px]" />
-                    </button>
-                  ))}
-                </div>
-                <button className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
-                  Post
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

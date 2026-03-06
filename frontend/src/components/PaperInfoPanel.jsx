@@ -1,0 +1,254 @@
+import { useState } from 'react'
+import { papersApi } from '../services/api'
+
+export const statusConfig = {
+  'read':    { label: 'Read',    class: 'bg-emerald-100 text-emerald-700' },
+  'to-read': { label: 'To Read', class: 'bg-amber-100 text-amber-700' },
+  'inbox':   { label: 'Inbox',   class: 'bg-blue-100 text-blue-700' },
+}
+
+function Icon({ name, className = '' }) {
+  return <span className={`material-symbols-outlined ${className}`}>{name}</span>
+}
+
+function displayUrl(url, type) {
+  if (!url) return url
+  if (type === 'github') return url.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+}
+
+export function formatAdded(raw) {
+  if (!raw) return null
+  const normalized = raw.replace(/(\.\d{3})\d+/, '$1')
+  const date = new Date(normalized)
+  if (isNaN(date.getTime())) return null
+  const diffDays = Math.floor((Date.now() - date.getTime()) / 86400000)
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return `${diffDays} days ago`
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function LinkField({ label, icon, value, placeholder, onSave, type }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value || '')
+
+  function startEdit() { setDraft(value || ''); setEditing(true) }
+  function cancel() { setEditing(false) }
+  async function save() { await onSave(draft.trim() || null); setEditing(false) }
+
+  if (editing) {
+    return (
+      <div className="flex gap-1.5 items-center">
+        <Icon name={icon} className="text-[15px] text-slate-400 flex-shrink-0" />
+        <input
+          autoFocus
+          type="url"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
+          placeholder={placeholder}
+          className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 font-mono"
+        />
+        <button onClick={save} className="px-2 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 flex-shrink-0">Save</button>
+        <button onClick={cancel} className="px-2 py-1 text-slate-400 text-xs rounded-lg hover:bg-slate-100 flex-shrink-0">✕</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2 group">
+      <Icon name={icon} className="text-[15px] text-slate-400 flex-shrink-0" />
+      {value ? (
+        <>
+          <a
+            href={value}
+            target="_blank"
+            rel="noreferrer"
+            className={`flex-1 text-xs text-blue-600 hover:underline truncate ${type === 'github' ? 'font-mono' : ''}`}
+            title={value}
+          >
+            {displayUrl(value, type)}
+          </a>
+          <button onClick={startEdit} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-slate-500 flex-shrink-0 transition-opacity">
+            <Icon name="edit" className="text-[13px]" />
+          </button>
+          <button onClick={() => onSave(null)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 flex-shrink-0 transition-opacity">
+            <Icon name="close" className="text-[13px]" />
+          </button>
+        </>
+      ) : (
+        <button onClick={startEdit} className="text-xs text-slate-400 hover:text-blue-600 transition-colors">
+          Add {label.toLowerCase()}…
+        </button>
+      )}
+    </div>
+  )
+}
+
+export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate }) {
+  const [abstractExpanded, setAbstractExpanded] = useState(false)
+
+  async function handleStatusChange(newStatus) {
+    try {
+      await papersApi.update(paper.id, { status: newStatus })
+      onStatusChange?.(paper.id, newStatus)
+    } catch (err) {
+      console.error('Failed to update status:', err)
+    }
+  }
+
+  async function handleLinkSave(field, value) {
+    try {
+      const updated = await papersApi.update(paper.id, { [field]: value })
+      onPaperUpdate?.(updated)
+    } catch (err) {
+      console.error('Failed to update link:', err)
+    }
+  }
+
+  const addedLabel = formatAdded(paper.createdAt)
+
+  return (
+    <div className="p-4 space-y-5">
+      {/* Metadata */}
+      <div className="space-y-2">
+        {[
+          { label: 'Venue', value: paper.venue },
+          { label: 'Added', value: addedLabel },
+        ].filter(r => r.value).map(({ label, value }) => (
+          <div key={label} className="flex gap-3 text-xs">
+            <span className="text-slate-400 w-12 flex-shrink-0 pt-px">{label}</span>
+            <span className="text-slate-700">{value}</span>
+          </div>
+        ))}
+        {paper.doi && (
+          <div className="flex gap-3 text-xs">
+            <span className="text-slate-400 w-12 flex-shrink-0 pt-px">DOI</span>
+            <a
+              href={`https://doi.org/${paper.doi}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-600 hover:underline font-mono truncate"
+              title={paper.doi}
+            >
+              {paper.doi}
+            </a>
+          </div>
+        )}
+        {paper.arxivId && (
+          <div className="flex gap-3 text-xs">
+            <span className="text-slate-400 w-12 flex-shrink-0 pt-px">arXiv</span>
+            <a
+              href={`https://arxiv.org/abs/${paper.arxivId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-600 hover:underline font-mono"
+            >
+              {paper.arxivId}
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* Status */}
+      <div>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Status</p>
+        <div className="flex gap-1.5">
+          {['inbox', 'to-read', 'read'].map(s => {
+            const cfg = statusConfig[s]
+            return (
+              <button
+                key={s}
+                onClick={() => handleStatusChange(s)}
+                className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-all ${cfg.class} ${
+                  paper.status === s ? 'ring-2 ring-offset-1 ring-current' : 'opacity-50 hover:opacity-80'
+                }`}
+              >
+                {cfg.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Abstract */}
+      {paper.abstract && (
+        <div>
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Abstract</p>
+          <p className={`text-xs text-slate-600 leading-relaxed ${abstractExpanded ? '' : 'line-clamp-4'}`}>
+            {paper.abstract}
+          </p>
+          <button
+            onClick={() => setAbstractExpanded(e => !e)}
+            className="mt-1.5 text-[11px] text-blue-600 hover:text-blue-700 font-medium transition-colors"
+          >
+            {abstractExpanded ? 'Show less' : 'Read more'}
+          </button>
+        </div>
+      )}
+
+      {/* Links */}
+      <div>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Links</p>
+        <div className="space-y-2">
+          <LinkField
+            label="GitHub"
+            icon="code"
+            type="github"
+            value={paper.githubUrl}
+            placeholder="https://github.com/owner/repo"
+            onSave={v => handleLinkSave('githubUrl', v)}
+          />
+          <LinkField
+            label="Website"
+            icon="language"
+            type="website"
+            value={paper.websiteUrl}
+            placeholder="https://…"
+            onSave={v => handleLinkSave('websiteUrl', v)}
+          />
+        </div>
+      </div>
+
+      {/* Tags */}
+      {paper.tags?.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
+          <div className="flex flex-wrap gap-1.5">
+            {paper.tags.map(tag => (
+              <span
+                key={tag}
+                className={`text-[11px] px-2 py-0.5 rounded-full ${
+                  paper.source === 'agent' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Agent provenance */}
+      {paper.source === 'agent' && paper.agentRun && (
+        <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 space-y-1.5">
+          <div className="flex items-center gap-1.5 text-purple-700 text-[11px] font-semibold uppercase tracking-wide">
+            <Icon name="smart_toy" className="text-[13px]" />
+            Provenance
+          </div>
+          <p className="text-xs text-purple-700">
+            Added by <strong>{paper.agentRun.name}</strong> · Run #{paper.agentRun.runNumber}
+          </p>
+          {paper.agentReasoning && (
+            <p className="text-xs text-purple-600 leading-relaxed">{paper.agentReasoning}</p>
+          )}
+          <button className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1 mt-1">
+            View workflow run
+            <Icon name="arrow_forward" className="text-[11px]" />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
