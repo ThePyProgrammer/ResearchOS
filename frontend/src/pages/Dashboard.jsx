@@ -7,27 +7,12 @@ function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
 }
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-
-function localTimeStr(date) {
-  // getHours/getMinutes always return LOCAL time — never UTC — regardless of browser/OS quirks
-  const h = date.getHours()
-  const m = date.getMinutes().toString().padStart(2, '0')
-  // Respect locale 12h/24h preference
-  const use12h = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12
-  if (use12h) {
-    const hour = h % 12 || 12
-    return `${hour}:${m} ${h >= 12 ? 'PM' : 'AM'}`
-  }
-  return `${h.toString().padStart(2, '0')}:${m}`
-}
-
 function formatTime(raw) {
   if (!raw) return ''
-  // Truncate microseconds so all JS engines parse the ISO string correctly
+  // Truncate microseconds so all JS engines handle ISO 8601 correctly
   const normalized = raw.replace(/(\.\d{3})\d+/, '$1')
   const date = new Date(normalized)
-  if (isNaN(date.getTime())) return raw  // legacy string — show as-is
+  if (isNaN(date.getTime())) return raw  // unparseable legacy string — show as-is
 
   const diffMs = Math.max(0, Date.now() - date.getTime())
   const diffMin = Math.floor(diffMs / 60000)
@@ -35,10 +20,12 @@ function formatTime(raw) {
   if (diffMin < 60) return `${diffMin} min ago`
   const diffHr = Math.floor(diffMin / 60)
   if (diffHr < 24) return `${diffHr} hr${diffHr === 1 ? '' : 's'} ago`
+  const diffDay = Math.floor(diffHr / 24)
+  if (diffDay === 1) return 'yesterday'
+  if (diffDay < 7) return `${diffDay} days ago`
 
-  // Older than 24 h — "Jun 5, 12:55 PM" using guaranteed-local getters
-  const datePart = `${MONTHS[date.getMonth()]} ${date.getDate()}`
-  return `${datePart}, ${localTimeStr(date)}`
+  // Older than a week — just the date, no time (avoids UTC vs local clock issues)
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 function StatCard({ icon, label, value, sub, pulse }) {
