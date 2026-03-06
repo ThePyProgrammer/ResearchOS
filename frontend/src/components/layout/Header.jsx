@@ -87,7 +87,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
         if (!site.already_exists) onAdded?.(site)
       } else {
         const paper = await papersApi.import(trimmed, libraryId)
-        if (!paper.already_exists && collectionId) {
+        if (!paper.already_exists && collectionId && collectionId !== "unfiled") {
           await papersApi.update(paper.id, { collections: [collectionId] })
           paper.collections = [collectionId]
         }
