@@ -12,11 +12,13 @@ _PAPERS_TABLE = "papers"
 
 
 def _compute_paper_counts(collections: list[Collection]) -> list[Collection]:
-    result = get_client().table(_PAPERS_TABLE).select("collections").execute()
+    db = get_client()
     counts: dict[str, int] = {}
-    for row in result.data:
-        for cid in (row.get("collections") or []):
-            counts[cid] = counts.get(cid, 0) + 1
+    for table in (_PAPERS_TABLE, "websites"):
+        result = db.table(table).select("collections").execute()
+        for row in result.data:
+            for cid in (row.get("collections") or []):
+                counts[cid] = counts.get(cid, 0) + 1
     return [c.model_copy(update={"paper_count": counts.get(c.id, 0)}) for c in collections]
 
 

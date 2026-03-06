@@ -376,6 +376,93 @@ async def _fetch_url(url: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Website URL metadata extraction
+# ---------------------------------------------------------------------------
+
+async def resolve_url_as_website(url: str) -> dict:
+    """
+    Fetch a URL and extract website metadata for a non-academic page.
+    Returns: title, description, authors, published_date.
+    Raises ValueError if the URL looks like an academic paper or can't be fetched.
+    """
+    if _ARXIV_URL_RE.search(url) or "doi.org/" in url:
+        raise ValueError("This URL looks like a paper. Use the Paper import instead.")
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (compatible; ResearchOS/0.1; mailto:researchos@localhost)"
+        ),
+        "Accept": "text/html,application/xhtml+xml",
+    }
+    try:
+        async with httpx.AsyncClient(
+            headers=headers, timeout=15.0, follow_redirects=True
+        ) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            html = resp.text
+    except httpx.HTTPStatusError as exc:
+        raise ValueError(
+            f"Server returned {exc.response.status_code} for URL."
+        ) from exc
+    except Exception as exc:
+        raise ValueError(f"Could not fetch URL: {exc}") from exc
+
+    meta = _collect_meta(html)
+
+    def first(*keys: str) -> str:
+        for k in keys:
+            vals = meta.get(k)
+            if vals:
+                return vals[0]
+        return ""
+
+    # Title
+    title = first("og:title", "twitter:title", "citation_title", "dc.title")
+    if not title:
+        title_m = re.search(
+            r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL
+        )
+        title = re.sub(r"\s+", " ", title_m.group(1)).strip() if title_m else url
+
+    if not title:
+        raise ValueError("Could not extract a title from that URL.")
+
+    # Description
+    description = first(
+        "og:description", "twitter:description", "description", "dc.description"
+    )
+
+    # Authors (multiple citation_author tags possible)
+    authors: list[str] = []
+    for key in ("author", "article:author", "citation_author", "dc.creator"):
+        authors.extend(meta.get(key, []))
+    seen: set[str] = set()
+    authors = [a for a in authors if not (a in seen or seen.add(a))]  # type: ignore[func-returns-value]
+
+    # Published date
+    raw_date = first(
+        "article:published_time",
+        "og:article:published_time",
+        "citation_publication_date",
+        "date",
+        "dc.date",
+    )
+    published_date: Optional[str] = None
+    if raw_date:
+        date_m = re.search(r"(\d{4}-\d{2}-\d{2}|\d{4}/\d{2}/\d{2}|\d{4})", raw_date)
+        if date_m:
+            published_date = date_m.group(1).replace("/", "-")
+
+    return {
+        "title": title,
+        "description": description[:2000] if description else None,
+        "authors": authors,
+        "published_date": published_date,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { papersApi, searchApi } from '../../services/api'
+import { papersApi, websitesApi, searchApi } from '../../services/api'
 import { useLibrary } from '../../context/LibraryContext'
 
 function Icon({ name, className = '' }) {
@@ -36,24 +36,25 @@ const TYPE_META = {
 // Quick-Add modal
 // ---------------------------------------------------------------------------
 function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
+  const [mode, setMode] = useState('paper') // 'paper' | 'website'
   const [input, setInput] = useState('')
   const [state, setState] = useState('idle') // idle | loading | success | duplicate | error
-  const [result, setResult] = useState(null)  // paper object on success
+  const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const inputRef = useRef(null)
 
-  const detectedType = detectType(input)
+  const detectedType = mode === 'paper' ? detectType(input) : null
 
-  // Focus input when opened
+  // Focus input when opened; reset on close
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 50)
     } else {
-      // Reset on close
       setInput('')
       setState('idle')
       setResult(null)
       setError('')
+      setMode('paper')
     }
   }, [open])
 
@@ -75,14 +76,25 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
     setResult(null)
 
     try {
-      const paper = await papersApi.import(trimmed, libraryId)
-      if (!paper.already_exists && collectionId) {
-        await papersApi.update(paper.id, { collections: [collectionId] })
-        paper.collections = [collectionId]
+      if (mode === 'website') {
+        const site = await websitesApi.import(trimmed, libraryId)
+        if (!site.already_exists && collectionId) {
+          await websitesApi.update(site.id, { collections: [collectionId] })
+          site.collections = [collectionId]
+        }
+        setResult(site)
+        setState(site.already_exists ? 'duplicate' : 'success')
+        if (!site.already_exists) onAdded?.(site)
+      } else {
+        const paper = await papersApi.import(trimmed, libraryId)
+        if (!paper.already_exists && collectionId) {
+          await papersApi.update(paper.id, { collections: [collectionId] })
+          paper.collections = [collectionId]
+        }
+        setResult(paper)
+        setState(paper.already_exists ? 'duplicate' : 'success')
+        if (!paper.already_exists) onAdded?.(paper)
       }
-      setResult(paper)
-      setState(paper.already_exists ? 'duplicate' : 'success')
-      if (!paper.already_exists) onAdded?.(paper)
     } catch (err) {
       setState('error')
       setError(err.message || 'Lookup failed. Please check the identifier.')
@@ -108,17 +120,34 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
           {/* Header */}
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <div className="flex items-center gap-2">
-              <span className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Icon name="add_circle" className="text-blue-600 text-[16px]" />
+              <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${mode === 'website' ? 'bg-teal-100' : 'bg-blue-100'}`}>
+                <Icon name={mode === 'website' ? 'link' : 'add_circle'} className={`text-[16px] ${mode === 'website' ? 'text-teal-600' : 'text-blue-600'}`} />
               </span>
               <h2 className="text-sm font-semibold text-slate-800">Quick Add</h2>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-            >
-              <Icon name="close" className="text-[18px]" />
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Mode toggle */}
+              <div className="flex bg-slate-100 rounded-lg p-0.5 text-[11px] font-semibold">
+                <button
+                  onClick={() => { setMode('paper'); setInput(''); setState('idle'); setResult(null) }}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'paper' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Paper
+                </button>
+                <button
+                  onClick={() => { setMode('website'); setInput(''); setState('idle'); setResult(null) }}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'website' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Website
+                </button>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+              >
+                <Icon name="close" className="text-[18px]" />
+              </button>
+            </div>
           </div>
 
           {/* Body */}
@@ -137,7 +166,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
                     setError('')
                   }
                 }}
-                placeholder="Paste DOI, arXiv ID, or URL…"
+                placeholder={mode === 'website' ? 'Paste a website URL…' : 'Paste DOI, arXiv ID, or URL…'}
                 disabled={state === 'loading'}
                 className="w-full px-4 py-3 pr-[4.5rem] bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60 transition"
               />
@@ -152,7 +181,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
             </div>
 
             {/* Examples */}
-            {state === 'idle' && !input && (
+            {state === 'idle' && !input && mode === 'paper' && (
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {[
                   { label: '10.48550/arXiv.1706.03762', type: 'doi' },
@@ -187,7 +216,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
                   <p className={`text-xs font-semibold ${
                     state === 'duplicate' ? 'text-amber-700' : 'text-emerald-700'
                   }`}>
-                    {state === 'duplicate' ? 'Already in library' : 'Paper added to library'}
+                    {state === 'duplicate' ? 'Already in library' : mode === 'website' ? 'Website added to library' : 'Paper added to library'}
                   </p>
                   <p className="text-xs text-slate-600 mt-0.5 truncate font-medium">
                     {result.title}
@@ -217,7 +246,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
             {/* Action row */}
             <div className="mt-4 flex items-center justify-between">
               <p className="text-[11px] text-slate-400">
-                Supports DOI, arXiv ID, arXiv URL, and paper page URLs
+                {mode === 'website' ? 'Fetches title, description and author from the page' : 'Supports DOI, arXiv ID, arXiv URL, and paper page URLs'}
               </p>
               <div className="flex items-center gap-2">
                 {(state === 'success' || state === 'duplicate') && (
@@ -245,7 +274,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
                   ) : (
                     <>
                       <Icon name="add" className="text-[14px]" />
-                      Add to Library
+                      {mode === 'website' ? 'Add Website' : 'Add Paper'}
                     </>
                   )}
                 </button>

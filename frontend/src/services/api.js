@@ -55,6 +55,21 @@ export const librariesApi = {
   remove: (id) => apiFetch(`/libraries/${id}`, { method: 'DELETE' }),
 }
 
+export const websitesApi = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    ).toString()
+    return apiFetch(`/websites${qs ? `?${qs}` : ''}`)
+  },
+  get: (id) => apiFetch(`/websites/${id}`),
+  create: (data) => apiFetch('/websites', { method: 'POST', body: data }),
+  update: (id, data) => apiFetch(`/websites/${id}`, { method: 'PATCH', body: data }),
+  remove: (id) => apiFetch(`/websites/${id}`, { method: 'DELETE' }),
+  import: (url, libraryId) =>
+    apiFetch('/websites/import', { method: 'POST', body: { url, library_id: libraryId || null } }),
+}
+
 export const collectionsApi = {
   list: (params = {}) => {
     const qs = new URLSearchParams(

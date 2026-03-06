@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { papersApi, searchApi } from '../services/api'
+import { papersApi, websitesApi, searchApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import PaperInfoPanel, { statusConfig } from '../components/PaperInfoPanel'
 
@@ -9,12 +9,27 @@ function Icon({ name, className = '' }) {
 }
 
 
-function PaperRow({ paper, selected, onSelect }) {
-  const status = statusConfig[paper.status] || statusConfig['inbox']
+function itemYear(item) {
+  if (item.itemType === 'website') {
+    return item.publishedDate ? item.publishedDate.slice(0, 4) : '—'
+  }
+  return item.year || '—'
+}
+
+function itemVenue(item) {
+  if (item.itemType === 'website') {
+    try { return new URL(item.url).hostname.replace(/^www\./, '') } catch { return item.url }
+  }
+  return item.venue || ''
+}
+
+function PaperRow({ item, selected, onSelect }) {
+  const status = statusConfig[item.status] || statusConfig['inbox']
+  const isWebsite = item.itemType === 'website'
 
   return (
     <tr
-      onClick={() => onSelect(paper)}
+      onClick={() => onSelect(item)}
       className={`cursor-pointer transition-colors ${
         selected ? 'bg-blue-50' : 'hover:bg-slate-50'
       }`}
@@ -24,7 +39,7 @@ function PaperRow({ paper, selected, onSelect }) {
           type="checkbox"
           className="rounded border-slate-300 text-blue-600"
           checked={selected}
-          onChange={() => onSelect(paper)}
+          onChange={() => onSelect(item)}
           onClick={e => e.stopPropagation()}
         />
       </td>
@@ -35,21 +50,30 @@ function PaperRow({ paper, selected, onSelect }) {
       </td>
       <td className="px-2 py-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-slate-800 line-clamp-1">{paper.title}</span>
-          {paper.source === 'agent' && (
+          <span className="text-sm font-medium text-slate-800 line-clamp-1">{item.title}</span>
+          {isWebsite && (
+            <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
+              Website
+            </span>
+          )}
+          {!isWebsite && item.source === 'agent' && (
             <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
-              Run #{paper.agentRun?.runNumber}
+              Run #{item.agentRun?.runNumber}
             </span>
           )}
         </div>
       </td>
       <td className="px-2 py-3 text-sm text-slate-500 max-w-[160px]">
-        <span className="truncate block">{paper.authors.slice(0, 2).join(', ')}{paper.authors.length > 2 ? ', et al.' : ''}</span>
+        <span className="truncate block">{item.authors.slice(0, 2).join(', ')}{item.authors.length > 2 ? ', et al.' : ''}</span>
       </td>
-      <td className="px-2 py-3 text-sm text-slate-500">{paper.year}</td>
-      <td className="px-2 py-3 text-sm text-slate-500">{paper.venue}</td>
+      <td className="px-2 py-3 text-sm text-slate-500">{itemYear(item)}</td>
+      <td className="px-2 py-3 text-sm text-slate-500 max-w-[140px]">
+        <span className="truncate block">{itemVenue(item)}</span>
+      </td>
       <td className="px-3 py-3 text-sm text-slate-400">
-        {paper.source === 'agent' ? (
+        {isWebsite ? (
+          <Icon name="link" className="text-[16px] text-teal-400" />
+        ) : item.source === 'agent' ? (
           <Icon name="smart_toy" className="text-[16px] text-purple-400" />
         ) : (
           <Icon name="person" className="text-[16px] text-slate-300" />
@@ -218,11 +242,253 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
   )
 }
 
+function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
+  const [tab, setTab] = useState('info')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [descExpanded, setDescExpanded] = useState(false)
+  const [editingGithub, setEditingGithub] = useState(false)
+  const [githubDraft, setGithubDraft] = useState('')
+
+  const domain = (() => { try { return new URL(item.url).hostname.replace(/^www\./, '') } catch { return item.url } })()
+  const statusCfg = statusConfig[item.status] || statusConfig['inbox']
+
+  const handleStatusChange = async (newStatus) => {
+    try {
+      await websitesApi.update(item.id, { status: newStatus })
+      onStatusChange(item.id, newStatus)
+    } catch (err) { console.error(err) }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await websitesApi.remove(item.id)
+      onDelete(item.id)
+    } catch (err) { console.error(err); setDeleting(false); setConfirmDelete(false) }
+  }
+
+  const handleFieldSave = async (field, value) => {
+    try {
+      const updated = await websitesApi.update(item.id, { [field]: value })
+      onUpdate(updated)
+    } catch (err) { console.error(err) }
+  }
+
+  return (
+    <aside className="w-80 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusCfg.class}`}>
+            {statusCfg.label}
+          </span>
+          <span className="text-[11px] bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+            <Icon name="link" className="text-[11px]" />
+            Website
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5">
+          <button onClick={() => setConfirmDelete(true)}
+            className="p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+            <Icon name="delete" className="text-[16px]" />
+          </button>
+          <button onClick={onClose} className="p-1.5 rounded text-slate-400 hover:text-slate-600 transition-colors">
+            <Icon name="close" className="text-[18px]" />
+          </button>
+        </div>
+      </div>
+
+      {confirmDelete && (
+        <div className="mx-4 mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-700 text-xs font-semibold mb-1">Delete this website?</p>
+          <p className="text-red-600 text-xs mb-3">This cannot be undone.</p>
+          <div className="flex gap-2">
+            <button onClick={handleDelete} disabled={deleting}
+              className="flex-1 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50">
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+            <button onClick={() => setConfirmDelete(false)}
+              className="flex-1 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto">
+        {/* Title + authors + actions */}
+        <div className="px-4 pt-4 pb-3 border-b border-slate-100 space-y-3">
+          <h3 className="text-sm font-semibold text-slate-900 leading-snug">{item.title}</h3>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            {item.authors.length > 0
+              ? <>{item.authors.slice(0, 3).join(', ')}{item.authors.length > 3 ? ` +${item.authors.length - 3} more` : ''}</>
+              : <span className="italic">No author</span>
+            }
+            {item.publishedDate ? <span className="text-slate-400"> · {item.publishedDate.slice(0, 4)}</span> : null}
+          </p>
+          <div className="flex gap-2">
+            <a href={item.url} target="_blank" rel="noreferrer"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-lg transition-colors">
+              <Icon name="open_in_new" className="text-[14px]" />
+              Visit Website
+            </a>
+            {item.githubUrl && (
+              <a href={item.githubUrl} target="_blank" rel="noreferrer"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors">
+                <Icon name="code" className="text-[14px]" />
+                GitHub
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-slate-100">
+          {['info', 'notes'].map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`flex-1 py-2.5 text-xs font-semibold transition-colors capitalize tracking-wide ${
+                tab === t ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-400 hover:text-slate-600'
+              }`}>
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'info' && (
+          <div className="p-4 space-y-5">
+            {/* Metadata */}
+            <div className="space-y-2">
+              {item.publishedDate && (
+                <div className="flex gap-3 text-xs">
+                  <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Date</span>
+                  <span className="text-slate-700">{item.publishedDate}</span>
+                </div>
+              )}
+              <div className="flex gap-3 text-xs">
+                <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Domain</span>
+                <a href={item.url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline truncate">{domain}</a>
+              </div>
+              <div className="flex gap-3 text-xs">
+                <span className="text-slate-400 w-12 flex-shrink-0 pt-px">URL</span>
+                <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate font-mono" title={item.url}>{item.url}</a>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Status</p>
+              <div className="flex gap-1.5">
+                {['inbox', 'to-read', 'read'].map(s => {
+                  const cfg = statusConfig[s]
+                  return (
+                    <button key={s} onClick={() => handleStatusChange(s)}
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-all ${cfg.class} ${
+                        item.status === s ? 'ring-2 ring-offset-1 ring-current' : 'opacity-50 hover:opacity-80'
+                      }`}>
+                      {cfg.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Description */}
+            {item.description && (
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Description</p>
+                <p className={`text-xs text-slate-600 leading-relaxed ${descExpanded ? '' : 'line-clamp-4'}`}>
+                  {item.description}
+                </p>
+                <button onClick={() => setDescExpanded(e => !e)}
+                  className="mt-1.5 text-[11px] text-teal-600 hover:text-teal-700 font-medium transition-colors">
+                  {descExpanded ? 'Show less' : 'Read more'}
+                </button>
+              </div>
+            )}
+
+            {/* Links */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Links</p>
+              <div className="space-y-2">
+                {/* GitHub link field */}
+                {editingGithub ? (
+                  <div className="flex gap-1.5 items-center">
+                    <Icon name="code" className="text-[15px] text-slate-400 flex-shrink-0" />
+                    <input autoFocus type="url" value={githubDraft} onChange={e => setGithubDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { handleFieldSave('github_url', githubDraft.trim() || null); setEditingGithub(false) }
+                        if (e.key === 'Escape') setEditingGithub(false)
+                      }}
+                      placeholder="https://github.com/owner/repo"
+                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 font-mono"
+                    />
+                    <button onClick={() => { handleFieldSave('github_url', githubDraft.trim() || null); setEditingGithub(false) }}
+                      className="px-2 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 flex-shrink-0">Save</button>
+                    <button onClick={() => setEditingGithub(false)}
+                      className="px-2 py-1 text-slate-400 text-xs rounded-lg hover:bg-slate-100 flex-shrink-0">✕</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 group">
+                    <Icon name="code" className="text-[15px] text-slate-400 flex-shrink-0" />
+                    {item.githubUrl ? (
+                      <>
+                        <a href={item.githubUrl} target="_blank" rel="noreferrer"
+                          className="flex-1 text-xs text-blue-600 hover:underline truncate font-mono" title={item.githubUrl}>
+                          {item.githubUrl.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')}
+                        </a>
+                        <button onClick={() => { setGithubDraft(item.githubUrl || ''); setEditingGithub(true) }}
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-slate-500 flex-shrink-0 transition-opacity">
+                          <Icon name="edit" className="text-[13px]" />
+                        </button>
+                        <button onClick={() => handleFieldSave('github_url', null)}
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 flex-shrink-0 transition-opacity">
+                          <Icon name="close" className="text-[13px]" />
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => { setGithubDraft(''); setEditingGithub(true) }}
+                        className="text-xs text-slate-400 hover:text-blue-600 transition-colors">
+                        Add GitHub URL…
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tags */}
+            {item.tags?.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {item.tags.map(tag => (
+                    <span key={tag} className="text-[11px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">{tag}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'notes' && (
+          <div className="p-4">
+            <p className="text-xs text-slate-400 text-center py-8">No notes yet.</p>
+            <button className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-teal-300 hover:text-teal-600 transition-colors">
+              + Add note
+            </button>
+          </div>
+        )}
+      </div>
+    </aside>
+  )
+}
+
 export default function Library() {
   const { activeLibraryId, refreshCollections } = useLibrary()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [selectedPaper, setSelectedPaper] = useState(null)
-  const [papers, setPapers] = useState([])
+  const [selectedItem, setSelectedItem] = useState(null)
+  const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -250,48 +516,49 @@ export default function Library() {
   }
 
 
-  // Re-fetch papers whenever collection, status filter, URL search query, or active library changes
+  // Re-fetch all items whenever search query or active library changes
   useEffect(() => {
     setLoading(true)
     setError(null)
 
     const listParams = activeLibraryId ? { library_id: activeLibraryId } : {}
-    const baseFetch = papersApi.list(listParams)
 
-    const fetchPromise = urlQuery
-      ? searchApi.query(urlQuery, { mode: urlMode, limit: 50 }).catch(() => {
-          // Search endpoint unavailable — clear the query and fall back to full list
+    if (urlQuery) {
+      searchApi.query(urlQuery, { mode: urlMode, limit: 50 })
+        .then(data => setItems(data))
+        .catch(() => {
           setSearchParams({})
-          return baseFetch
+          Promise.all([papersApi.list(listParams), websitesApi.list(listParams)])
+            .then(([papers, websites]) => setItems([...papers, ...websites]))
+            .catch(err => setError(err.message))
         })
-      : baseFetch
-
-    fetchPromise
-      .then(data => setPapers(data))
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
+        .finally(() => setLoading(false))
+    } else {
+      Promise.all([papersApi.list(listParams), websitesApi.list(listParams)])
+        .then(([papers, websites]) => setItems([...papers, ...websites]))
+        .catch(err => setError(err.message))
+        .finally(() => setLoading(false))
+    }
   }, [urlQuery, urlMode, location.key, activeLibraryId])
 
-  const handleStatusChange = (paperId, newStatus) => {
-    setPapers(prev => prev.map(p => p.id === paperId ? { ...p, status: newStatus } : p))
-    if (selectedPaper?.id === paperId) {
-      setSelectedPaper(prev => ({ ...prev, status: newStatus }))
-    }
+  const handleStatusChange = (itemId, newStatus) => {
+    setItems(prev => prev.map(p => p.id === itemId ? { ...p, status: newStatus } : p))
+    if (selectedItem?.id === itemId) setSelectedItem(prev => ({ ...prev, status: newStatus }))
   }
 
-  const handlePaperUpdate = (updated) => {
-    setPapers(prev => prev.map(p => p.id === updated.id ? updated : p))
-    if (selectedPaper?.id === updated.id) setSelectedPaper(updated)
+  const handleItemUpdate = (updated) => {
+    setItems(prev => prev.map(p => p.id === updated.id ? updated : p))
+    if (selectedItem?.id === updated.id) setSelectedItem(updated)
   }
 
-  const handleDelete = (paperId) => {
-    setPapers(prev => prev.filter(p => p.id !== paperId))
-    setSelectedPaper(null)
+  const handleDelete = (itemId) => {
+    setItems(prev => prev.filter(p => p.id !== itemId))
+    setSelectedItem(null)
     refreshCollections()
   }
 
 
-  const allTags = useMemo(() => [...new Set(papers.flatMap(p => p.tags))].sort(), [papers])
+  const allTags = useMemo(() => [...new Set(items.flatMap(p => p.tags))].sort(), [items])
   const activeFilterCount = (sourceFilter !== 'all' ? 1 : 0)
     + (yearFrom || yearTo ? 1 : 0)
     + (titleFilter ? 1 : 0)
@@ -299,18 +566,18 @@ export default function Library() {
     + tagFilters.size
 
   const filtered = useMemo(() => {
-    let result = urlQuery ? papers : papers.filter(p => filterTab === 'all' || p.status === filterTab)
+    let result = urlQuery ? items : items.filter(p => filterTab === 'all' || p.status === filterTab)
     if (activeCollection === 'inbox') result = result.filter(p => p.status === 'inbox')
     else if (activeCollection === 'unfiled') result = result.filter(p => p.collections.length === 0)
     else if (activeCollection !== 'all') result = result.filter(p => p.collections.includes(activeCollection))
     if (sourceFilter !== 'all') result = result.filter(p => p.source === sourceFilter)
     if (titleFilter) result = result.filter(p => p.title.toLowerCase().includes(titleFilter.toLowerCase()))
-    if (venueFilter) result = result.filter(p => p.venue.toLowerCase().includes(venueFilter.toLowerCase()))
-    if (yearFrom) result = result.filter(p => p.year >= Number(yearFrom))
-    if (yearTo) result = result.filter(p => p.year <= Number(yearTo))
+    if (venueFilter) result = result.filter(p => itemVenue(p).toLowerCase().includes(venueFilter.toLowerCase()))
+    if (yearFrom) result = result.filter(p => Number(itemYear(p)) >= Number(yearFrom))
+    if (yearTo) result = result.filter(p => Number(itemYear(p)) <= Number(yearTo))
     if (tagFilters.size > 0) result = result.filter(p => [...tagFilters].every(t => p.tags.includes(t)))
     return result
-  }, [papers, urlQuery, filterTab, activeCollection, sourceFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters])
+  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters])
 
   function clearFilters() {
     setSourceFilter('all')
@@ -356,7 +623,7 @@ export default function Library() {
                   <Icon name="close" className="text-[14px]" />
                 </button>
               </div>
-              <span className="text-xs text-slate-400">{papers.length} result{papers.length !== 1 ? 's' : ''}</span>
+              <span className="text-xs text-slate-400">{items.length} result{items.length !== 1 ? 's' : ''}</span>
             </div>
           )}
         </div>
@@ -370,10 +637,10 @@ export default function Library() {
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Status</span>
                 <div className="flex flex-wrap gap-1.5">
                   {[
-                    { id: 'all', label: 'All', count: papers.length },
-                    { id: 'inbox', label: 'Inbox', count: papers.filter(p => p.status === 'inbox').length },
-                    { id: 'to-read', label: 'To Read', count: papers.filter(p => p.status === 'to-read').length },
-                    { id: 'read', label: 'Read', count: papers.filter(p => p.status === 'read').length },
+                    { id: 'all', label: 'All', count: items.length },
+                    { id: 'inbox', label: 'Inbox', count: items.filter(p => p.status === 'inbox').length },
+                    { id: 'to-read', label: 'To Read', count: items.filter(p => p.status === 'to-read').length },
+                    { id: 'read', label: 'Read', count: items.filter(p => p.status === 'read').length },
                   ].map(opt => (
                     <button
                       key={opt.id}
@@ -398,9 +665,9 @@ export default function Library() {
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Source</span>
                 <div className="flex gap-1.5">
                   {[
-                    { id: 'all', label: 'All', count: papers.length },
-                    { id: 'human', label: 'Human', count: papers.filter(p => p.source === 'human').length },
-                    { id: 'agent', label: 'Agent', count: papers.filter(p => p.source === 'agent').length },
+                    { id: 'all', label: 'All', count: items.length },
+                    { id: 'human', label: 'Human', count: items.filter(p => p.source === 'human').length },
+                    { id: 'agent', label: 'Agent', count: items.filter(p => p.source === 'agent').length },
                   ].map(opt => (
                     <button
                       key={opt.id}
@@ -545,12 +812,12 @@ export default function Library() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map(paper => (
+                {filtered.map(item => (
                   <PaperRow
-                    key={paper.id}
-                    paper={paper}
-                    selected={selectedPaper?.id === paper.id}
-                    onSelect={p => setSelectedPaper(selectedPaper?.id === p.id ? null : p)}
+                    key={item.id}
+                    item={item}
+                    selected={selectedItem?.id === item.id}
+                    onSelect={i => setSelectedItem(selectedItem?.id === i.id ? null : i)}
                   />
                 ))}
               </tbody>
@@ -568,8 +835,8 @@ export default function Library() {
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-white text-sm text-slate-500">
           <span>
             {urlQuery
-              ? `${papers.length} search result${papers.length !== 1 ? 's' : ''} for "${urlQuery}"`
-              : `Showing ${filtered.length} of ${papers.length} paper${papers.length !== 1 ? 's' : ''}`}
+              ? `${items.length} search result${items.length !== 1 ? 's' : ''} for "${urlQuery}"`
+              : `Showing ${filtered.length} of ${items.length} item${items.length !== 1 ? 's' : ''}`}
           </span>
           <div className="flex items-center gap-1">
             <button className="px-2 py-1 rounded hover:bg-slate-100 disabled:opacity-40" disabled>
@@ -583,12 +850,21 @@ export default function Library() {
         </div>
       </div>
 
-      {selectedPaper && (
-        <PaperDetail
-          paper={selectedPaper}
-          onClose={() => setSelectedPaper(null)}
+      {selectedItem && selectedItem.itemType === 'website' && (
+        <WebsiteDetail
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
           onStatusChange={handleStatusChange}
-          onPaperUpdate={handlePaperUpdate}
+          onUpdate={handleItemUpdate}
+          onDelete={handleDelete}
+        />
+      )}
+      {selectedItem && selectedItem.itemType !== 'website' && (
+        <PaperDetail
+          paper={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onStatusChange={handleStatusChange}
+          onPaperUpdate={handleItemUpdate}
           onDelete={handleDelete}
         />
       )}

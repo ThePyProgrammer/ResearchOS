@@ -30,6 +30,7 @@ class Paper(CamelModel):
     website_url: Optional[str] = None
     library_id: Optional[str] = None
     created_at: str
+    item_type: str = "paper"
 
 
 class PaperCreate(CamelModel):
