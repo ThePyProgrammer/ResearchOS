@@ -78,7 +78,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
     try {
       if (mode === 'website') {
         const site = await websitesApi.import(trimmed, libraryId)
-        if (!site.already_exists && collectionId) {
+        if (!site.already_exists && collectionId && collectionId !== "unfiled") {
           await websitesApi.update(site.id, { collections: [collectionId] })
           site.collections = [collectionId]
         }
