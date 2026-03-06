@@ -65,7 +65,13 @@ function PaperRow({ paper, selected, onSelect }) {
   )
 }
 
-function LinkField({ label, icon, value, placeholder, onSave }) {
+function displayUrl(url, type) {
+  if (!url) return url
+  if (type === 'github') return url.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+}
+
+function LinkField({ label, icon, value, placeholder, onSave, type }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value || '')
 
@@ -78,40 +84,46 @@ function LinkField({ label, icon, value, placeholder, onSave }) {
 
   if (editing) {
     return (
-      <div className="space-y-1">
-        <p className="text-xs font-semibold text-slate-500">{label}</p>
-        <div className="flex gap-1.5">
-          <input
-            autoFocus
-            type="url"
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
-            placeholder={placeholder}
-            className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-          />
-          <button onClick={save} className="px-2 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">Save</button>
-          <button onClick={cancel} className="px-2 py-1 text-slate-500 text-xs rounded-lg hover:bg-slate-100">✕</button>
-        </div>
+      <div className="flex gap-1.5 items-center">
+        <Icon name={icon} className="text-[15px] text-slate-400 flex-shrink-0" />
+        <input
+          autoFocus
+          type="url"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
+          placeholder={placeholder}
+          className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 font-mono"
+        />
+        <button onClick={save} className="px-2 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 flex-shrink-0">Save</button>
+        <button onClick={cancel} className="px-2 py-1 text-slate-400 text-xs rounded-lg hover:bg-slate-100 flex-shrink-0">✕</button>
       </div>
     )
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 group">
       <Icon name={icon} className="text-[15px] text-slate-400 flex-shrink-0" />
       {value ? (
         <>
-          <a href={value} target="_blank" rel="noreferrer" className="flex-1 text-xs text-blue-600 hover:underline truncate">{value}</a>
-          <button onClick={startEdit} className="text-slate-300 hover:text-slate-500 flex-shrink-0">
+          <a
+            href={value}
+            target="_blank"
+            rel="noreferrer"
+            className={`flex-1 text-xs text-blue-600 hover:underline truncate ${type === 'github' ? 'font-mono' : ''}`}
+            title={value}
+          >
+            {displayUrl(value, type)}
+          </a>
+          <button onClick={startEdit} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-slate-500 flex-shrink-0 transition-opacity">
             <Icon name="edit" className="text-[13px]" />
           </button>
-          <button onClick={() => onSave(null)} className="text-slate-300 hover:text-red-400 flex-shrink-0">
+          <button onClick={() => onSave(null)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 flex-shrink-0 transition-opacity">
             <Icon name="close" className="text-[13px]" />
           </button>
         </>
       ) : (
-        <button onClick={startEdit} className="text-xs text-slate-400 hover:text-blue-600">
+        <button onClick={startEdit} className="text-xs text-slate-400 hover:text-blue-600 transition-colors">
           Add {label.toLowerCase()}…
         </button>
       )}
@@ -119,10 +131,23 @@ function LinkField({ label, icon, value, placeholder, onSave }) {
   )
 }
 
+function formatAdded(raw) {
+  if (!raw) return null
+  const normalized = raw.replace(/(\.\d{3})\d+/, '$1')
+  const date = new Date(normalized)
+  if (isNaN(date.getTime())) return null
+  const diffDays = Math.floor((Date.now() - date.getTime()) / 86400000)
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  if (diffDays < 7) return `${diffDays} days ago`
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }) {
   const [tab, setTab] = useState('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [abstractExpanded, setAbstractExpanded] = useState(false)
   const navigate = useNavigate()
 
   const statusOptions = ['inbox', 'to-read', 'read']
@@ -157,32 +182,41 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
     }
   }
 
+  const statusCfg = statusConfig[paper.status] || statusConfig['inbox']
+  const addedLabel = formatAdded(paper.createdAt)
+
   return (
     <aside className="w-80 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col">
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-        <div className="flex gap-1.5">
-          <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">Article</span>
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusCfg.class}`}>
+            {statusCfg.label}
+          </span>
           {paper.source === 'agent' && (
-            <span className="text-[11px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">Agent-sourced</span>
+            <span className="text-[11px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+              <Icon name="smart_toy" className="text-[11px]" />
+              Agent
+            </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <button
             onClick={() => setConfirmDelete(true)}
-            className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+            className="p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
             title="Delete paper"
           >
             <Icon name="delete" className="text-[16px]" />
           </button>
-          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} className="p-1.5 rounded text-slate-400 hover:text-slate-600 transition-colors">
             <Icon name="close" className="text-[18px]" />
           </button>
         </div>
       </div>
 
       {confirmDelete && (
-        <div className="mx-4 mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
-          <p className="text-red-700 font-medium mb-1">Delete this paper?</p>
+        <div className="mx-4 mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-700 text-xs font-semibold mb-1">Delete this paper?</p>
           <p className="text-red-600 text-xs mb-3">This cannot be undone.</p>
           <div className="flex gap-2">
             <button
@@ -203,15 +237,46 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
       )}
 
       <div className="flex-1 overflow-y-auto">
-        <div className="p-4 border-b border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-900 leading-snug mb-3">{paper.title}</h3>
-          <button
-            onClick={() => navigate(`/library/paper/${paper.id}`)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            <Icon name="picture_as_pdf" className="text-[16px]" />
-            View PDF
-          </button>
+        {/* Title + quick actions */}
+        <div className="px-4 pt-4 pb-3 border-b border-slate-100 space-y-3">
+          <h3 className="text-sm font-semibold text-slate-900 leading-snug">{paper.title}</h3>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            {paper.authors.slice(0, 3).join(', ')}{paper.authors.length > 3 ? ` +${paper.authors.length - 3} more` : ''}
+            {paper.year ? <span className="text-slate-400"> · {paper.year}</span> : null}
+          </p>
+
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate(`/library/paper/${paper.id}`)}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              <Icon name="picture_as_pdf" className="text-[14px]" />
+              View PDF
+            </button>
+            {paper.arxivId && (
+              <a
+                href={`https://arxiv.org/abs/${paper.arxivId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                title={`arXiv:${paper.arxivId}`}
+              >
+                arXiv
+              </a>
+            )}
+            {paper.doi && (
+              <a
+                href={`https://doi.org/${paper.doi}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                title={`DOI: ${paper.doi}`}
+              >
+                DOI
+              </a>
+            )}
+          </div>
         </div>
 
         {/* Tabs */}
@@ -220,8 +285,8 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize ${
-                tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-700'
+              className={`flex-1 py-2.5 text-xs font-semibold transition-colors capitalize tracking-wide ${
+                tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               {t}
@@ -230,45 +295,50 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
         </div>
 
         {tab === 'info' && (
-          <div className="p-4 space-y-4">
-            <div className="space-y-2 text-sm">
+          <div className="p-4 space-y-5">
+            {/* Metadata */}
+            <div className="space-y-2">
               {[
-                { label: 'Year', value: paper.year },
                 { label: 'Venue', value: paper.venue },
-                { label: 'Authors', value: paper.authors.join(', ') },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex gap-2">
-                  <span className="text-slate-400 w-14 flex-shrink-0">{label}</span>
-                  <span className="text-slate-700 flex-1">{value}</span>
+                { label: 'Added', value: addedLabel },
+              ].filter(r => r.value).map(({ label, value }) => (
+                <div key={label} className="flex gap-3 text-xs">
+                  <span className="text-slate-400 w-12 flex-shrink-0 pt-px">{label}</span>
+                  <span className="text-slate-700">{value}</span>
                 </div>
               ))}
               {paper.doi && (
-                <div className="flex gap-2">
-                  <span className="text-slate-400 w-14 flex-shrink-0">DOI</span>
-                  <a href="#" className="text-blue-600 hover:underline text-sm break-all">{paper.doi}</a>
+                <div className="flex gap-3 text-xs">
+                  <span className="text-slate-400 w-12 flex-shrink-0 pt-px">DOI</span>
+                  <a
+                    href={`https://doi.org/${paper.doi}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 hover:underline font-mono truncate"
+                    title={paper.doi}
+                  >
+                    {paper.doi}
+                  </a>
+                </div>
+              )}
+              {paper.arxivId && (
+                <div className="flex gap-3 text-xs">
+                  <span className="text-slate-400 w-12 flex-shrink-0 pt-px">arXiv</span>
+                  <a
+                    href={`https://arxiv.org/abs/${paper.arxivId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 hover:underline font-mono"
+                  >
+                    {paper.arxivId}
+                  </a>
                 </div>
               )}
             </div>
 
-            <div className="space-y-2 pt-1">
-              <LinkField
-                label="GitHub"
-                icon="code"
-                value={paper.githubUrl}
-                placeholder="https://github.com/…"
-                onSave={v => handleLinkSave('githubUrl', v)}
-              />
-              <LinkField
-                label="Website"
-                icon="language"
-                value={paper.websiteUrl}
-                placeholder="https://…"
-                onSave={v => handleLinkSave('websiteUrl', v)}
-              />
-            </div>
-
+            {/* Status */}
             <div>
-              <p className="text-xs font-semibold text-slate-500 mb-1.5">Status</p>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Status</p>
               <div className="flex gap-1.5">
                 {statusOptions.map(s => {
                   const cfg = statusConfig[s]
@@ -276,8 +346,8 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
                     <button
                       key={s}
                       onClick={() => handleStatusChange(s)}
-                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full transition-opacity ${cfg.class} ${
-                        paper.status === s ? 'opacity-100 ring-2 ring-offset-1 ring-current' : 'opacity-60 hover:opacity-100'
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-all ${cfg.class} ${
+                        paper.status === s ? 'ring-2 ring-offset-1 ring-current' : 'opacity-50 hover:opacity-80'
                       }`}
                     >
                       {cfg.label}
@@ -287,39 +357,54 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
               </div>
             </div>
 
-            {paper.source === 'agent' && paper.agentRun && (
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-1.5">
-                <div className="flex items-center gap-1.5 text-purple-700 text-xs font-semibold">
-                  <Icon name="smart_toy" className="text-[14px]" />
-                  Provenance
-                </div>
-                <p className="text-xs text-purple-700">
-                  Added by <strong>{paper.agentRun.name}</strong> during Run #{paper.agentRun.runNumber}
+            {/* Abstract */}
+            {paper.abstract && (
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Abstract</p>
+                <p className={`text-xs text-slate-600 leading-relaxed ${abstractExpanded ? '' : 'line-clamp-4'}`}>
+                  {paper.abstract}
                 </p>
-                {paper.agentReasoning && (
-                  <p className="text-xs text-purple-600 leading-relaxed">{paper.agentReasoning}</p>
-                )}
-                <button className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1">
-                  View workflow run
-                  <Icon name="arrow_forward" className="text-[12px]" />
+                <button
+                  onClick={() => setAbstractExpanded(e => !e)}
+                  className="mt-1.5 text-[11px] text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                >
+                  {abstractExpanded ? 'Show less' : 'Read more'}
                 </button>
               </div>
             )}
 
+            {/* Links */}
             <div>
-              <p className="text-xs font-semibold text-slate-500 mb-1.5">Abstract</p>
-              <p className="text-sm text-slate-600 leading-relaxed line-clamp-4">{paper.abstract}</p>
-              <button className="mt-1 text-xs text-blue-600 hover:underline">Read more</button>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Links</p>
+              <div className="space-y-2">
+                <LinkField
+                  label="GitHub"
+                  icon="code"
+                  type="github"
+                  value={paper.githubUrl}
+                  placeholder="https://github.com/owner/repo"
+                  onSave={v => handleLinkSave('githubUrl', v)}
+                />
+                <LinkField
+                  label="Website"
+                  icon="language"
+                  type="website"
+                  value={paper.websiteUrl}
+                  placeholder="https://…"
+                  onSave={v => handleLinkSave('websiteUrl', v)}
+                />
+              </div>
             </div>
 
+            {/* Tags */}
             {paper.tags.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-slate-500 mb-1.5">Tags</p>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
                 <div className="flex flex-wrap gap-1.5">
                   {paper.tags.map(tag => (
                     <span
                       key={tag}
-                      className={`text-xs px-2 py-0.5 rounded-full ${
+                      className={`text-[11px] px-2 py-0.5 rounded-full ${
                         paper.source === 'agent' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'
                       }`}
                     >
@@ -329,13 +414,33 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
                 </div>
               </div>
             )}
+
+            {/* Agent provenance */}
+            {paper.source === 'agent' && paper.agentRun && (
+              <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-purple-700 text-[11px] font-semibold uppercase tracking-wide">
+                  <Icon name="smart_toy" className="text-[13px]" />
+                  Provenance
+                </div>
+                <p className="text-xs text-purple-700">
+                  Added by <strong>{paper.agentRun.name}</strong> · Run #{paper.agentRun.runNumber}
+                </p>
+                {paper.agentReasoning && (
+                  <p className="text-xs text-purple-600 leading-relaxed">{paper.agentReasoning}</p>
+                )}
+                <button className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1 mt-1">
+                  View workflow run
+                  <Icon name="arrow_forward" className="text-[11px]" />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {tab === 'notes' && (
           <div className="p-4">
-            <p className="text-sm text-slate-400 text-center py-8">No notes yet.</p>
-            <button className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-sm text-slate-400 hover:border-blue-300 hover:text-blue-600 transition-colors">
+            <p className="text-xs text-slate-400 text-center py-8">No notes yet.</p>
+            <button className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-blue-300 hover:text-blue-600 transition-colors">
               + Add note
             </button>
           </div>
@@ -343,8 +448,8 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
 
         {tab === 'graph' && (
           <div className="p-4">
-            <div className="h-40 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-200">
-              <p className="text-sm text-slate-400">Citation graph coming soon</p>
+            <div className="h-40 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
+              <p className="text-xs text-slate-400">Citation graph coming soon</p>
             </div>
           </div>
         )}
