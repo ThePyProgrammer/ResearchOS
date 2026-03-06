@@ -30,8 +30,8 @@ export const papersApi = {
   update: (id, data) => apiFetch(`/papers/${id}`, { method: 'PATCH', body: data }),
   remove: (id) => apiFetch(`/papers/${id}`, { method: 'DELETE' }),
   /** Resolve a DOI, arXiv ID, or URL and add to the library. */
-  import: (identifier) =>
-    apiFetch('/papers/import', { method: 'POST', body: { identifier } }),
+  import: (identifier, libraryId) =>
+    apiFetch('/papers/import', { method: 'POST', body: { identifier, library_id: libraryId || null } }),
   /** Upload a PDF file (File object) and store it in Supabase Storage. */
   uploadPdf: async (id, file) => {
     const formData = new FormData()

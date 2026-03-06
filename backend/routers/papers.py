@@ -53,6 +53,7 @@ async def create_paper(data: PaperCreate):
 
 class ImportRequest(BaseModel):
     identifier: str  # DOI, arXiv ID, or URL
+    library_id: Optional[str] = None
 
 
 @router.post("/import", status_code=201)
@@ -114,6 +115,7 @@ async def import_paper(data: ImportRequest):
         abstract=meta.get("abstract"),
         source="human",
         pdf_url=meta.get("pdf_url"),
+        library_id=data.library_id,
     )
     paper = paper_service.create_paper(paper_create)
     logger.info("Imported paper '%s' from identifier '%s'", paper.title, identifier)

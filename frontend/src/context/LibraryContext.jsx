@@ -1,26 +1,31 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { librariesApi, collectionsApi } from '../services/api'
 
 const LibraryContext = createContext(null)
 
 export function LibraryProvider({ children }) {
+  const [searchParams] = useSearchParams()
   const [libraries, setLibraries] = useState([])
-  const [activeLibraryId, setActiveLibraryId] = useState(null)
   const [collections, setCollections] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // Active library is purely URL-driven; falls back to first library
+  const urlLibId = searchParams.get('lib')
+
   useEffect(() => {
     librariesApi.list()
-      .then(libs => {
-        setLibraries(libs)
-        if (libs.length > 0) setActiveLibraryId(libs[0].id)
-      })
+      .then(setLibraries)
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
+  const activeLibraryId = urlLibId || (libraries[0]?.id ?? null)
+  const activeLibrary = libraries.find(l => l.id === activeLibraryId) ?? null
+
   useEffect(() => {
     if (loading) return
+    setCollections([])
     collectionsApi.list(activeLibraryId ? { library_id: activeLibraryId } : {})
       .then(setCollections)
       .catch(() => {})
@@ -43,16 +48,19 @@ export function LibraryProvider({ children }) {
     return created
   }, [activeLibraryId])
 
+  const refreshCollections = useCallback(() => {
+    collectionsApi.list(activeLibraryId ? { library_id: activeLibraryId } : {})
+      .then(setCollections)
+      .catch(() => {})
+  }, [activeLibraryId])
+
   const deleteCollection = useCallback(async (col) => {
     const toDelete = []
-    const gather = (parentId) => {
+    const gather = (id) => {
       collections
-        .filter(c => c.id === parentId || c.parentId === parentId)
+        .filter(c => c.id === id || c.parentId === id)
         .forEach(c => {
-          if (!toDelete.includes(c.id)) {
-            toDelete.push(c.id)
-            gather(c.id)
-          }
+          if (!toDelete.includes(c.id)) { toDelete.push(c.id); gather(c.id) }
         })
     }
     gather(col.id)
@@ -61,12 +69,10 @@ export function LibraryProvider({ children }) {
     return toDelete
   }, [collections])
 
-  const activeLibrary = libraries.find(l => l.id === activeLibraryId) ?? null
-
   return (
     <LibraryContext.Provider value={{
-      libraries, activeLibrary, activeLibraryId, setActiveLibraryId, createLibrary,
-      collections, createCollection, deleteCollection,
+      libraries, activeLibrary, activeLibraryId,
+      collections, createLibrary, createCollection, deleteCollection, refreshCollections,
       loading,
     }}>
       {children}

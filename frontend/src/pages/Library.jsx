@@ -354,7 +354,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
 }
 
 export default function Library() {
-  const { activeLibraryId } = useLibrary()
+  const { activeLibraryId, refreshCollections } = useLibrary() // derived from ?lib= URL param
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedPaper, setSelectedPaper] = useState(null)
   const [papers, setPapers] = useState([])
@@ -373,10 +373,12 @@ export default function Library() {
   const filterTab = searchParams.get('status') || 'all'
   const urlQuery = searchParams.get('q') || ''
   const urlMode = searchParams.get('mode') || 'lexical'
+  const libParam = searchParams.get('lib')
 
   // Helper: build next params preserving fields we want to keep
   function navParams({ col, status, q, mode } = {}) {
     const p = {}
+    if (libParam) p.lib = libParam
     const nextCol = col !== undefined ? col : activeCollection
     const nextStatus = status !== undefined ? status : filterTab
     if (nextCol && nextCol !== 'all') p.col = nextCol
@@ -423,6 +425,7 @@ export default function Library() {
   const handleDelete = (paperId) => {
     setPapers(prev => prev.filter(p => p.id !== paperId))
     setSelectedPaper(null)
+    refreshCollections()
   }
 
 
@@ -445,7 +448,7 @@ export default function Library() {
     if (yearTo) result = result.filter(p => p.year <= Number(yearTo))
     if (tagFilters.size > 0) result = result.filter(p => [...tagFilters].every(t => p.tags.includes(t)))
     return result
-  }, [papers, urlQuery, filterTab, sourceFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters])
+  }, [papers, urlQuery, filterTab, activeCollection, sourceFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters])
 
   function clearFilters() {
     setSourceFilter('all')

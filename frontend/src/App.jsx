@@ -9,24 +9,21 @@ import { LibraryProvider } from './context/LibraryContext'
 
 export default function App() {
   return (
-    <LibraryProvider>
     <BrowserRouter>
-      <Routes>
-        {/* Pages that use the global search/action Header */}
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="library" element={<Library />} />
-          <Route path="agents" element={<Agents />} />
-        </Route>
-
-        {/* Pages that manage their own full-width page header */}
-        <Route path="/" element={<LayoutBare />}>
-          <Route path="library/paper/:id" element={<Paper />} />
-          <Route path="proposals" element={<Proposals />} />
-        </Route>
-      </Routes>
+      <LibraryProvider>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="library" element={<Library />} />
+            <Route path="agents" element={<Agents />} />
+          </Route>
+          <Route path="/" element={<LayoutBare />}>
+            <Route path="library/paper/:id" element={<Paper />} />
+            <Route path="proposals" element={<Proposals />} />
+          </Route>
+        </Routes>
+      </LibraryProvider>
     </BrowserRouter>
-    </LibraryProvider>
   )
 }

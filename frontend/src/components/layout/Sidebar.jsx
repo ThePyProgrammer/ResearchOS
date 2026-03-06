@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { proposalsApi } from '../../services/api'
 import { user } from '../../data/mockData'
@@ -14,17 +15,17 @@ function SidebarLink({ to, icon, label, badge, active, collapsed }) {
       to={to}
       title={collapsed ? label : undefined}
       className={({ isActive }) =>
-        `flex items-center rounded-lg text-sm font-medium transition-colors ${
-          collapsed ? 'justify-center px-0 py-2' : 'gap-2.5 px-3 py-2'
+        `flex items-center rounded-lg transition-colors ${
+          collapsed ? 'justify-center px-0 py-1.5' : 'gap-2.5 px-3 py-1.5'
         } ${
           (active !== undefined ? active : isActive)
-            ? 'bg-white/10 text-white'
+            ? 'bg-white/10 text-white font-medium'
             : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
         }`
       }
     >
       <Icon name={icon} className="text-[18px] flex-shrink-0" />
-      {!collapsed && <span className="flex-1">{label}</span>}
+      {!collapsed && <span className="flex-1 text-[13px]">{label}</span>}
       {!collapsed && badge && (
         <span className="bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
           {badge}
@@ -38,11 +39,17 @@ function SidebarLink({ to, icon, label, badge, active, collapsed }) {
 }
 
 function LibrarySwitcher({ collapsed }) {
-  const { libraries, activeLibrary, setActiveLibraryId, createLibrary } = useLibrary()
+  const { libraries, activeLibrary, createLibrary } = useLibrary()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const ref = useRef(null)
+
+  function switchLibrary(id) {
+    setOpen(false)
+    navigate(`/library?lib=${id}`)
+  }
 
   useEffect(() => {
     if (!open) return
@@ -57,10 +64,9 @@ function LibrarySwitcher({ collapsed }) {
     e.preventDefault()
     if (!newName.trim()) return
     const lib = await createLibrary(newName.trim())
-    setActiveLibraryId(lib.id)
     setNewName('')
     setCreating(false)
-    setOpen(false)
+    switchLibrary(lib.id)
   }
 
   if (collapsed) {
@@ -71,7 +77,7 @@ function LibrarySwitcher({ collapsed }) {
           onClick={() => setOpen(o => !o)}
           className="w-full flex justify-center py-1.5 rounded-lg hover:bg-white/5 transition-colors text-slate-400"
         >
-          <Icon name="library_books" className="text-[18px]" />
+          <Icon name="library_books" className="text-[18px] text-slate-400" />
         </button>
       </div>
     )
@@ -83,11 +89,11 @@ function LibrarySwitcher({ collapsed }) {
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors group"
       >
-        <Icon name="library_books" className="text-[16px] text-slate-400 flex-shrink-0" />
+        <Icon name="library_books" className="text-[18px] text-slate-400 flex-shrink-0" />
         <span className="flex-1 text-[13px] font-medium text-slate-200 truncate">
           {activeLibrary?.name ?? 'No library'}
         </span>
-        <Icon name={open ? 'expand_less' : 'expand_more'} className="text-[16px] text-slate-500 group-hover:text-slate-300" />
+        <Icon name={open ? 'expand_less' : 'expand_more'} className="text-[18px] text-slate-500 group-hover:text-slate-300" />
       </button>
 
       {open && (
@@ -96,17 +102,17 @@ function LibrarySwitcher({ collapsed }) {
             {libraries.map(lib => (
               <button
                 key={lib.id}
-                onClick={() => { setActiveLibraryId(lib.id); setOpen(false) }}
+                onClick={() => switchLibrary(lib.id)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${
                   lib.id === activeLibrary?.id
                     ? 'bg-blue-600/20 text-blue-300'
                     : 'text-slate-300 hover:bg-white/5'
                 }`}
               >
-                <Icon name="library_books" className="text-[15px] flex-shrink-0" />
-                <span className="flex-1 truncate">{lib.name}</span>
+                <Icon name="library_books" className="text-[16px] flex-shrink-0" />
+                <span className="flex-1 truncate text-[13px]">{lib.name}</span>
                 {lib.id === activeLibrary?.id && (
-                  <Icon name="check" className="text-[15px] text-blue-400" />
+                  <Icon name="check" className="text-[16px] text-blue-400" />
                 )}
               </button>
             ))}
@@ -141,8 +147,8 @@ function LibrarySwitcher({ collapsed }) {
                 onClick={() => setCreating(true)}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
               >
-                <Icon name="add" className="text-[16px]" />
-                New library
+                <Icon name="add" className="text-[18px]" />
+                <span className="text-[13px]">New library</span>
               </button>
             )}
           </div>
@@ -169,7 +175,7 @@ function CollectionModal({ parentName, onConfirm, onCancel }) {
     await onConfirm(name.trim())
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onCancel}>
       <div className="bg-white rounded-xl shadow-xl w-80 p-5" onClick={e => e.stopPropagation()}>
         <h2 className="text-sm font-semibold text-slate-800">
@@ -198,14 +204,16 @@ function CollectionModal({ parentName, onConfirm, onCancel }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
 function LibraryTree() {
-  const { collections, createCollection, deleteCollection } = useLibrary()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { collections, createCollection, deleteCollection, activeLibraryId } = useLibrary()
+  const [searchParams] = useSearchParams()
   const activeCollection = searchParams.get('col') || 'all'
+  const libParam = activeLibraryId ? `lib=${activeLibraryId}` : ''
   const [expanded, setExpanded] = useState({ c1: true })
   const [ctxMenu, setCtxMenu] = useState(null)
   const [modal, setModal] = useState(null)
@@ -221,21 +229,26 @@ function LibraryTree() {
     }
   }, [!!ctxMenu])
 
+  const navigate = useNavigate()
   function select(id) {
-    const params = {}
-    if (id !== 'all') params.col = id
-    setSearchParams(params)
+    if (id === 'all') navigate(libParam ? `/library?${libParam}` : '/library')
+    else navigate(libParam ? `/library?${libParam}&col=${id}` : `/library?col=${id}`)
   }
 
   async function handleCreate(name) {
-    await createCollection({ name, parentId: modal.parentId })
-    setModal(null)
+    try {
+      await createCollection({ name, parentId: modal.parentId })
+      setModal(null)
+    } catch (err) {
+      console.error('Failed to create collection:', err)
+      alert(`Failed to create collection: ${err.message}`)
+    }
   }
 
   async function handleDelete(col) {
     setCtxMenu(m => ({ ...m, deleting: true }))
     const deletedIds = await deleteCollection(col)
-    if (deletedIds.includes(activeCollection)) setSearchParams({})
+    if (deletedIds.includes(activeCollection)) navigate(libParam ? `/library?${libParam}` : '/library')
     setCtxMenu(null)
   }
 
@@ -268,13 +281,13 @@ function LibraryTree() {
           style={{ paddingLeft: `${8 + depth * 12}px`, paddingRight: '8px' }}
         >
           {children.length > 0 ? (
-            <Icon name={isOpen ? 'expand_more' : 'chevron_right'} className="text-[13px] flex-shrink-0 opacity-50" />
+            <Icon name={isOpen ? 'expand_more' : 'chevron_right'} className="text-[14px] flex-shrink-0 opacity-50" />
           ) : (
-            <span className="w-[13px] flex-shrink-0" />
+            <span className="w-[14px] flex-shrink-0" />
           )}
           <Icon
             name={col.type === 'agent-output' ? 'smart_toy' : 'folder'}
-            className={`text-[15px] flex-shrink-0 ${col.type === 'agent-output' ? 'text-purple-400' : 'text-slate-500'}`}
+            className={`text-[16px] flex-shrink-0 ${col.type === 'agent-output' ? 'text-purple-400' : 'text-slate-500'}`}
           />
           <span className="flex-1 truncate text-left text-[13px]">{col.name}</span>
           <span className="text-[11px] text-slate-600 flex-shrink-0">{col.paperCount}</span>
@@ -328,7 +341,7 @@ function LibraryTree() {
                 onClick={() => { setCtxMenu(null); setModal({ parentId: ctxMenu.col.id, parentName: ctxMenu.col.name }) }}
                 className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               >
-                <Icon name="create_new_folder" className="text-[16px] text-slate-400" />
+                <Icon name="create_new_folder" className="text-[18px] text-slate-400" />
                 New subcollection
               </button>
               <div className="my-1 border-t border-slate-100" />
@@ -336,7 +349,7 @@ function LibraryTree() {
                 onClick={() => setCtxMenu(m => ({ ...m, confirming: true }))}
                 className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
               >
-                <Icon name="delete" className="text-[16px]" />
+                <Icon name="delete" className="text-[18px]" />
                 Delete
               </button>
             </>
@@ -345,24 +358,24 @@ function LibraryTree() {
       )}
 
       {/* Quick access */}
-      <p className="px-3 pt-1 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
+      <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
         Quick Access
       </p>
       {[
-        { id: 'all',    icon: 'collections_bookmark', label: 'All Papers' },
-        { id: 'inbox',  icon: 'inbox',                label: 'Inbox' },
-        { id: 'unfiled',icon: 'folder_off',           label: 'Unfiled' },
+        { id: 'all',     icon: 'collections_bookmark', label: 'All Papers' },
+        { id: 'inbox',   icon: 'inbox',                label: 'Inbox' },
+        { id: 'unfiled', icon: 'folder_off',           label: 'Unfiled' },
       ].map(item => (
         <button
           key={item.id}
           onClick={() => select(item.id)}
-          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-colors ${
             activeCollection === item.id
               ? 'bg-white/10 text-white font-medium'
               : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
           }`}
         >
-          <Icon name={item.icon} className="text-[16px] flex-shrink-0" />
+          <Icon name={item.icon} className="text-[18px] flex-shrink-0" />
           <span className="flex-1 text-left text-[13px]">{item.label}</span>
         </button>
       ))}
@@ -375,20 +388,12 @@ function LibraryTree() {
           className="p-0.5 rounded text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
           title="New collection"
         >
-          <Icon name="add" className="text-[16px]" />
+          <Icon name="add" className="text-[18px]" />
         </button>
       </div>
       {rootCollections.map(col => (
         <CollectionNode key={col.id} col={col} />
       ))}
-
-      {/* Run agent shortcut */}
-      <div className="pt-3">
-        <button className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-purple-400 hover:bg-white/5 hover:text-purple-300 transition-colors font-medium">
-          <Icon name="smart_toy" className="text-[16px]" />
-          <span className="text-[13px]">Run Agent Workflow</span>
-        </button>
-      </div>
 
       {modal && (
         <CollectionModal
@@ -404,9 +409,6 @@ function LibraryTree() {
 
 export default function Sidebar({ collapsed, onToggle }) {
   const navigate = useNavigate()
-  const location = useLocation()
-  const isLibrary = location.pathname.startsWith('/library')
-  const isMyLibrary = location.pathname === '/library'
   const [pendingCount, setPendingCount] = useState(null)
 
   useEffect(() => {
@@ -446,32 +448,31 @@ export default function Sidebar({ collapsed, onToggle }) {
       <LibrarySwitcher collapsed={collapsed} />
 
       <nav className={`flex-1 space-y-1 ${collapsed ? 'p-2 pt-3' : 'p-3'}`}>
-        {/* Main nav */}
+        {/* Dashboard */}
         <div className="space-y-0.5">
           <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" collapsed={collapsed} />
-          <SidebarLink to="/library" icon="collections_bookmark" label="My Library" active={isMyLibrary} collapsed={collapsed} />
         </div>
 
-        {/* Collection tree — shown expanded when on library pages */}
-        {!collapsed && isLibrary && (
+        {/* Library tree (Quick Access + Collections) */}
+        {!collapsed && (
           <div className="space-y-0.5">
             <LibraryTree />
           </div>
         )}
 
         {/* Agent Workflows */}
-        <div className={isLibrary && !collapsed ? 'pt-3' : ''}>
+        <div className="pt-3">
           {!collapsed && (
-            <p className="px-3 mb-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
+            <p className="px-3 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
               Agent Workflows
             </p>
           )}
           <div className="space-y-0.5">
             <SidebarLink to="/agents" icon="smart_toy" label="Workflow Catalog" collapsed={collapsed} />
             <SidebarLink to="/proposals" icon="rate_review" label="Agent Proposals" badge={pendingCount} collapsed={collapsed} />
-            <div className={`flex items-center rounded-lg text-sm text-slate-400 ${collapsed ? 'justify-center py-2' : 'gap-2.5 px-3 py-2'}`}>
+            <div className={`flex items-center rounded-lg text-slate-400 ${collapsed ? 'justify-center py-1.5' : 'gap-2.5 px-3 py-1.5'}`}>
               <Icon name="sensors" className="text-[18px] text-emerald-400 flex-shrink-0" />
-              {!collapsed && <span className="flex-1">Daily arXiv Scanner</span>}
+              {!collapsed && <span className="flex-1 text-[13px]">Daily arXiv Scanner</span>}
               {!collapsed && (
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -481,25 +482,6 @@ export default function Sidebar({ collapsed, onToggle }) {
             </div>
           </div>
         </div>
-
-        {/* Tags — hidden when collapsed or on library (tree takes up space) */}
-        {!collapsed && !isLibrary && (
-          <div>
-            <p className="px-3 mb-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
-              Tags
-            </p>
-            <div className="flex flex-wrap gap-1.5 px-3">
-              {['#survey', '#important', '#methods', '#dataset', '#rlhf', '#transformers'].map(tag => (
-                <button
-                  key={tag}
-                  className="text-[11px] text-slate-400 hover:text-slate-200 hover:bg-white/5 px-2 py-0.5 rounded-full transition-colors"
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* User profile */}

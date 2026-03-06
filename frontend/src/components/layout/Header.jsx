@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { papersApi, searchApi } from '../../services/api'
+import { useLibrary } from '../../context/LibraryContext'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -34,7 +35,7 @@ const TYPE_META = {
 // ---------------------------------------------------------------------------
 // Quick-Add modal
 // ---------------------------------------------------------------------------
-function QuickAddModal({ open, onClose, onAdded, collectionId }) {
+function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
   const [input, setInput] = useState('')
   const [state, setState] = useState('idle') // idle | loading | success | duplicate | error
   const [result, setResult] = useState(null)  // paper object on success
@@ -74,7 +75,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId }) {
     setResult(null)
 
     try {
-      const paper = await papersApi.import(trimmed)
+      const paper = await papersApi.import(trimmed, libraryId)
       if (!paper.already_exists && collectionId) {
         await papersApi.update(paper.id, { collections: [collectionId] })
         paper.collections = [collectionId]
@@ -261,6 +262,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId }) {
 // Header
 // ---------------------------------------------------------------------------
 export default function Header() {
+  const { refreshCollections } = useLibrary()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -270,6 +272,7 @@ export default function Header() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const activeCollectionId = searchParams.get('col') || null
+  const activeLibraryId = searchParams.get('lib') || null
 
   // Debounced lexical search → quick dropdown (no API key needed)
   useEffect(() => {
@@ -435,8 +438,16 @@ export default function Header() {
       <QuickAddModal
         open={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
-        onAdded={() => navigate(activeCollectionId ? `/library?col=${activeCollectionId}` : '/library')}
+        onAdded={() => {
+          refreshCollections()
+          const params = new URLSearchParams()
+          if (activeLibraryId) params.set('lib', activeLibraryId)
+          if (activeCollectionId) params.set('col', activeCollectionId)
+          const qs = params.toString()
+          navigate(qs ? `/library?${qs}` : '/library')
+        }}
         collectionId={activeCollectionId}
+        libraryId={activeLibraryId}
       />
     </>
   )
