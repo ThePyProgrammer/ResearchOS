@@ -12,13 +12,32 @@ const statusConfig = {
   'inbox': { label: 'Inbox', class: 'bg-blue-100 text-blue-700' },
 }
 
-function CollectionSidebar({ collections, active, onSelect, totalCount }) {
+function CollectionSidebar({ collections, active, onSelect, onDeleteCollection, totalCount }) {
   const rootCollections = collections.filter(c => c.parentId === null)
   const [expanded, setExpanded] = useState({ c1: true })
+  const [ctxMenu, setCtxMenu] = useState(null) // { col, x, y, confirming, deleting }
+
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => setCtxMenu(null)
+    window.addEventListener('click', close)
+    window.addEventListener('keydown', e => { if (e.key === 'Escape') close() })
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('keydown', e => { if (e.key === 'Escape') close() })
+    }
+  }, [!!ctxMenu])
+
+  async function handleDelete(col) {
+    setCtxMenu(m => ({ ...m, deleting: true }))
+    await onDeleteCollection(col)
+    setCtxMenu(null)
+  }
 
   function CollectionNode({ col, depth = 0 }) {
     const children = collections.filter(c => c.parentId === col.id)
     const isOpen = expanded[col.id]
+    const isCtxTarget = ctxMenu?.col.id === col.id
 
     return (
       <div>
@@ -27,8 +46,15 @@ function CollectionSidebar({ collections, active, onSelect, totalCount }) {
             onSelect(col.id)
             if (children.length) setExpanded(e => ({ ...e, [col.id]: !isOpen }))
           }}
+          onContextMenu={e => {
+            e.preventDefault()
+            e.stopPropagation()
+            setCtxMenu({ col, x: e.clientX, y: e.clientY, confirming: false, deleting: false })
+          }}
           className={`w-full flex items-center gap-2 py-1.5 rounded-lg text-sm transition-colors ${
-            active === col.id
+            isCtxTarget
+              ? 'bg-red-50 text-red-700'
+              : active === col.id
               ? 'bg-blue-50 text-blue-700 font-medium'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
@@ -54,6 +80,49 @@ function CollectionSidebar({ collections, active, onSelect, totalCount }) {
   }
 
   return (
+    <>
+    {ctxMenu && (
+      <div
+        style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 50 }}
+        className="bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-52"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
+          <p className="text-xs text-slate-400 truncate">{ctxMenu.col.name}</p>
+        </div>
+        {ctxMenu.confirming ? (
+          <div className="px-3 py-2">
+            <p className="text-xs text-slate-600 mb-0.5 font-medium">Delete this collection?</p>
+            {collections.some(c => c.parentId === ctxMenu.col.id) && (
+              <p className="text-[11px] text-amber-600 mb-2">Subcollections will also be deleted.</p>
+            )}
+            <div className="flex gap-1.5 mt-2">
+              <button
+                onClick={() => handleDelete(ctxMenu.col)}
+                disabled={ctxMenu.deleting}
+                className="flex-1 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {ctxMenu.deleting ? 'Deleting…' : 'Delete'}
+              </button>
+              <button
+                onClick={() => setCtxMenu(null)}
+                className="flex-1 py-1.5 border border-slate-200 text-slate-600 text-xs rounded-lg hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setCtxMenu(m => ({ ...m, confirming: true }))}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <Icon name="delete" className="text-[16px]" />
+            Delete
+          </button>
+        )}
+      </div>
+    )}
     <aside className="w-52 flex-shrink-0 border-r border-slate-200 bg-white p-3 space-y-1 overflow-y-auto">
       <p className="px-2 pt-1 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
         Quick Access
@@ -95,6 +164,7 @@ function CollectionSidebar({ collections, active, onSelect, totalCount }) {
         </button>
       </div>
     </aside>
+    </>
   )
 }
 
@@ -495,6 +565,28 @@ export default function Library() {
     setSelectedPaper(null)
   }
 
+  const handleDeleteCollection = async (col) => {
+    // Collect the target + all descendants
+    const allCollections = collections
+    const toDelete = []
+    const gather = (parentId) => {
+      allCollections.filter(c => c.id === parentId || c.parentId === parentId).forEach(c => {
+        if (!toDelete.includes(c.id)) {
+          toDelete.push(c.id)
+          gather(c.id)
+        }
+      })
+    }
+    gather(col.id)
+
+    await Promise.all(toDelete.map(id => collectionsApi.remove(id).catch(() => {})))
+    setCollections(prev => prev.filter(c => !toDelete.includes(c.id)))
+    if (toDelete.includes(activeCollection)) {
+      setActiveCollection('all')
+      setFilterTab('all')
+    }
+  }
+
   // In search mode, results are already filtered by the backend; otherwise apply status tab
   const filtered = urlQuery
     ? papers
@@ -510,6 +602,7 @@ export default function Library() {
           setFilterTab('all')
           if (urlQuery) setSearchParams({})
         }}
+        onDeleteCollection={handleDeleteCollection}
         totalCount={papers.length}
       />
 
