@@ -26,6 +26,8 @@ class Paper(CamelModel):
     rejected: bool = False
     collections: list[str] = []
     pdf_url: Optional[str] = None
+    github_url: Optional[str] = None
+    website_url: Optional[str] = None
     created_at: str
 
 
@@ -45,6 +47,8 @@ class PaperCreate(CamelModel):
     agent_reasoning: Optional[str] = None
     collections: list[str] = []
     pdf_url: Optional[str] = None
+    github_url: Optional[str] = None
+    website_url: Optional[str] = None
 
 
 class PaperUpdate(CamelModel):
@@ -55,3 +59,5 @@ class PaperUpdate(CamelModel):
     agent_run: Optional[AgentRunRef] = None
     relevance_score: Optional[int] = None
     agent_reasoning: Optional[str] = None
+    github_url: Optional[str] = None
+    website_url: Optional[str] = None
