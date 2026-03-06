@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { activityApi, runsApi } from '../services/api'
+import { activityApi, runsApi, papersApi, collectionsApi } from '../services/api'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -97,21 +97,26 @@ export default function Dashboard() {
   const [tab, setTab] = useState('all')
   const [activity, setActivity] = useState([])
   const [runs, setRuns] = useState([])
+  const [paperCount, setPaperCount] = useState(null)
+  const [collectionCount, setCollectionCount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     setLoading(true)
     setError(null)
-    Promise.all([activityApi.list(), runsApi.list()])
-      .then(([activityData, runsData]) => {
+    Promise.all([activityApi.list(), runsApi.list(), papersApi.list(), collectionsApi.list()])
+      .then(([activityData, runsData, papersData, collectionsData]) => {
         setActivity(activityData)
         setRuns(runsData)
+        setPaperCount(papersData.length)
+        setCollectionCount(collectionsData.length)
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
 
+  // activity `type` values in DB: "agent" | "human"
   const filtered = tab === 'all' ? activity : activity.filter(a => a.type === tab)
   const runningCount = runs.filter(r => r.status === 'running').length
 
@@ -124,7 +129,12 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 mb-8">
-        <StatCard icon="collections_bookmark" label="Total Papers" value="1,248" sub="Across 8 collections" />
+        <StatCard
+          icon="collections_bookmark"
+          label="Total Papers"
+          value={paperCount === null ? '—' : paperCount.toLocaleString()}
+          sub={collectionCount === null ? null : `Across ${collectionCount} collection${collectionCount === 1 ? '' : 's'}`}
+        />
         <StatCard
           icon="smart_toy"
           label="Active Workflows"
@@ -139,15 +149,19 @@ export default function Dashboard() {
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
           <h2 className="text-base font-semibold text-slate-800">Recent Activity</h2>
           <div className="flex bg-slate-100 rounded-lg p-0.5 text-sm">
-            {['all', 'agents', 'human'].map(t => (
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'agent', label: 'Agents' },
+              { key: 'human', label: 'Human' },
+            ].map(({ key, label }) => (
               <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-3 py-1 rounded-md font-medium transition-colors capitalize ${
-                  tab === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                key={key}
+                onClick={() => setTab(key)}
+                className={`px-3 py-1 rounded-md font-medium transition-colors ${
+                  tab === key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                {t === 'agents' ? 'Agents' : t === 'human' ? 'Human' : 'All'}
+                {label}
               </button>
             ))}
           </div>

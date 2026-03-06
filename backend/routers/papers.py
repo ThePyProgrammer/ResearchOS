@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from models.paper import PaperCreate, PaperUpdate
 from services import paper_service
+from services import activity_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/papers", tags=["papers"])
@@ -31,6 +32,16 @@ async def list_papers(
 @router.post("", status_code=201)
 async def create_paper(data: PaperCreate):
     paper = paper_service.create_paper(data)
+    activity_service.log_activity(
+        type="human",
+        icon="note_add",
+        icon_color="text-blue-600",
+        icon_bg="bg-blue-50",
+        title=f"Added \"{paper.title}\"",
+        detail=", ".join(paper.authors[:2]) + (" et al." if len(paper.authors) > 2 else "") if paper.authors else None,
+        action_label="View paper",
+        action_href=f"/library/paper/{paper.id}",
+    )
     return JSONResponse(paper.model_dump(by_alias=True), status_code=201)
 
 
@@ -104,6 +115,16 @@ async def import_paper(data: ImportRequest):
     )
     paper = paper_service.create_paper(paper_create)
     logger.info("Imported paper '%s' from identifier '%s'", paper.title, identifier)
+    activity_service.log_activity(
+        type="human",
+        icon="note_add",
+        icon_color="text-blue-600",
+        icon_bg="bg-blue-50",
+        title=f"Imported \"{paper.title}\"",
+        detail=", ".join(paper.authors[:2]) + (" et al." if len(paper.authors) > 2 else "") if paper.authors else None,
+        action_label="View paper",
+        action_href=f"/library/paper/{paper.id}",
+    )
     return JSONResponse(
         {**paper.model_dump(by_alias=True), "already_exists": False},
         status_code=201,

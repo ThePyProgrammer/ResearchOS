@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from models.collection import CollectionCreate, CollectionUpdate
 from services import collection_service
+from services import activity_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/collections", tags=["collections"])
@@ -21,6 +22,16 @@ async def list_collections():
 @router.post("", status_code=201)
 async def create_collection(data: CollectionCreate):
     col = collection_service.create_collection(data)
+    activity_service.log_activity(
+        type="human",
+        icon="create_new_folder",
+        icon_color="text-violet-600",
+        icon_bg="bg-violet-50",
+        title=f"Created collection \"{col.name}\"",
+        detail=f"Subcollection of parent" if col.parent_id else None,
+        action_label="Open library",
+        action_href=f"/library?col={col.id}",
+    )
     return JSONResponse(col.model_dump(by_alias=True), status_code=201)
 
 
