@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, websitesApi, searchApi, notesApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
-import PaperInfoPanel, { statusConfig, NamedLinks } from '../components/PaperInfoPanel'
+import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker } from '../components/PaperInfoPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -29,6 +29,11 @@ function PaperRow({ item, selected, onSelect }) {
 
   return (
     <tr
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('application/researchos-item', JSON.stringify({ id: item.id, itemType: item.itemType || 'paper', collections: item.collections }))
+        e.dataTransfer.effectAllowed = 'copy'
+      }}
       onClick={() => onSelect(item)}
       className={`cursor-pointer transition-colors ${
         selected ? 'bg-blue-50' : 'hover:bg-slate-50'
@@ -461,6 +466,13 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
               </div>
             </div>
 
+            {/* Collections */}
+            <CollectionsPicker
+              item={item}
+              onUpdate={onUpdate}
+              updateFn={(id, data) => websitesApi.update(id, data)}
+            />
+
             {/* Description */}
             {item.description && (
               <div>
@@ -565,6 +577,14 @@ export default function Library() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sourceFilter, setSourceFilter] = useState('all')
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  // Listen for item changes from sidebar drag-drop
+  useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1)
+    window.addEventListener('researchos:items-changed', handler)
+    return () => window.removeEventListener('researchos:items-changed', handler)
+  }, [])
   const [yearFrom, setYearFrom] = useState('')
   const [yearTo, setYearTo] = useState('')
   const [titleFilter, setTitleFilter] = useState('')
@@ -612,7 +632,7 @@ export default function Library() {
         .catch(err => setError(err.message))
         .finally(() => setLoading(false))
     }
-  }, [urlQuery, urlMode, location.key, activeLibraryId])
+  }, [urlQuery, urlMode, location.key, activeLibraryId, refreshKey])
 
   const handleStatusChange = (itemId, newStatus) => {
     setItems(prev => prev.map(p => p.id === itemId ? { ...p, status: newStatus } : p))

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom'
-import { proposalsApi } from '../../services/api'
+import { proposalsApi, papersApi, websitesApi } from '../../services/api'
 import { user } from '../../data/mockData'
 import { useLibrary } from '../../context/LibraryContext'
 
@@ -225,7 +225,7 @@ function CollectionModal({ parentName, onConfirm, onCancel }) {
 }
 
 function LibraryTree() {
-  const { collections, createCollection, updateCollection, deleteCollection, activeLibraryId } = useLibrary()
+  const { collections, createCollection, updateCollection, deleteCollection, refreshCollections, activeLibraryId } = useLibrary()
   const [searchParams] = useSearchParams()
   const activeCollection = searchParams.get('col') || 'all'
   const [expanded, setExpanded] = useState({ c1: true })
@@ -317,7 +317,9 @@ function LibraryTree() {
   function handleDragOver(e, colId) {
     e.preventDefault()
     e.stopPropagation()
-    e.dataTransfer.dropEffect = 'move'
+    // Accept both collection moves and item (paper/website) drops
+    const hasItem = e.dataTransfer.types.includes('application/researchos-item')
+    e.dataTransfer.dropEffect = hasItem ? 'copy' : 'move'
     if (dragOverId !== colId) setDragOverId(colId)
   }
 
@@ -333,6 +335,25 @@ function LibraryTree() {
     e.preventDefault()
     e.stopPropagation()
     setDragOverId(null)
+
+    // Check if this is an item (paper/website) drop
+    const itemData = e.dataTransfer.getData('application/researchos-item')
+    if (itemData) {
+      try {
+        const item = JSON.parse(itemData)
+        if (item.collections?.includes(targetId)) return // already in this collection
+        const next = [...(item.collections || []), targetId]
+        const api = item.itemType === 'website' ? websitesApi : papersApi
+        await api.update(item.id, { collections: next })
+        refreshCollections()
+        window.dispatchEvent(new CustomEvent('researchos:items-changed'))
+      } catch (err) {
+        console.error('Failed to add item to collection:', err)
+      }
+      return
+    }
+
+    // Otherwise it's a collection move
     const draggedId = draggedRef.current || e.dataTransfer.getData('text/plain')
     draggedRef.current = null
     if (!draggedId || draggedId === targetId) return
