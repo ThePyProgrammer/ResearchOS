@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { papersApi } from '../services/api'
+import { useLibrary } from '../context/LibraryContext'
 
 export const statusConfig = {
   'read':    { label: 'Read',    class: 'bg-emerald-100 text-emerald-700' },
@@ -172,6 +173,119 @@ function LinkField({ label, icon, value, placeholder, onSave, type }) {
   )
 }
 
+export function CollectionsPicker({ item, onUpdate, updateFn }) {
+  const { collections } = useLibrary()
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const inputRef = useRef(null)
+  const dropdownRef = useRef(null)
+
+  const itemCollections = item.collections || []
+  const assignedCols = collections.filter(c => itemCollections.includes(c.id))
+  const available = collections.filter(c =>
+    !itemCollections.includes(c.id) &&
+    c.name.toLowerCase().includes(query.toLowerCase())
+  )
+
+  const apiFn = updateFn || ((id, data) => papersApi.update(id, data))
+
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
+
+  async function addCollection(colId) {
+    const next = [...itemCollections, colId]
+    try {
+      const updated = await apiFn(item.id, { collections: next })
+      onUpdate?.(updated)
+      window.dispatchEvent(new CustomEvent('researchos:items-changed'))
+    } catch (err) {
+      console.error('Failed to add collection:', err)
+    }
+    setQuery('')
+    setOpen(false)
+  }
+
+  async function removeCollection(colId) {
+    const next = itemCollections.filter(id => id !== colId)
+    try {
+      const updated = await apiFn(item.id, { collections: next })
+      onUpdate?.(updated)
+      window.dispatchEvent(new CustomEvent('researchos:items-changed'))
+    } catch (err) {
+      console.error('Failed to remove collection:', err)
+    }
+  }
+
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Collections</p>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {assignedCols.map(col => (
+          <span
+            key={col.id}
+            className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 group"
+          >
+            <Icon name="folder" className="text-[12px]" />
+            {col.name}
+            <button
+              onClick={() => removeCollection(col.id)}
+              className="text-blue-400 hover:text-red-500 transition-colors ml-0.5"
+              title="Remove from collection"
+            >
+              <Icon name="close" className="text-[11px]" />
+            </button>
+          </span>
+        ))}
+        {assignedCols.length === 0 && (
+          <span className="text-[11px] text-slate-400 italic">No collections</span>
+        )}
+      </div>
+      <div className="relative" ref={dropdownRef}>
+        <div
+          className="flex items-center gap-1.5 px-2 py-1.5 border border-slate-200 rounded-lg cursor-text hover:border-slate-300 transition-colors"
+          onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 0) }}
+        >
+          <Icon name="add" className="text-[14px] text-slate-400" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={e => { setQuery(e.target.value); setOpen(true) }}
+            onFocus={() => setOpen(true)}
+            placeholder="Add to collection…"
+            className="flex-1 text-xs bg-transparent focus:outline-none text-slate-700 placeholder-slate-400 min-w-0"
+          />
+        </div>
+        {open && available.length > 0 && (
+          <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+            {available.map(col => (
+              <button
+                key={col.id}
+                onClick={() => addCollection(col.id)}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors text-left"
+              >
+                <Icon name={col.type === 'agent-output' ? 'smart_toy' : 'folder'} className="text-[14px] text-slate-400" />
+                {col.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {open && query && available.length === 0 && (
+          <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2">
+            <p className="text-xs text-slate-400">No matching collections</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate }) {
   const [abstractExpanded, setAbstractExpanded] = useState(false)
 
@@ -257,6 +371,9 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
           })}
         </div>
       </div>
+
+      {/* Collections */}
+      <CollectionsPicker item={paper} onUpdate={onPaperUpdate} />
 
       {/* Abstract */}
       {paper.abstract && (
