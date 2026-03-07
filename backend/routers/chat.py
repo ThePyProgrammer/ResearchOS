@@ -33,6 +33,7 @@ async def send_chat(paper_id: str, data: ChatMessageCreate):
         paper_abstract=paper.get("abstract", ""),
         pdf_url=paper.get("pdf_url"),
         note_context=data.context,
+        notes_context=data.notes_context,
     )
     return JSONResponse(assistant_msg.model_dump(by_alias=True), status_code=201)
 

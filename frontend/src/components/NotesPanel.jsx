@@ -220,8 +220,7 @@ function TreeNode({ note, notes, selected, expanded, onSelect, onToggle, onConte
 }
 
 /* ─── Main NotesPanel ─── */
-export default function NotesPanel({ paperId }) {
-  const [notes, setNotes] = useState([])
+export default function NotesPanel({ paperId, notes, setNotes }) {
   const [selectedId, setSelectedId] = useState(null)
   const [expanded, setExpanded] = useState({})
   const [content, setContent] = useState('')
@@ -234,11 +233,6 @@ export default function NotesPanel({ paperId }) {
   const saveTimerRef = useRef(null)
 
   const selectedNote = notes.find(n => n.id === selectedId)
-
-  // Load notes
-  useEffect(() => {
-    notesApi.list(paperId).then(setNotes).catch(console.error)
-  }, [paperId])
 
   // Sync content when selection changes
   useEffect(() => {

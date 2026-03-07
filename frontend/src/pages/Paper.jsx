@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { papersApi } from '../services/api'
+import { papersApi, notesApi } from '../services/api'
 import PaperInfoPanel from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
@@ -60,7 +60,15 @@ export default function Paper() {
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [copilotOpen, setCopilotOpen] = useState(true)
+  const [notes, setNotes] = useState([])
   const fileInputRef = useRef(null)
+
+  // Load notes for the paper
+  const loadNotes = useCallback(() => {
+    notesApi.list(id).then(setNotes).catch(console.error)
+  }, [id])
+
+  useEffect(() => { loadNotes() }, [loadNotes])
 
   useEffect(() => {
     let objectUrl = null
@@ -334,12 +342,14 @@ export default function Paper() {
             {sideTab === 'notes' && (
               <div className="flex-1 flex overflow-hidden">
                 <div className="flex-1 flex overflow-hidden">
-                  <NotesPanel paperId={id} />
+                  <NotesPanel paperId={id} notes={notes} setNotes={setNotes} />
                 </div>
                 <CopilotPanel
                   paperId={id}
                   open={copilotOpen}
                   onToggle={() => setCopilotOpen(o => !o)}
+                  notes={notes}
+                  onNotesChanged={loadNotes}
                 />
               </div>
             )}
