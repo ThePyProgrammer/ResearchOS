@@ -1,8 +1,32 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import { chatApi } from '../services/api'
+
+/**
+ * Render LaTeX delimiters ($...$ and $$...$$) inside an HTML string.
+ * Processes display math ($$) first, then inline ($).
+ */
+function renderLatexInHtml(html) {
+  if (!html) return html
+  // Display math: $$...$$
+  html = html.replace(/\$\$([\s\S]*?)\$\$/g, (_, tex) => {
+    try {
+      return katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false })
+    } catch { return `<code>${tex}</code>` }
+  })
+  // Inline math: $...$  (but not inside <code> or <pre> tags)
+  // Simple approach: replace $...$ not preceded/followed by $
+  html = html.replace(/(?<!\$)\$(?!\$)((?:[^$\\]|\\.)+?)\$(?!\$)/g, (_, tex) => {
+    try {
+      return katex.renderToString(tex.trim(), { displayMode: false, throwOnError: false })
+    } catch { return `<code>${tex}</code>` }
+  })
+  return html
+}
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -99,6 +123,7 @@ function ChatInput({ onSend, sending }) {
 /* ─── Chat message bubble ─── */
 function ChatBubble({ message }) {
   const isUser = message.role === 'user'
+  const renderedContent = useMemo(() => renderLatexInHtml(message.content), [message.content])
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
       <div className={`max-w-[85%] ${isUser ? 'order-2' : 'order-1'}`}>
@@ -124,7 +149,7 @@ function ChatBubble({ message }) {
         >
           <div
             className="copilot-message-content"
-            dangerouslySetInnerHTML={{ __html: message.content }}
+            dangerouslySetInnerHTML={{ __html: renderedContent }}
           />
         </div>
       </div>

@@ -8,6 +8,8 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import Highlight from '@tiptap/extension-highlight'
 import Typography from '@tiptap/extension-typography'
+import Mathematics from '@tiptap/extension-mathematics'
+import 'katex/dist/katex.min.css'
 import { notesApi } from '../services/api'
 
 function Icon({ name, className = '' }) {
@@ -51,6 +53,7 @@ function TiptapEditor({ content, onUpdate, onSave }) {
       TaskItem.configure({ nested: true }),
       Highlight.configure({ multicolor: false }),
       Typography,
+      Mathematics,
     ],
     content: content || '',
     editorProps: {
@@ -142,6 +145,11 @@ function TiptapEditor({ content, onUpdate, onSave }) {
           onClick={() => editor.chain().focus().toggleCodeBlock().run()} />
         <ToolBtn icon="horizontal_rule" label="Divider"
           onClick={() => editor.chain().focus().setHorizontalRule().run()} />
+        <ToolBtn icon="function" label="Inline math (LaTeX)"
+          onClick={() => {
+            const latex = window.prompt('LaTeX expression', 'E = mc^2')
+            if (latex) editor.chain().focus().setInlineMath(latex).run()
+          }} />
 
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
 

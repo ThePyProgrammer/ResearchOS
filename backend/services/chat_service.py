@@ -20,7 +20,9 @@ brainstorm ideas, and assist with writing notes.
 Be concise, accurate, and cite specifics from the paper when relevant.
 When referencing the paper, quote exact passages where possible.
 Format your responses in clean HTML suitable for display (use <p>, <strong>, <em>, <ul>, <li>, <code>, <pre>, <h3> tags).
-Do NOT use markdown formatting — use HTML tags directly."""
+Do NOT use markdown formatting — use HTML tags directly.
+For mathematical expressions, use LaTeX with dollar sign delimiters: $...$ for inline math and $$...$$ for display math.
+The frontend renders LaTeX via KaTeX."""
 
 
 def _get_openai() -> OpenAI:
