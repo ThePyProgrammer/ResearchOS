@@ -119,6 +119,7 @@ function LoadingSkeleton() {
 export default function Dashboard() {
   const { activeLibrary } = useLibrary()
   const [tab, setTab] = useState('all')
+  const [chartMode, setChartMode] = useState('cumulative')
   const [activity, setActivity] = useState([])
   const [runs, setRuns] = useState([])
   const [papers, setPapers] = useState([])
@@ -150,22 +151,24 @@ export default function Dashboard() {
   const filtered = tab === 'all' ? activity : activity.filter(a => a.type === tab)
   const runningCount = runs.filter(r => r.status === 'running').length
 
-  // Build cumulative "papers added over time" chart data grouped by month
+  // Build cumulative "papers added over time" chart data grouped by day
   const chartData = useMemo(() => {
     if (!papers.length) return []
     const counts = {}
     for (const p of papers) {
-      const d = new Date(p.createdAt)
+      const normalized = (p.createdAt || '').replace(/(\.\d{3})\d+/, '$1')
+      const d = new Date(normalized)
       if (isNaN(d)) continue
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       counts[key] = (counts[key] || 0) + 1
     }
     const sorted = Object.keys(counts).sort()
     let cumulative = 0
     return sorted.map(key => {
       cumulative += counts[key]
-      const [year, month] = key.split('-')
-      const label = new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'short', year: '2-digit' })
+      const [year, month, day] = key.split('-')
+      const label = new Date(Number(year), Number(month) - 1, Number(day))
+        .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
       return { label, added: counts[key], total: cumulative }
     })
   }, [papers])
@@ -200,28 +203,70 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-base font-semibold text-slate-800">Papers Added Over Time</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Cumulative library growth by month</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {chartMode === 'cumulative' ? 'Cumulative library growth' : 'Daily additions'}
+              </p>
             </div>
-            <span className="text-xs text-slate-400">{papers.length} total</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">{papers.length} total</span>
+              <div className="flex bg-slate-100 rounded-lg p-0.5 text-xs">
+                <button
+                  onClick={() => setChartMode('cumulative')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                    chartMode === 'cumulative' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Cumulative
+                </button>
+                <button
+                  onClick={() => setChartMode('daily')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                    chartMode === 'daily' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Daily
+                </button>
+              </div>
+            </div>
           </div>
           <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="paperGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-                formatter={(value, name) => [value, name === 'total' ? 'Total' : 'Added']}
-                labelStyle={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}
-              />
-              <Area type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} fill="url(#paperGradient)" dot={{ r: 3, fill: '#3b82f6', strokeWidth: 0 }} activeDot={{ r: 5 }} />
-            </AreaChart>
+            {chartMode === 'cumulative' ? (
+              <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="paperGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                  formatter={(value, name) => [value, name === 'total' ? 'Total' : 'Added']}
+                  labelStyle={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}
+                />
+                <Area type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} fill="url(#paperGradient)" dot={{ r: 3, fill: '#3b82f6', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+              </AreaChart>
+            ) : (
+              <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="dailyGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                  formatter={(value) => [value, 'Added']}
+                  labelStyle={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}
+                />
+                <Area type="monotone" dataKey="added" stroke="#8b5cf6" strokeWidth={2} fill="url(#dailyGradient)" dot={{ r: 3, fill: '#8b5cf6', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+              </AreaChart>
+            )}
           </ResponsiveContainer>
         </div>
       )}
