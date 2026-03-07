@@ -9,6 +9,19 @@ function Icon({ name, className = '' }) {
 }
 
 
+function lastName(name) {
+  if (!name) return ''
+  const parts = name.trim().split(/\s+/)
+  return parts[parts.length - 1]
+}
+
+function formatAuthors(authors) {
+  if (!authors || authors.length === 0) return ''
+  if (authors.length === 1) return lastName(authors[0])
+  if (authors.length === 2) return `${lastName(authors[0])} & ${lastName(authors[1])}`
+  return `${lastName(authors[0])} et al.`
+}
+
 function itemYear(item) {
   if (item.publishedDate) return item.publishedDate.slice(0, 4)
   if (item.itemType === 'website') return '—'
@@ -121,7 +134,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate }) 
         </div>
       </td>
       <td className="px-2 py-3 text-sm text-slate-500 max-w-[160px]">
-        <span className="truncate block">{item.authors.slice(0, 2).join(', ')}{item.authors.length > 2 ? ', et al.' : ''}</span>
+        <span className="truncate block">{formatAuthors(item.authors)}</span>
       </td>
       <td className="px-2 py-3 text-sm text-slate-500">
         {editingYear ? (
