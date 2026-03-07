@@ -16,7 +16,8 @@ class NoteSuggestion(CamelModel):
 
 class ChatMessage(CamelModel):
     id: str
-    paper_id: str
+    paper_id: Optional[str] = None
+    website_id: Optional[str] = None
     role: str  # 'user' | 'assistant'
     content: str
     suggestions: Optional[list[dict]] = None

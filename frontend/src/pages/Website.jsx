@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { websitesApi, notesApi } from '../services/api'
 import { statusConfig, NamedLinks } from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
+import CopilotPanel from '../components/CopilotPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -163,6 +164,7 @@ export default function Website() {
   const [sideTab, setSideTab] = useState('details')
   const [notes, setNotes] = useState([])
   const [iframeError, setIframeError] = useState(false)
+  const [copilotOpen, setCopilotOpen] = useState(true)
 
   useEffect(() => {
     websitesApi.get(id)
@@ -323,11 +325,22 @@ export default function Website() {
               />
             )}
             {sideTab === 'notes' && (
-              <NotesPanel
-                notes={notes}
-                setNotes={setNotes}
-                createFn={(data) => notesApi.createForWebsite(id, data)}
-              />
+              <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex overflow-hidden">
+                  <NotesPanel
+                    notes={notes}
+                    setNotes={setNotes}
+                    createFn={(data) => notesApi.createForWebsite(id, data)}
+                  />
+                </div>
+                <CopilotPanel
+                  websiteId={id}
+                  open={copilotOpen}
+                  onToggle={() => setCopilotOpen(o => !o)}
+                  notes={notes}
+                  onNotesChanged={loadNotes}
+                />
+              </div>
             )}
           </div>
         </div>

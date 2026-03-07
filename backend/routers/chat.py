@@ -12,6 +12,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
 
 
+# ─── Website chat ─────────────────────────────────────────────────────────────
+
+@router.get("/websites/{website_id}/chat")
+async def list_website_chat(website_id: str):
+    messages = chat_service.list_messages_for_website(website_id)
+    return JSONResponse([m.model_dump(by_alias=True) for m in messages])
+
+
+@router.post("/websites/{website_id}/chat", status_code=201)
+async def send_website_chat(website_id: str, data: ChatMessageCreate):
+    result = get_client().table("websites").select("title,url,description,authors").eq("id", website_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Website not found")
+
+    site = result.data[0]
+    assistant_msg = chat_service.generate_response_for_website(
+        website_id=website_id,
+        user_content=data.content,
+        website_title=site.get("title", ""),
+        website_url=site.get("url", ""),
+        website_description=site.get("description"),
+        website_authors=site.get("authors") or [],
+        notes_context=data.notes_context,
+    )
+    return JSONResponse(assistant_msg.model_dump(by_alias=True), status_code=201)
+
+
+@router.delete("/websites/{website_id}/chat", status_code=204)
+async def clear_website_chat(website_id: str):
+    chat_service.clear_history_for_website(website_id)
+
+
 @router.get("/papers/{paper_id}/chat")
 async def list_chat(paper_id: str):
     messages = chat_service.list_messages(paper_id)

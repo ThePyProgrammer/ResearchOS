@@ -141,6 +141,9 @@ export const chatApi = {
   getTextStatus: (paperId) => apiFetch(`/papers/${paperId}/text`),
   /** Trigger PDF text extraction (downloads + processes PDF). */
   extractText: (paperId) => apiFetch(`/papers/${paperId}/text`, { method: 'POST' }),
+  listForWebsite: (websiteId) => apiFetch(`/websites/${websiteId}/chat`),
+  sendForWebsite: (websiteId, data) => apiFetch(`/websites/${websiteId}/chat`, { method: 'POST', body: data }),
+  clearForWebsite: (websiteId) => apiFetch(`/websites/${websiteId}/chat`, { method: 'DELETE' }),
 }
 
 export const searchApi = {

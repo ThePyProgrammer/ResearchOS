@@ -1,0 +1,3 @@
+ALTER TABLE chat_messages
+  ALTER COLUMN paper_id DROP NOT NULL,
+  ADD COLUMN IF NOT EXISTS website_id TEXT;

@@ -205,13 +205,13 @@ function SuggestionCard({ suggestion, currentNotes, onAccept, onReject }) {
 }
 
 /* ─── Tiptap input for composing messages ─── */
-function ChatInput({ onSend, sending }) {
+function ChatInput({ onSend, sending, placeholder = 'Ask about this item...' }) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: false, codeBlock: false, blockquote: false, horizontalRule: false,
       }),
-      Placeholder.configure({ placeholder: 'Ask about this paper...' }),
+      Placeholder.configure({ placeholder }),
     ],
     content: '',
     editorProps: {
@@ -339,7 +339,10 @@ function ChatBubble({ message, currentNotes, onSuggestionAccept, onSuggestionRej
 }
 
 /* ─── Main CopilotPanel ─── */
-export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesChanged }) {
+export default function CopilotPanel({ paperId, websiteId, open, onToggle, notes, onNotesChanged }) {
+  const isWebsite = Boolean(websiteId)
+  const itemId = paperId || websiteId
+
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -347,23 +350,23 @@ export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesCh
   const [extracting, setExtracting] = useState(false)
   const scrollRef = useRef(null)
 
-  // Load chat history + text extraction status
+  // Load chat history (+ text extraction status for papers)
   useEffect(() => {
-    if (!paperId) return
+    if (!itemId) return
     setLoading(true)
-    Promise.all([
-      chatApi.list(paperId),
-      chatApi.getTextStatus(paperId).catch(() => null),
-    ])
+    const listPromise = isWebsite ? chatApi.listForWebsite(websiteId) : chatApi.list(paperId)
+    const statusPromise = isWebsite ? Promise.resolve(null) : chatApi.getTextStatus(paperId).catch(() => null)
+    Promise.all([listPromise, statusPromise])
       .then(([msgs, status]) => {
         setMessages(msgs)
         setTextStatus(status)
       })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [paperId])
+  }, [itemId])
 
   async function handleExtract() {
+    if (isWebsite) return
     setExtracting(true)
     try {
       const status = await chatApi.extractText(paperId)
@@ -388,7 +391,6 @@ export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesCh
 
     const tempUserMsg = {
       id: `temp_${Date.now()}`,
-      paperId,
       role: 'user',
       content,
       createdAt: new Date().toISOString(),
@@ -396,7 +398,6 @@ export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesCh
     setMessages(prev => [...prev, tempUserMsg])
 
     try {
-      // Send with notes context so AI knows about the filesystem
       const notesCtx = (notes || []).map(n => ({
         id: n.id,
         name: n.name,
@@ -405,13 +406,17 @@ export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesCh
         content: n.type !== 'folder' ? (n.content || '') : undefined,
       }))
 
-      await chatApi.send(paperId, {
-        content,
-        notesContext: notesCtx.length > 0 ? notesCtx : undefined,
-      })
+      const payload = { content, notesContext: notesCtx.length > 0 ? notesCtx : undefined }
 
-      const updated = await chatApi.list(paperId)
-      setMessages(updated)
+      if (isWebsite) {
+        await chatApi.sendForWebsite(websiteId, payload)
+        const updated = await chatApi.listForWebsite(websiteId)
+        setMessages(updated)
+      } else {
+        await chatApi.send(paperId, payload)
+        const updated = await chatApi.list(paperId)
+        setMessages(updated)
+      }
     } catch (err) {
       console.error('Chat send failed:', err)
       setMessages(prev => {
@@ -420,7 +425,6 @@ export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesCh
           ...withoutTemp,
           {
             id: `err_${Date.now()}`,
-            paperId,
             role: 'assistant',
             content: `<p><em>Failed to get response: ${err.message}</em></p>`,
             createdAt: new Date().toISOString(),
@@ -433,24 +437,25 @@ export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesCh
   }
 
   async function handleSuggestionAccept(suggestion) {
+    const createNote = (data) =>
+      isWebsite
+        ? notesApi.createForWebsite(websiteId, data)
+        : notesApi.create(paperId, data)
+
     try {
       if (suggestion.type === 'create') {
-        await notesApi.create(paperId, {
+        await createNote({
           name: suggestion.noteName,
           parentId: suggestion.parentId || null,
           type: 'file',
           content: suggestion.content,
         })
       } else if (suggestion.type === 'edit') {
-        // Verify the noteId exists; if not, fall back to create
         const noteExists = (notes || []).some(n => n.id === suggestion.noteId)
         if (noteExists) {
-          await notesApi.update(suggestion.noteId, {
-            content: suggestion.content,
-          })
+          await notesApi.update(suggestion.noteId, { content: suggestion.content })
         } else {
-          // AI hallucinated an ID — create a new note instead
-          await notesApi.create(paperId, {
+          await createNote({
             name: suggestion.noteName || 'Untitled',
             parentId: suggestion.parentId || null,
             type: 'file',
@@ -490,9 +495,14 @@ export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesCh
   }
 
   async function handleClear() {
-    if (!window.confirm('Clear all chat history for this paper?')) return
+    const label = isWebsite ? 'website' : 'paper'
+    if (!window.confirm(`Clear all chat history for this ${label}?`)) return
     try {
-      await chatApi.clear(paperId)
+      if (isWebsite) {
+        await chatApi.clearForWebsite(websiteId)
+      } else {
+        await chatApi.clear(paperId)
+      }
       setMessages([])
     } catch (err) {
       console.error('Failed to clear chat:', err)
@@ -547,9 +557,14 @@ export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesCh
         </div>
       </div>
 
-      {/* PDF context status */}
+      {/* Context status */}
       <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/50">
-        {textStatus?.pageCount ? (
+        {isWebsite ? (
+          <div className="flex items-center gap-1.5">
+            <Icon name="language" className="text-[13px] text-teal-500" />
+            <span className="text-[10px] text-teal-700 font-medium">Website context available</span>
+          </div>
+        ) : textStatus?.pageCount ? (
           <div className="flex items-center gap-1.5">
             <Icon name="check_circle" className="text-[13px] text-emerald-500" />
             <span className="text-[10px] text-emerald-700 font-medium">
@@ -595,12 +610,17 @@ export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesCh
               </p>
             </div>
             <div className="w-full space-y-1.5 mt-2">
-              {[
+              {(isWebsite ? [
+                'Summarize the key points of this page',
+                'Create a notes file with key takeaways',
+                'What are the main arguments or claims?',
+                'Write a summary note about this site',
+              ] : [
                 'Summarize the key contributions',
                 'Create a notes file with key takeaways',
                 'What are the limitations?',
                 'Write a methodology summary note',
-              ].map(q => (
+              ]).map(q => (
                 <button
                   key={q}
                   onClick={() => handleSend(`<p>${q}</p>`)}
@@ -637,7 +657,11 @@ export default function CopilotPanel({ paperId, open, onToggle, notes, onNotesCh
       </div>
 
       {/* Input area */}
-      <ChatInput onSend={handleSend} sending={sending} />
+      <ChatInput
+        onSend={handleSend}
+        sending={sending}
+        placeholder={isWebsite ? 'Ask about this website...' : 'Ask about this paper...'}
+      />
     </div>
   )
 }
