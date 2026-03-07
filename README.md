@@ -11,9 +11,9 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Paper metadata** — authors, year, venue, abstract, DOI, arXiv ID, GitHub repo, website URL, named links
 - **Notes IDE** — per-item (paper and website) note filesystem with folders and files, powered by a tiptap WYSIWYG editor with LaTeX support (KaTeX), task lists, syntax highlighting, and rich text formatting
 - **AI Auto-Note-Taker** — per-library setting (enable/disable + custom prompt); generates a structured "AI Overview" note for any paper or website with one click using `gpt-4o-mini`; uses cached PDF text when available
-- **AI copilot** — context-aware research assistant embedded in the notes IDE; has full access to extracted PDF text, understands your notes, and can suggest diffs (edits to existing notes or new files) that you accept or reject individually
+- **AI copilot** — context-aware research assistant embedded in the notes IDE for both papers and websites; has full access to extracted PDF text (papers) or website metadata (websites), understands your notes, and can suggest diffs (edits to existing notes or new files) that you accept or reject individually
 - **PDF text extraction** — automatic PDF-to-markdown conversion via pymupdf4llm, cached in the database for fast copilot access
-- **Website viewer** — `/library/website/:id` renders the live site in an iframe alongside the Notes IDE and a Details panel; falls back gracefully when the site blocks embedding
+- **Website viewer** — `/library/website/:id` renders the live site in an iframe alongside the Notes IDE, AI Copilot, and a Details panel; falls back gracefully when the site blocks embedding
 - **Library settings page** — rename library, configure AI Auto-Note-Taker (toggle + custom prompt), delete library with name-confirmation guard
 - **Agent workflows** — run multi-step research workflows (literature review, gap analysis, etc.) powered by OpenAI via pydantic-ai
 - **Human-in-the-loop proposals** — agents propose changes (tagging, collection assignment, status updates) that you approve or reject with a diff view
@@ -64,6 +64,7 @@ backend/migrations/004_chat_messages.sql     # chat_messages table for AI copilo
 backend/migrations/004_website_notes.sql     # website_id on notes, paper_id made nullable
 backend/migrations/005_paper_texts.sql       # paper_texts table for cached PDF extraction
 backend/migrations/006_chat_suggestions.sql  # suggestions JSONB column on chat_messages
+backend/migrations/007_website_chat.sql      # website_id on chat_messages, paper_id made nullable
 ```
 
 ## Running
@@ -97,7 +98,7 @@ Open `http://localhost:5173` in your browser.
 | `/dashboard` | Activity feed + run stats |
 | `/library` | Paper + website library with collections sidebar, filter panel, and detail panel |
 | `/library/paper/:id` | Paper reader — PDF viewer + Notes IDE + AI Copilot |
-| `/library/website/:id` | Website viewer — live iframe + Notes IDE + Details panel |
+| `/library/website/:id` | Website viewer — live iframe + Notes IDE + AI Copilot + Details panel |
 | `/library/settings` | Library settings — rename, AI Auto-Note-Taker config, delete |
 | `/agents` | Workflow catalog + active runs with live logs |
 | `/proposals` | Agent proposals — approve/reject with diff view |
@@ -138,7 +139,8 @@ All routes are prefixed `/api`. Responses are camelCase JSON.
 | POST | `/api/papers/{id}/notes/generate` | AI-generate an overview note for a paper |
 | POST | `/api/websites/{id}/notes/generate` | AI-generate an overview note for a website |
 | PATCH/DELETE | `/api/notes/{id}` | Update / delete a note |
-| GET/POST/DELETE | `/api/papers/{id}/chat` | List / send / clear copilot chat |
+| GET/POST/DELETE | `/api/papers/{id}/chat` | List / send / clear copilot chat for a paper |
+| GET/POST/DELETE | `/api/websites/{id}/chat` | List / send / clear copilot chat for a website |
 | GET/POST | `/api/papers/{id}/text` | Get cached / extract PDF text |
 
 ## Project Structure
@@ -195,7 +197,7 @@ researchos/
 │           ├── Dashboard.jsx       # Activity feed + run stats + papers-over-time chart (cumulative/daily)
 │           ├── Library.jsx         # Unified paper/website table + PaperDetail + WebsiteDetail
 │           ├── Paper.jsx           # PDF viewer + Notes IDE + AI Copilot
-│           ├── Website.jsx         # Live iframe + Notes IDE + Details panel
+│           ├── Website.jsx         # Live iframe + Notes IDE + AI Copilot + Details panel
 │           ├── LibrarySettings.jsx # Rename library, AI Auto-Note-Taker, delete
 │           ├── Agents.jsx          # Workflow catalog + active runs
 │           └── Proposals.jsx       # Agent proposals approve/reject
