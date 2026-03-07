@@ -53,7 +53,7 @@ def create_collection(data: CollectionCreate) -> Collection:
 
 
 def update_collection(collection_id: str, data: CollectionUpdate) -> Optional[Collection]:
-    updates = data.model_dump(exclude_none=True)
+    updates = data.model_dump(exclude_unset=True)
     if not updates:
         return get_collection(collection_id)
     if get_collection(collection_id) is None:

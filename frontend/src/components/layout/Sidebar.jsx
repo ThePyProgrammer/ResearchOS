@@ -225,12 +225,15 @@ function CollectionModal({ parentName, onConfirm, onCancel }) {
 }
 
 function LibraryTree() {
-  const { collections, createCollection, deleteCollection, activeLibraryId } = useLibrary()
+  const { collections, createCollection, updateCollection, deleteCollection, activeLibraryId } = useLibrary()
   const [searchParams] = useSearchParams()
   const activeCollection = searchParams.get('col') || 'all'
   const [expanded, setExpanded] = useState({ c1: true })
   const [ctxMenu, setCtxMenu] = useState(null)
   const [modal, setModal] = useState(null)
+  const [renamingId, setRenamingId] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [dragOverId, setDragOverId] = useState(null)
 
   useEffect(() => {
     if (!ctxMenu) return
@@ -266,16 +269,119 @@ function LibraryTree() {
     setCtxMenu(null)
   }
 
+  function startRename(col) {
+    setRenamingId(col.id)
+    setRenameValue(col.name)
+    setCtxMenu(null)
+  }
+
+  async function commitRename(colId) {
+    const trimmed = renameValue.trim()
+    if (trimmed && trimmed !== collections.find(c => c.id === colId)?.name) {
+      try {
+        await updateCollection(colId, { name: trimmed })
+      } catch (err) {
+        console.error('Failed to rename collection:', err)
+      }
+    }
+    setRenamingId(null)
+    setRenameValue('')
+  }
+
+  function isDescendant(parentId, childId) {
+    let cur = childId
+    const visited = new Set()
+    while (cur) {
+      if (visited.has(cur)) return false
+      visited.add(cur)
+      if (cur === parentId) return true
+      const node = collections.find(c => c.id === cur)
+      cur = node?.parentId || null
+    }
+    return false
+  }
+
+  const draggedRef = useRef(null)
+
+  function handleDragStart(e, col) {
+    draggedRef.current = col.id
+    e.dataTransfer.setData('text/plain', col.id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleDragEnd() {
+    draggedRef.current = null
+    setDragOverId(null)
+  }
+
+  function handleDragOver(e, colId) {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverId !== colId) setDragOverId(colId)
+  }
+
+  function handleDragLeave(e) {
+    e.stopPropagation()
+    // Only clear if leaving the actual element, not entering a child
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDragOverId(null)
+    }
+  }
+
+  async function handleDrop(e, targetId) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverId(null)
+    const draggedId = draggedRef.current || e.dataTransfer.getData('text/plain')
+    draggedRef.current = null
+    if (!draggedId || draggedId === targetId) return
+    if (isDescendant(draggedId, targetId)) return
+    const dragged = collections.find(c => c.id === draggedId)
+    if (!dragged || dragged.parentId === targetId) return
+    try {
+      await updateCollection(draggedId, { parentId: targetId || null })
+      setExpanded(prev => ({ ...prev, [targetId]: true }))
+    } catch (err) {
+      console.error('Failed to move collection:', err)
+    }
+  }
+
+  async function handleDropRoot(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverId(null)
+    const draggedId = draggedRef.current || e.dataTransfer.getData('text/plain')
+    draggedRef.current = null
+    if (!draggedId) return
+    const dragged = collections.find(c => c.id === draggedId)
+    if (!dragged || dragged.parentId === null) return
+    try {
+      await updateCollection(draggedId, { parentId: null })
+    } catch (err) {
+      console.error('Failed to move collection to root:', err)
+    }
+  }
+
   function CollectionNode({ col, depth = 0 }) {
     const children = collections.filter(c => c.parentId === col.id)
     const isOpen = expanded[col.id]
     const isActive = activeCollection === col.id
     const isCtxTarget = ctxMenu?.col.id === col.id
+    const isRenaming = renamingId === col.id
+    const isDragOver = dragOverId === col.id
 
     return (
       <div>
-        <button
+        <div
+          draggable={!isRenaming}
+          onDragStart={e => handleDragStart(e, col)}
+          onDragEnd={handleDragEnd}
+          onDragOver={e => handleDragOver(e, col.id)}
+          onDragLeave={e => handleDragLeave(e)}
+          onDrop={e => handleDrop(e, col.id)}
           onClick={() => {
+            if (isRenaming) return
             select(col.id)
             if (children.length) setExpanded(e => ({ ...e, [col.id]: !isOpen }))
           }}
@@ -284,9 +390,16 @@ function LibraryTree() {
             e.stopPropagation()
             setCtxMenu({ col, x: e.clientX, y: e.clientY, confirming: false, deleting: false })
           }}
-          title={col.name}
-          className={`w-full flex items-center gap-1.5 py-1.5 rounded-lg text-sm transition-colors ${
-            isCtxTarget
+          onDoubleClick={e => {
+            e.preventDefault()
+            e.stopPropagation()
+            startRename(col)
+          }}
+          title={isRenaming ? undefined : col.name}
+          className={`w-full flex items-center gap-1.5 py-1.5 rounded-lg text-sm transition-colors cursor-pointer ${
+            isDragOver
+              ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40'
+              : isCtxTarget
               ? 'bg-red-900/30 text-red-400'
               : isActive
               ? 'bg-white/10 text-white font-medium'
@@ -303,9 +416,26 @@ function LibraryTree() {
             name={col.type === 'agent-output' ? 'smart_toy' : 'folder'}
             className={`text-[16px] flex-shrink-0 ${col.type === 'agent-output' ? 'text-purple-400' : 'text-slate-500'}`}
           />
-          <span className="flex-1 truncate text-left text-[13px]">{col.name}</span>
-          <span className="text-[11px] text-slate-600 flex-shrink-0">{col.paperCount}</span>
-        </button>
+          {isRenaming ? (
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={e => setRenameValue(e.target.value)}
+              onBlur={() => commitRename(col.id)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') commitRename(col.id)
+                if (e.key === 'Escape') { setRenamingId(null); setRenameValue('') }
+              }}
+              onClick={e => e.stopPropagation()}
+              className="flex-1 bg-slate-700 text-slate-200 text-[13px] px-1.5 py-0.5 rounded border border-blue-500/50 focus:outline-none focus:border-blue-400 min-w-0"
+            />
+          ) : (
+            <>
+              <span className="flex-1 truncate text-left text-[13px]">{col.name}</span>
+              <span className="text-[11px] text-slate-600 flex-shrink-0">{col.paperCount}</span>
+            </>
+          )}
+        </div>
         {isOpen && children.map(child => (
           <CollectionNode key={child.id} col={child} depth={depth + 1} />
         ))}
@@ -358,6 +488,29 @@ function LibraryTree() {
                 <Icon name="create_new_folder" className="text-[18px] text-slate-400" />
                 New subcollection
               </button>
+              <button
+                onClick={() => startRename(ctxMenu.col)}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <Icon name="edit" className="text-[18px] text-slate-400" />
+                Rename
+              </button>
+              {ctxMenu.col.parentId && (
+                <button
+                  onClick={async () => {
+                    setCtxMenu(null)
+                    try {
+                      await updateCollection(ctxMenu.col.id, { parentId: null })
+                    } catch (err) {
+                      console.error('Failed to move to root:', err)
+                    }
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <Icon name="drive_file_move" className="text-[18px] text-slate-400" />
+                  Move to root
+                </button>
+              )}
               <div className="my-1 border-t border-slate-100" />
               <button
                 onClick={() => setCtxMenu(m => ({ ...m, confirming: true }))}
@@ -395,7 +548,14 @@ function LibraryTree() {
       ))}
 
       {/* Collections header */}
-      <div className="flex items-center px-3 pt-3 pb-1">
+      <div
+        className={`flex items-center px-3 pt-3 pb-1 rounded-lg transition-colors ${
+          dragOverId === '__root__' ? 'bg-blue-500/10' : ''
+        }`}
+        onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverId('__root__') }}
+        onDragLeave={() => setDragOverId(null)}
+        onDrop={handleDropRoot}
+      >
         <p className="flex-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Collections</p>
         <button
           onClick={() => setModal({ parentId: null, parentName: null })}
