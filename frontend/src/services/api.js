@@ -127,6 +127,12 @@ export const notesApi = {
   remove: (noteId) => apiFetch(`/notes/${noteId}`, { method: 'DELETE' }),
 }
 
+export const chatApi = {
+  list: (paperId) => apiFetch(`/papers/${paperId}/chat`),
+  send: (paperId, data) => apiFetch(`/papers/${paperId}/chat`, { method: 'POST', body: data }),
+  clear: (paperId) => apiFetch(`/papers/${paperId}/chat`, { method: 'DELETE' }),
+}
+
 export const searchApi = {
   /** Quick search — returns papers with a `score` field appended. */
   query: (q, { mode = 'lexical', limit = 10 } = {}) =>

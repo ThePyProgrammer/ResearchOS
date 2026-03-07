@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { papersApi } from '../services/api'
 import PaperInfoPanel from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
+import CopilotPanel from '../components/CopilotPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -54,11 +55,11 @@ export default function Paper() {
   const [error, setError] = useState(null)
   const [sideTab, setSideTab] = useState('details')
   const [zoom, setZoom] = useState(100)
-  const [aiQuestion, setAiQuestion] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null)
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [copilotOpen, setCopilotOpen] = useState(true)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -149,6 +150,7 @@ export default function Paper() {
   }
 
   const pdfPages = buildPdfPages(paper)
+  const isNotes = sideTab === 'notes'
 
   return (
     <div className="flex flex-col h-full">
@@ -210,7 +212,7 @@ export default function Paper() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* PDF Panel */}
-        <div className="flex-1 flex flex-col overflow-hidden border-r border-slate-200">
+        <div className={`${isNotes ? 'w-[40%] min-w-[300px]' : 'flex-1'} flex flex-col overflow-hidden border-r border-slate-200 transition-all duration-200`}>
           {/* PDF Toolbar */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 bg-white text-sm">
             {paper.pdfUrl ? (
@@ -297,63 +299,48 @@ export default function Paper() {
           )}
         </div>
 
-        {/* Side Panel */}
-        <div className={`${sideTab === 'notes' ? 'w-[560px]' : 'w-80'} flex-shrink-0 flex flex-col bg-white border-l border-slate-200 transition-all duration-200`}>
-          <div className="flex border-b border-slate-100">
+        {/* Right area — tabs + content */}
+        <div className={`${isNotes ? 'flex-1' : 'w-80 flex-shrink-0'} flex flex-col bg-white transition-all duration-200`}>
+          {/* Tab bar */}
+          <div className="flex border-b border-slate-100 flex-shrink-0">
             {[
-              { id: 'details', label: 'Details' },
-              { id: 'notes',   label: 'Notes' },
-              { id: 'ai',      label: 'AI' },
+              { id: 'details', label: 'Details', icon: 'info' },
+              { id: 'notes', label: 'Notes', icon: 'edit_note' },
             ].map(t => (
               <button
                 key={t.id}
                 onClick={() => setSideTab(t.id)}
-                className={`flex-1 py-2.5 text-xs font-semibold transition-colors tracking-wide capitalize ${
+                className={`flex items-center justify-center gap-1.5 flex-1 py-2.5 text-xs font-semibold transition-colors tracking-wide capitalize ${
                   sideTab === t.id ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
+                <Icon name={t.icon} className="text-[15px]" />
                 {t.label}
               </button>
             ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          {/* Tab content */}
+          <div className="flex-1 overflow-hidden flex">
             {sideTab === 'details' && (
-              <PaperInfoPanel
-                paper={paper}
-                onStatusChange={(_, newStatus) => setPaper(p => ({ ...p, status: newStatus }))}
-                onPaperUpdate={setPaper}
-              />
+              <div className="flex-1 overflow-y-auto">
+                <PaperInfoPanel
+                  paper={paper}
+                  onStatusChange={(_, newStatus) => setPaper(p => ({ ...p, status: newStatus }))}
+                  onPaperUpdate={setPaper}
+                />
+              </div>
             )}
             {sideTab === 'notes' && (
-              <NotesPanel paperId={id} />
-            )}
-            {sideTab === 'ai' && (
-              <div className="p-4 space-y-4">
-                <div className="bg-purple-50 border border-purple-100 rounded-xl p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icon name="smart_toy" className="text-purple-500 text-[16px]" />
-                    <span className="text-xs font-semibold text-purple-800 uppercase tracking-wide">AI Summary</span>
-                  </div>
-                  <p className="text-xs text-purple-700 leading-relaxed">
-                    {paper.abstract
-                      ? paper.abstract.slice(0, 300) + (paper.abstract.length > 300 ? '…' : '')
-                      : 'No summary available.'}
-                  </p>
+              <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex overflow-hidden">
+                  <NotesPanel paperId={id} />
                 </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Ask a question</p>
-                  <textarea
-                    value={aiQuestion}
-                    onChange={e => setAiQuestion(e.target.value)}
-                    placeholder="e.g. How does multi-head attention work?"
-                    className="w-full p-2.5 text-xs border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                    rows={3}
-                  />
-                  <button className="mt-2 w-full py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors">
-                    Ask AI
-                  </button>
-                </div>
+                <CopilotPanel
+                  paperId={id}
+                  open={copilotOpen}
+                  onToggle={() => setCopilotOpen(o => !o)}
+                />
               </div>
             )}
           </div>
