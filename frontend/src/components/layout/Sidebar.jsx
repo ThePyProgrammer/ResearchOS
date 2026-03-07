@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { NavLink, useNavigate, useSearchParams } from 'react-router-dom'
+import { NavLink, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { proposalsApi, papersApi, websitesApi } from '../../services/api'
 import { user } from '../../data/mockData'
 import { useLibrary } from '../../context/LibraryContext'
@@ -227,7 +227,9 @@ function CollectionModal({ parentName, onConfirm, onCancel }) {
 function LibraryTree() {
   const { collections, createCollection, updateCollection, deleteCollection, refreshCollections, activeLibraryId } = useLibrary()
   const [searchParams] = useSearchParams()
-  const activeCollection = searchParams.get('col') || 'all'
+  const location = useLocation()
+  const onLibraryPage = location.pathname === '/library'
+  const activeCollection = onLibraryPage ? (searchParams.get('col') || 'all') : null
   const [expanded, setExpanded] = useState({ c1: true })
   const [ctxMenu, setCtxMenu] = useState(null)
   const [modal, setModal] = useState(null)
