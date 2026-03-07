@@ -22,7 +22,7 @@ function itemVenue(item) {
   return item.venue || ''
 }
 
-function PaperRow({ item, selected, onSelect, onItemUpdate }) {
+function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate }) {
   const status = statusConfig[item.status] || statusConfig['inbox']
   const isWebsite = item.itemType === 'website'
   const [editingTitle, setEditingTitle] = useState(false)
@@ -66,15 +66,15 @@ function PaperRow({ item, selected, onSelect, onItemUpdate }) {
       }}
       onClick={() => onSelect(item)}
       className={`cursor-pointer transition-colors ${
-        selected ? 'bg-blue-50' : 'hover:bg-slate-50'
+        selected ? 'bg-blue-50' : checked ? 'bg-blue-50/50' : 'hover:bg-slate-50'
       }`}
     >
       <td className="pl-4 pr-2 py-3 w-8">
         <input
           type="checkbox"
           className="rounded border-slate-300 text-blue-600"
-          checked={selected}
-          onChange={() => onSelect(item)}
+          checked={checked}
+          onChange={() => onCheck(item)}
           onClick={e => e.stopPropagation()}
         />
       </td>
@@ -721,7 +721,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
 }
 
 export default function Library() {
-  const { activeLibraryId, refreshCollections } = useLibrary()
+  const { activeLibraryId, collections, refreshCollections } = useLibrary()
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedItem, setSelectedItem] = useState(null)
   const [items, setItems] = useState([])
@@ -729,6 +729,12 @@ export default function Library() {
   const [error, setError] = useState(null)
   const [sourceFilter, setSourceFilter] = useState('all')
   const [refreshKey, setRefreshKey] = useState(0)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showMoveModal, setShowMoveModal] = useState(false)
+  const [moveSearch, setMoveSearch] = useState('')
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkMoving, setBulkMoving] = useState(false)
 
   // Listen for item changes from sidebar drag-drop
   useEffect(() => {
@@ -765,6 +771,7 @@ export default function Library() {
     setLoading(true)
     setError(null)
 
+    setSelectedIds(new Set())
     const listParams = activeLibraryId ? { library_id: activeLibraryId } : {}
 
     if (urlQuery) {
@@ -801,6 +808,71 @@ export default function Library() {
     refreshCollections()
   }
 
+  const toggleCheck = (item) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(item.id) ? next.delete(item.id) : next.add(item.id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(i => i.id)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true)
+    try {
+      const toDelete = items.filter(i => selectedIds.has(i.id))
+      await Promise.all(toDelete.map(i => {
+        const api = i.itemType === 'website' ? websitesApi : papersApi
+        return api.remove(i.id)
+      }))
+      setItems(prev => prev.filter(i => !selectedIds.has(i.id)))
+      if (selectedItem && selectedIds.has(selectedItem.id)) setSelectedItem(null)
+      setSelectedIds(new Set())
+      setShowDeleteModal(false)
+      refreshCollections()
+    } catch (err) {
+      console.error('Bulk delete failed:', err)
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  const handleBulkMove = async (collectionId) => {
+    setBulkMoving(true)
+    try {
+      const toMove = items.filter(i => selectedIds.has(i.id))
+      const updated = await Promise.all(toMove.map(i => {
+        const api = i.itemType === 'website' ? websitesApi : papersApi
+        const newCollections = i.collections.includes(collectionId)
+          ? i.collections
+          : [...i.collections, collectionId]
+        return api.update(i.id, { collections: newCollections })
+      }))
+      setItems(prev => prev.map(i => {
+        const u = updated.find(x => x.id === i.id)
+        return u || i
+      }))
+      if (selectedItem && selectedIds.has(selectedItem.id)) {
+        const u = updated.find(x => x.id === selectedItem.id)
+        if (u) setSelectedItem(u)
+      }
+      setSelectedIds(new Set())
+      setShowMoveModal(false)
+      setMoveSearch('')
+      refreshCollections()
+    } catch (err) {
+      console.error('Bulk move failed:', err)
+    } finally {
+      setBulkMoving(false)
+    }
+  }
 
   const allTags = useMemo(() => [...new Set(items.flatMap(p => p.tags))].sort(), [items])
   const activeFilterCount = (sourceFilter !== 'all' ? 1 : 0)
@@ -1032,6 +1104,38 @@ export default function Library() {
           </div>
         )}
 
+        {/* Bulk action bar */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border-b border-blue-200">
+            <span className="text-xs font-semibold text-blue-700">
+              {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} selected
+            </span>
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                onClick={() => setShowMoveModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <Icon name="library_add" className="text-[14px]" />
+                Add to Collection...
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <Icon name="delete" className="text-[14px]" />
+                Delete All
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors"
+                title="Clear selection"
+              >
+                <Icon name="close" className="text-[16px]" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
@@ -1045,7 +1149,13 @@ export default function Library() {
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                 <tr>
                   <th className="pl-4 pr-2 py-2.5 w-8">
-                    <input type="checkbox" className="rounded border-slate-300" />
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 text-blue-600"
+                      checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                      ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length }}
+                      onChange={toggleSelectAll}
+                    />
                   </th>
                   <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Title</th>
@@ -1061,7 +1171,9 @@ export default function Library() {
                     key={item.id}
                     item={item}
                     selected={selectedItem?.id === item.id}
+                    checked={selectedIds.has(item.id)}
                     onSelect={i => setSelectedItem(selectedItem?.id === i.id ? null : i)}
+                    onCheck={toggleCheck}
                     onItemUpdate={updated => {
                       setItems(prev => prev.map(it => it.id === updated.id ? { ...it, ...updated } : it))
                       if (selectedItem?.id === updated.id) setSelectedItem(s => ({ ...s, ...updated }))
@@ -1115,6 +1227,108 @@ export default function Library() {
           onPaperUpdate={handleItemUpdate}
           onDelete={handleDelete}
         />
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !bulkDeleting && setShowDeleteModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-[400px] p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Icon name="delete" className="text-[20px] text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Delete {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}?</h3>
+                <p className="text-xs text-slate-500 mt-0.5">This action cannot be undone. All selected papers and websites will be permanently removed.</p>
+              </div>
+            </div>
+            <div className="max-h-32 overflow-y-auto mb-4 border border-slate-100 rounded-lg">
+              {items.filter(i => selectedIds.has(i.id)).map(i => (
+                <div key={i.id} className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-600 border-b border-slate-50 last:border-0">
+                  <Icon name={i.itemType === 'website' ? 'link' : 'description'} className="text-[14px] text-slate-400 flex-shrink-0" />
+                  <span className="truncate">{i.title}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="flex-1 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} item${selectedIds.size !== 1 ? 's' : ''}`}
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={bulkDeleting}
+                className="flex-1 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move to collection modal */}
+      {showMoveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!bulkMoving) { setShowMoveModal(false); setMoveSearch('') } }}>
+          <div className="bg-white rounded-xl shadow-xl w-[360px]" onClick={e => e.stopPropagation()}>
+            <div className="px-4 pt-4 pb-3">
+              <p className="text-xs font-semibold text-slate-500 mb-2">
+                Add {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} to collection
+              </p>
+              <div className="relative">
+                <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-slate-400 pointer-events-none" />
+                <input
+                  autoFocus
+                  type="text"
+                  value={moveSearch}
+                  onChange={e => setMoveSearch(e.target.value)}
+                  placeholder="Search collections..."
+                  className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 focus:bg-white"
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { setShowMoveModal(false); setMoveSearch('') }
+                  }}
+                />
+              </div>
+            </div>
+            {bulkMoving ? (
+              <div className="flex items-center justify-center py-6 text-slate-400">
+                <span className="animate-spin inline-block w-4 h-4 border-2 border-slate-300 border-t-blue-600 rounded-full mr-2" />
+                <span className="text-sm">Moving...</span>
+              </div>
+            ) : (
+              <div className="max-h-52 overflow-y-auto border-t border-slate-100">
+                {(() => {
+                  const matches = collections.filter(c =>
+                    c.name.toLowerCase().includes(moveSearch.toLowerCase())
+                  )
+                  if (matches.length === 0) {
+                    return (
+                      <div className="px-4 py-6 text-center text-xs text-slate-400">
+                        {collections.length === 0 ? 'No collections yet.' : 'No matching collections.'}
+                      </div>
+                    )
+                  }
+                  return matches.map(col => (
+                    <button
+                      key={col.id}
+                      onClick={() => handleBulkMove(col.id)}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-blue-50 transition-colors group"
+                    >
+                      <Icon name="folder" className="text-[16px] text-slate-400 group-hover:text-blue-500" />
+                      <span className="text-sm text-slate-700 group-hover:text-blue-700 truncate flex-1">{col.name}</span>
+                      {col.paperCount != null && (
+                        <span className="text-[10px] text-slate-400 flex-shrink-0">{col.paperCount}</span>
+                      )}
+                    </button>
+                  ))
+                })()}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
