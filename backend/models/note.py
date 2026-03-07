@@ -4,7 +4,8 @@ from .base import CamelModel
 
 class Note(CamelModel):
     id: str
-    paper_id: str
+    paper_id: Optional[str] = None
+    website_id: Optional[str] = None
     name: str
     parent_id: Optional[str] = None
     type: str = "file"  # file | folder

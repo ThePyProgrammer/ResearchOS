@@ -220,7 +220,7 @@ function TreeNode({ note, notes, selected, expanded, onSelect, onToggle, onConte
 }
 
 /* ─── Main NotesPanel ─── */
-export default function NotesPanel({ paperId, notes, setNotes }) {
+export default function NotesPanel({ paperId, notes, setNotes, createFn }) {
   const [selectedId, setSelectedId] = useState(null)
   const [expanded, setExpanded] = useState({})
   const [content, setContent] = useState('')
@@ -282,7 +282,8 @@ export default function NotesPanel({ paperId, notes, setNotes }) {
     e.preventDefault()
     if (!newName.trim()) return
     try {
-      const note = await notesApi.create(paperId, {
+      const _create = createFn ?? ((data) => notesApi.create(paperId, data))
+      const note = await _create({
         name: newName.trim(),
         parentId: creating.parentId,
         type: creating.type,

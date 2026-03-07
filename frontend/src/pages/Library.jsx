@@ -179,8 +179,8 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
               onClick={() => navigate(`/library/paper/${paper.id}`)}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
             >
-              <Icon name="picture_as_pdf" className="text-[14px]" />
-              View PDF
+              <Icon name="article" className="text-[14px]" />
+              Open Paper
             </button>
             {paper.arxivId && (
               <a
@@ -322,6 +322,11 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
   const [descExpanded, setDescExpanded] = useState(false)
   const [editingGithub, setEditingGithub] = useState(false)
   const [githubDraft, setGithubDraft] = useState('')
+  const [generatingNotes, setGeneratingNotes] = useState(false)
+  const [notesGenerated, setNotesGenerated] = useState(false)
+  const [notesError, setNotesError] = useState(null)
+  const { activeLibrary, activeLibraryId } = useLibrary()
+  const navigate = useNavigate()
 
   const domain = (() => { try { return new URL(item.url).hostname.replace(/^www\./, '') } catch { return item.url } })()
   const statusCfg = statusConfig[item.status] || statusConfig['inbox']
@@ -401,11 +406,13 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
             {item.publishedDate ? <span className="text-slate-400"> · {item.publishedDate.slice(0, 4)}</span> : null}
           </p>
           <div className="flex gap-2">
-            <a href={item.url} target="_blank" rel="noreferrer"
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-lg transition-colors">
-              <Icon name="open_in_new" className="text-[14px]" />
-              Visit Website
-            </a>
+            <button
+              onClick={() => navigate(`/library/website/${item.id}`)}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              <Icon name="link" className="text-[14px]" />
+              Open Website
+            </button>
             {item.githubUrl && (
               <a href={item.githubUrl} target="_blank" rel="noreferrer"
                 className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors">
@@ -557,10 +564,74 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
         )}
 
         {tab === 'notes' && (
-          <div className="p-4">
-            <p className="text-xs text-slate-400 text-center py-8">No notes yet.</p>
-            <button className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-teal-300 hover:text-teal-600 transition-colors">
-              + Add note
+          <div className="p-4 space-y-3">
+            {activeLibrary?.autoNoteEnabled && (
+              <div className="border border-teal-100 bg-teal-50 rounded-xl p-3 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Icon name="auto_awesome" className="text-[14px] text-teal-500" />
+                  <p className="text-xs font-semibold text-teal-700">AI Auto-Note-Taker</p>
+                </div>
+                {notesGenerated ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+                      <Icon name="check_circle" className="text-[13px]" />
+                      Notes generated successfully
+                    </p>
+                    <button
+                      onClick={() => navigate(`/library/website/${item.id}`)}
+                      className="w-full py-1.5 text-[11px] font-medium text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
+                    >
+                      Open in editor →
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {notesError && (
+                      <p className="text-[11px] text-red-600">{notesError}</p>
+                    )}
+                    <button
+                      onClick={async () => {
+                        setGeneratingNotes(true)
+                        setNotesError(null)
+                        try {
+                          await notesApi.generateForWebsite(item.id, activeLibraryId)
+                          setNotesGenerated(true)
+                        } catch (err) {
+                          setNotesError(err.message)
+                        } finally {
+                          setGeneratingNotes(false)
+                        }
+                      }}
+                      disabled={generatingNotes}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-teal-600 text-white text-[11px] font-medium rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors"
+                    >
+                      {generatingNotes ? (
+                        <>
+                          <span className="animate-spin inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full" />
+                          Generating…
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="auto_awesome" className="text-[13px]" />
+                          Generate AI Notes
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[10px] text-teal-500/70">
+                      Uses your library's custom instructions.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+            {!activeLibrary?.autoNoteEnabled && (
+              <p className="text-xs text-slate-400 text-center py-6">No notes yet.</p>
+            )}
+            <button
+              onClick={() => navigate(`/library/website/${item.id}`)}
+              className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-teal-300 hover:text-teal-600 transition-colors"
+            >
+              Open note editor →
             </button>
           </div>
         )}

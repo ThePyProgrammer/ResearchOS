@@ -127,6 +127,10 @@ export const notesApi = {
   remove: (noteId) => apiFetch(`/notes/${noteId}`, { method: 'DELETE' }),
   generate: (paperId, libraryId) =>
     apiFetch(`/papers/${paperId}/notes/generate`, { method: 'POST', body: { library_id: libraryId || null } }),
+  listForWebsite: (websiteId) => apiFetch(`/websites/${websiteId}/notes`),
+  createForWebsite: (websiteId, data) => apiFetch(`/websites/${websiteId}/notes`, { method: 'POST', body: data }),
+  generateForWebsite: (websiteId, libraryId) =>
+    apiFetch(`/websites/${websiteId}/notes/generate`, { method: 'POST', body: { library_id: libraryId || null } }),
 }
 
 export const chatApi = {
