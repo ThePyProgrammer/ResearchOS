@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { papersApi, websitesApi, searchApi } from '../services/api'
+import { papersApi, websitesApi, searchApi, notesApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import PaperInfoPanel, { statusConfig, NamedLinks } from '../components/PaperInfoPanel'
 
@@ -88,6 +88,10 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
   const [tab, setTab] = useState('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [generatingNotes, setGeneratingNotes] = useState(false)
+  const [notesGenerated, setNotesGenerated] = useState(false)
+  const [notesError, setNotesError] = useState(null)
+  const { activeLibrary, activeLibraryId } = useLibrary()
   const navigate = useNavigate()
 
   const handleDelete = async () => {
@@ -222,10 +226,74 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
         )}
 
         {tab === 'notes' && (
-          <div className="p-4">
-            <p className="text-xs text-slate-400 text-center py-8">No notes yet.</p>
-            <button className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-blue-300 hover:text-blue-600 transition-colors">
-              + Add note
+          <div className="p-4 space-y-3">
+            {activeLibrary?.autoNoteEnabled && (
+              <div className="border border-blue-100 bg-blue-50 rounded-xl p-3 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Icon name="auto_awesome" className="text-[14px] text-blue-500" />
+                  <p className="text-xs font-semibold text-blue-700">AI Auto-Note-Taker</p>
+                </div>
+                {notesGenerated ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+                      <Icon name="check_circle" className="text-[13px]" />
+                      Notes generated successfully
+                    </p>
+                    <button
+                      onClick={() => navigate(`/library/paper/${paper.id}`)}
+                      className="w-full py-1.5 text-[11px] font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      Open in editor →
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {notesError && (
+                      <p className="text-[11px] text-red-600">{notesError}</p>
+                    )}
+                    <button
+                      onClick={async () => {
+                        setGeneratingNotes(true)
+                        setNotesError(null)
+                        try {
+                          await notesApi.generate(paper.id, activeLibraryId)
+                          setNotesGenerated(true)
+                        } catch (err) {
+                          setNotesError(err.message)
+                        } finally {
+                          setGeneratingNotes(false)
+                        }
+                      }}
+                      disabled={generatingNotes}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-blue-600 text-white text-[11px] font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                      {generatingNotes ? (
+                        <>
+                          <span className="animate-spin inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full" />
+                          Generating…
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="auto_awesome" className="text-[13px]" />
+                          Generate AI Notes
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[10px] text-blue-500/70">
+                      Uses your library's custom instructions.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+            {!activeLibrary?.autoNoteEnabled && (
+              <p className="text-xs text-slate-400 text-center py-6">No notes yet.</p>
+            )}
+            <button
+              onClick={() => navigate(`/library/paper/${paper.id}`)}
+              className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-blue-300 hover:text-blue-600 transition-colors"
+            >
+              Open note editor →
             </button>
           </div>
         )}

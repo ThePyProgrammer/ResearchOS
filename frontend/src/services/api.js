@@ -125,6 +125,8 @@ export const notesApi = {
   create: (paperId, data) => apiFetch(`/papers/${paperId}/notes`, { method: 'POST', body: data }),
   update: (noteId, data) => apiFetch(`/notes/${noteId}`, { method: 'PATCH', body: data }),
   remove: (noteId) => apiFetch(`/notes/${noteId}`, { method: 'DELETE' }),
+  generate: (paperId, libraryId) =>
+    apiFetch(`/papers/${paperId}/notes/generate`, { method: 'POST', body: { library_id: libraryId || null } }),
 }
 
 export const chatApi = {

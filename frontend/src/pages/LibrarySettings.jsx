@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLibrary } from '../context/LibraryContext'
+import { librariesApi } from '../services/api'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -26,6 +27,12 @@ export default function LibrarySettings() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
+  // AI Auto-Note-Taker settings
+  const [autoNoteEnabled, setAutoNoteEnabled] = useState(activeLibrary?.autoNoteEnabled ?? false)
+  const [autoNotePrompt, setAutoNotePrompt] = useState(activeLibrary?.autoNotePrompt ?? '')
+  const [savingNoteSettings, setSavingNoteSettings] = useState(false)
+  const [noteSettingsSaved, setNoteSettingsSaved] = useState(false)
+
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
@@ -50,6 +57,22 @@ export default function LibrarySettings() {
       setTimeout(() => setSaveSuccess(false), 2500)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleSaveNoteSettings(e) {
+    e.preventDefault()
+    setSavingNoteSettings(true)
+    setNoteSettingsSaved(false)
+    try {
+      await updateLibrary(activeLibrary.id, {
+        auto_note_enabled: autoNoteEnabled,
+        auto_note_prompt: autoNotePrompt.trim() || null,
+      })
+      setNoteSettingsSaved(true)
+      setTimeout(() => setNoteSettingsSaved(false), 2500)
+    } finally {
+      setSavingNoteSettings(false)
     }
   }
 
@@ -114,6 +137,67 @@ export default function LibrarySettings() {
                 {saving ? 'Saving…' : 'Save changes'}
               </button>
               {saveSuccess && (
+                <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                  <Icon name="check_circle" className="text-[15px]" />
+                  Saved
+                </span>
+              )}
+            </div>
+          </form>
+        </SettingsSection>
+
+        {/* AI Auto-Note-Taker */}
+        <SettingsSection
+          title="AI Auto-Note-Taker"
+          description="When enabled, you can generate an AI-written overview note for any paper with one click."
+        >
+          <form onSubmit={handleSaveNoteSettings} className="space-y-4">
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <div className="relative mt-0.5 flex-shrink-0">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={autoNoteEnabled}
+                  onChange={e => setAutoNoteEnabled(e.target.checked)}
+                />
+                <div className="w-9 h-5 bg-slate-200 rounded-full peer-checked:bg-blue-600 transition-colors" />
+                <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">
+                  Enable AI Auto-Note-Taker
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Adds a "Generate AI Notes" button to every paper's Notes tab.
+                </p>
+              </div>
+            </label>
+
+            <div className={autoNoteEnabled ? '' : 'opacity-50 pointer-events-none'}>
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                Custom instructions <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <textarea
+                rows={4}
+                value={autoNotePrompt}
+                onChange={e => { setAutoNotePrompt(e.target.value); setNoteSettingsSaved(false) }}
+                placeholder={`e.g. "Focus on methodology and experimental results. Highlight limitations. Format with a TL;DR at the top."`}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 placeholder:text-slate-300"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                This prompt is appended to the base note-taking instructions for every generated note in this library.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={savingNoteSettings}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+              >
+                {savingNoteSettings ? 'Saving…' : 'Save settings'}
+              </button>
+              {noteSettingsSaved && (
                 <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
                   <Icon name="check_circle" className="text-[15px]" />
                   Saved

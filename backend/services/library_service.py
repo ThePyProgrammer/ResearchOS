@@ -32,7 +32,7 @@ def create_library(data: LibraryCreate) -> Library:
 
 
 def update_library(library_id: str, data: LibraryUpdate) -> Optional[Library]:
-    updates = data.model_dump(exclude_none=True)
+    updates = data.model_dump(exclude_unset=True)
     if not updates:
         return get_library(library_id)
     if get_library(library_id) is None:
