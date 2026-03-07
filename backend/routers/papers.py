@@ -109,6 +109,7 @@ async def import_paper(data: ImportRequest):
         title=meta["title"],
         authors=meta.get("authors") or [],
         year=meta.get("year") or 0,
+        published_date=meta.get("published_date"),
         venue=meta.get("venue") or "Unknown",
         doi=doi,
         arxiv_id=arxiv_id,

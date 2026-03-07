@@ -18,6 +18,7 @@ class Paper(CamelModel):
     title: str
     authors: list[str]
     year: int
+    published_date: Optional[str] = None
     venue: str
     doi: Optional[str] = None
     arxiv_id: Optional[str] = None
@@ -43,6 +44,7 @@ class PaperCreate(CamelModel):
     title: str
     authors: list[str]
     year: int
+    published_date: Optional[str] = None
     venue: str
     doi: Optional[str] = None
     arxiv_id: Optional[str] = None
@@ -62,6 +64,14 @@ class PaperCreate(CamelModel):
 
 
 class PaperUpdate(CamelModel):
+    title: Optional[str] = None
+    authors: Optional[list[str]] = None
+    year: Optional[int] = None
+    published_date: Optional[str] = None
+    venue: Optional[str] = None
+    doi: Optional[str] = None
+    arxiv_id: Optional[str] = None
+    abstract: Optional[str] = None
     status: Optional[str] = None
     tags: Optional[list[str]] = None
     collections: Optional[list[str]] = None

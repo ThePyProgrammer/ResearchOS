@@ -116,6 +116,125 @@ export function NamedLinks({ links = [], onSave }) {
   )
 }
 
+export function EditableField({ label, value, onSave, type = 'text', placeholder = '', mono = false }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  function startEdit() { setDraft(value || ''); setEditing(true) }
+  function cancel() { setEditing(false) }
+  async function save() {
+    let val = draft.trim()
+    if (type === 'number') val = val ? Number(val) : null
+    if (type === 'date') val = val || null
+    // eslint-disable-next-line eqeqeq
+    if (val != value && (val || value)) {
+      await onSave(val || null)
+    }
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="flex gap-3 text-xs">
+        <span className="text-slate-400 w-12 flex-shrink-0 pt-1">{label}</span>
+        <div className="flex-1 flex gap-1.5 items-center min-w-0">
+          <input
+            autoFocus
+            type={type === 'date' ? 'date' : type === 'number' ? 'number' : 'text'}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
+            onBlur={save}
+            placeholder={placeholder}
+            className={`flex-1 min-w-0 px-1.5 py-0.5 border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-xs ${mono ? 'font-mono' : ''}`}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex gap-3 text-xs group">
+      <span className="text-slate-400 w-12 flex-shrink-0 pt-px">{label}</span>
+      {value ? (
+        <span
+          className={`text-slate-700 cursor-default ${mono ? 'font-mono truncate' : ''}`}
+          onDoubleClick={startEdit}
+          title="Double-click to edit"
+        >
+          {value}
+        </span>
+      ) : (
+        <button onClick={startEdit} className="text-slate-400 hover:text-blue-600 transition-colors italic">
+          Add {label.toLowerCase()}…
+        </button>
+      )}
+    </div>
+  )
+}
+
+export function EditableTextArea({ label, value, onSave, placeholder = '' }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [expanded, setExpanded] = useState(false)
+
+  function startEdit() { setDraft(value || ''); setEditing(true) }
+  function cancel() { setEditing(false) }
+  async function save() {
+    const val = draft.trim() || null
+    if (val !== (value || null)) await onSave(val)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">{label}</p>
+        <textarea
+          autoFocus
+          rows={5}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') cancel() }}
+          onBlur={save}
+          placeholder={placeholder}
+          className="w-full px-2 py-1.5 text-xs text-slate-600 leading-relaxed border border-blue-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-y"
+        />
+      </div>
+    )
+  }
+
+  if (!value) {
+    return (
+      <div>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">{label}</p>
+        <button onClick={startEdit} className="text-xs text-slate-400 hover:text-blue-600 transition-colors italic">
+          Add {label.toLowerCase()}…
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">{label}</p>
+      <p
+        className={`text-xs text-slate-600 leading-relaxed cursor-default ${expanded ? '' : 'line-clamp-4'}`}
+        onDoubleClick={startEdit}
+        title="Double-click to edit"
+      >
+        {value}
+      </p>
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="mt-1.5 text-[11px] text-blue-600 hover:text-blue-700 font-medium transition-colors"
+      >
+        {expanded ? 'Show less' : 'Read more'}
+      </button>
+    </div>
+  )
+}
+
 function LinkField({ label, icon, value, placeholder, onSave, type }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value || '')
@@ -287,8 +406,6 @@ export function CollectionsPicker({ item, onUpdate, updateFn }) {
 }
 
 export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate }) {
-  const [abstractExpanded, setAbstractExpanded] = useState(false)
-
   async function handleStatusChange(newStatus) {
     try {
       await papersApi.update(paper.id, { status: newStatus })
@@ -298,12 +415,12 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
     }
   }
 
-  async function handleLinkSave(field, value) {
+  async function handleFieldSave(field, value) {
     try {
       const updated = await papersApi.update(paper.id, { [field]: value })
       onPaperUpdate?.(updated)
     } catch (err) {
-      console.error('Failed to update link:', err)
+      console.error('Failed to update field:', err)
     }
   }
 
@@ -313,42 +430,28 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
     <div className="p-4 space-y-5">
       {/* Metadata */}
       <div className="space-y-2">
-        {[
-          { label: 'Venue', value: paper.venue },
-          { label: 'Added', value: addedLabel },
-        ].filter(r => r.value).map(({ label, value }) => (
-          <div key={label} className="flex gap-3 text-xs">
-            <span className="text-slate-400 w-12 flex-shrink-0 pt-px">{label}</span>
-            <span className="text-slate-700">{value}</span>
-          </div>
-        ))}
-        {paper.doi && (
+        <EditableField label="Authors" value={paper.authors?.join(', ')} placeholder="Author 1, Author 2, …"
+          onSave={v => handleFieldSave('authors', v ? v.split(',').map(a => a.trim()).filter(Boolean) : [])} />
+        <EditableField label="Date" value={paper.publishedDate || (paper.year ? String(paper.year) : '')}
+          type={paper.publishedDate ? 'date' : 'date'} placeholder="2024-01-15"
+          onSave={async v => {
+            const updates = { publishedDate: v }
+            if (v && v.length >= 4) updates.year = parseInt(v.substring(0, 4), 10) || paper.year
+            const updated = await papersApi.update(paper.id, updates)
+            onPaperUpdate?.(updated)
+          }} />
+        <EditableField label="Venue" value={paper.venue} placeholder="e.g. NeurIPS 2024"
+          onSave={v => handleFieldSave('venue', v)} />
+        {addedLabel && (
           <div className="flex gap-3 text-xs">
-            <span className="text-slate-400 w-12 flex-shrink-0 pt-px">DOI</span>
-            <a
-              href={`https://doi.org/${paper.doi}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-600 hover:underline font-mono truncate"
-              title={paper.doi}
-            >
-              {paper.doi}
-            </a>
+            <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Added</span>
+            <span className="text-slate-700">{addedLabel}</span>
           </div>
         )}
-        {paper.arxivId && (
-          <div className="flex gap-3 text-xs">
-            <span className="text-slate-400 w-12 flex-shrink-0 pt-px">arXiv</span>
-            <a
-              href={`https://arxiv.org/abs/${paper.arxivId}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-600 hover:underline font-mono"
-            >
-              {paper.arxivId}
-            </a>
-          </div>
-        )}
+        <EditableField label="DOI" value={paper.doi} placeholder="10.xxxx/…" mono
+          onSave={v => handleFieldSave('doi', v)} />
+        <EditableField label="arXiv" value={paper.arxivId} placeholder="2401.12345" mono
+          onSave={v => handleFieldSave('arxivId', v)} />
       </div>
 
       {/* Status */}
@@ -376,20 +479,12 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
       <CollectionsPicker item={paper} onUpdate={onPaperUpdate} />
 
       {/* Abstract */}
-      {paper.abstract && (
-        <div>
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Abstract</p>
-          <p className={`text-xs text-slate-600 leading-relaxed ${abstractExpanded ? '' : 'line-clamp-4'}`}>
-            {paper.abstract}
-          </p>
-          <button
-            onClick={() => setAbstractExpanded(e => !e)}
-            className="mt-1.5 text-[11px] text-blue-600 hover:text-blue-700 font-medium transition-colors"
-          >
-            {abstractExpanded ? 'Show less' : 'Read more'}
-          </button>
-        </div>
-      )}
+      <EditableTextArea
+        label="Abstract"
+        value={paper.abstract}
+        placeholder="Add abstract…"
+        onSave={v => handleFieldSave('abstract', v)}
+      />
 
       {/* Links */}
       <div>
@@ -401,7 +496,7 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
             type="github"
             value={paper.githubUrl}
             placeholder="https://github.com/owner/repo"
-            onSave={v => handleLinkSave('githubUrl', v)}
+            onSave={v => handleFieldSave('githubUrl', v)}
           />
           <LinkField
             label="Website"
@@ -409,11 +504,11 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
             type="website"
             value={paper.websiteUrl}
             placeholder="https://…"
-            onSave={v => handleLinkSave('websiteUrl', v)}
+            onSave={v => handleFieldSave('websiteUrl', v)}
           />
           <NamedLinks
             links={paper.links || []}
-            onSave={links => handleLinkSave('links', links)}
+            onSave={links => handleFieldSave('links', links)}
           />
         </div>
       </div>

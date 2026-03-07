@@ -110,13 +110,21 @@ async def _fetch_doi(doi: str) -> dict:
         elif given:
             authors.append(given)
 
-    # Publication year (prefer print over online)
+    # Publication date (prefer print over online)
     year = 0
+    published_date = None
     for date_key in ("published", "published-print", "published-online"):
         parts = (msg.get(date_key) or {}).get("date-parts", [[]])
         if parts and parts[0]:
             try:
-                year = int(parts[0][0])
+                dp = parts[0]
+                year = int(dp[0])
+                # Build YYYY-MM-DD from available parts
+                published_date = str(dp[0]).zfill(4)
+                if len(dp) > 1:
+                    published_date += f"-{str(dp[1]).zfill(2)}"
+                    if len(dp) > 2:
+                        published_date += f"-{str(dp[2]).zfill(2)}"
                 break
             except (ValueError, TypeError):
                 pass
@@ -134,6 +142,7 @@ async def _fetch_doi(doi: str) -> dict:
         "title": title,
         "authors": authors,
         "year": year,
+        "published_date": published_date,
         "venue": venue,
         "doi": doi,
         "arxiv_id": None,
@@ -178,6 +187,7 @@ async def _fetch_arxiv(arxiv_id: str) -> dict:
     published_el = entry.find("atom:published", _ARXIV_NS)
     published = (published_el.text or "")[:10]
     year = int(published[:4]) if published and published[:4].isdigit() else 0
+    published_date = published if published and published[:4].isdigit() else None
 
     authors: list[str] = []
     for author_el in entry.findall("atom:author", _ARXIV_NS):
@@ -196,6 +206,7 @@ async def _fetch_arxiv(arxiv_id: str) -> dict:
         "title": title,
         "authors": authors,
         "year": year,
+        "published_date": published_date,
         "venue": "arXiv",
         "doi": None,
         "arxiv_id": canonical,
@@ -267,12 +278,20 @@ def _parse_meta(meta: dict[str, list[str]], url: str) -> dict:
     seen: set[str] = set()
     authors = [a for a in authors if a not in seen and not seen.add(a)]  # type: ignore[func-returns-value]
 
-    # Year
+    # Date / Year
     year = 0
+    published_date = None
     date_str = first("citation_publication_date", "citation_date", "dc.date", "date")
-    ym = re.search(r"\b((?:19|20)\d{2})\b", date_str)
-    if ym:
-        year = int(ym.group(1))
+    # Try to extract a full date (YYYY-MM-DD or YYYY/MM/DD)
+    full_date_m = re.search(r"((?:19|20)\d{2})[-/](\d{1,2})[-/](\d{1,2})", date_str)
+    if full_date_m:
+        year = int(full_date_m.group(1))
+        published_date = f"{full_date_m.group(1)}-{full_date_m.group(2).zfill(2)}-{full_date_m.group(3).zfill(2)}"
+    else:
+        ym = re.search(r"\b((?:19|20)\d{2})\b", date_str)
+        if ym:
+            year = int(ym.group(1))
+            published_date = ym.group(1)
 
     title = first(
         "citation_title", "dc.title", "og:title", "twitter:title", "title"
@@ -293,6 +312,7 @@ def _parse_meta(meta: dict[str, list[str]], url: str) -> dict:
         "title": title,
         "authors": authors,
         "year": year,
+        "published_date": published_date,
         "venue": venue,
         "doi": doi or None,
         "arxiv_id": None,

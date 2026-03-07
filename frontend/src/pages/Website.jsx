@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { websitesApi, notesApi } from '../services/api'
-import { statusConfig, NamedLinks } from '../components/PaperInfoPanel'
+import { statusConfig, NamedLinks, EditableField, EditableTextArea } from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
 
@@ -12,7 +12,6 @@ function Icon({ name, className = '' }) {
 function WebsiteInfoPanel({ site, onUpdate, onStatusChange }) {
   const [editingGithub, setEditingGithub] = useState(false)
   const [githubDraft, setGithubDraft] = useState('')
-  const [descExpanded, setDescExpanded] = useState(false)
 
   const domain = (() => { try { return new URL(site.url).hostname.replace(/^www\./, '') } catch { return site.url } })()
 
@@ -34,22 +33,14 @@ function WebsiteInfoPanel({ site, onUpdate, onStatusChange }) {
     <div className="p-4 space-y-5 overflow-y-auto">
       {/* Metadata */}
       <div className="space-y-2">
-        {site.publishedDate && (
-          <div className="flex gap-3 text-xs">
-            <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Date</span>
-            <span className="text-slate-700">{site.publishedDate}</span>
-          </div>
-        )}
+        <EditableField label="Date" value={site.publishedDate} type="date" placeholder=""
+          onSave={v => handleFieldSave('publishedDate', v)} />
         <div className="flex gap-3 text-xs">
           <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Domain</span>
           <a href={site.url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline truncate">{domain}</a>
         </div>
-        {site.authors?.length > 0 && (
-          <div className="flex gap-3 text-xs">
-            <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Authors</span>
-            <span className="text-slate-700">{site.authors.join(', ')}</span>
-          </div>
-        )}
+        <EditableField label="Authors" value={site.authors?.join(', ')} placeholder="Author 1, Author 2, …"
+          onSave={v => handleFieldSave('authors', v ? v.split(',').map(a => a.trim()).filter(Boolean) : [])} />
       </div>
 
       {/* Status */}
@@ -71,18 +62,12 @@ function WebsiteInfoPanel({ site, onUpdate, onStatusChange }) {
       </div>
 
       {/* Description */}
-      {site.description && (
-        <div>
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Description</p>
-          <p className={`text-xs text-slate-600 leading-relaxed ${descExpanded ? '' : 'line-clamp-4'}`}>
-            {site.description}
-          </p>
-          <button onClick={() => setDescExpanded(e => !e)}
-            className="mt-1.5 text-[11px] text-teal-600 hover:text-teal-700 font-medium transition-colors">
-            {descExpanded ? 'Show less' : 'Read more'}
-          </button>
-        </div>
-      )}
+      <EditableTextArea
+        label="Description"
+        value={site.description}
+        placeholder="Add description…"
+        onSave={v => handleFieldSave('description', v)}
+      />
 
       {/* Links */}
       <div>
@@ -165,6 +150,8 @@ export default function Website() {
   const [notes, setNotes] = useState([])
   const [iframeError, setIframeError] = useState(false)
   const [copilotOpen, setCopilotOpen] = useState(true)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
 
   useEffect(() => {
     websitesApi.get(id)
@@ -227,7 +214,40 @@ export default function Website() {
         <div className="h-4 border-l border-slate-200" />
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Icon name="link" className="text-[18px] text-teal-500 flex-shrink-0" />
-          <span className="text-sm font-medium text-slate-700 truncate">{site.title}</span>
+          {editingTitle ? (
+            <input
+              autoFocus
+              type="text"
+              value={titleDraft}
+              onChange={e => setTitleDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const trimmed = titleDraft.trim()
+                  if (trimmed && trimmed !== site.title) {
+                    websitesApi.update(site.id, { title: trimmed }).then(setSite).catch(console.error)
+                  }
+                  setEditingTitle(false)
+                }
+                if (e.key === 'Escape') setEditingTitle(false)
+              }}
+              onBlur={() => {
+                const trimmed = titleDraft.trim()
+                if (trimmed && trimmed !== site.title) {
+                  websitesApi.update(site.id, { title: trimmed }).then(setSite).catch(console.error)
+                }
+                setEditingTitle(false)
+              }}
+              className="text-sm font-medium text-slate-700 bg-white border border-teal-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-teal-500/30 flex-1 min-w-0"
+            />
+          ) : (
+            <span
+              className="text-sm font-medium text-slate-700 truncate cursor-default"
+              onDoubleClick={() => { setTitleDraft(site.title); setEditingTitle(true) }}
+              title="Double-click to edit"
+            >
+              {site.title}
+            </span>
+          )}
           <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
             Website
           </span>

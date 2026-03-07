@@ -61,6 +61,8 @@ export default function Paper() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const [copilotOpen, setCopilotOpen] = useState(true)
   const [notes, setNotes] = useState([])
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
   const fileInputRef = useRef(null)
 
   // Load notes for the paper
@@ -174,7 +176,40 @@ export default function Paper() {
         <div className="h-4 border-l border-slate-200" />
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Icon name="article" className="text-[18px] text-slate-400 flex-shrink-0" />
-          <span className="text-sm font-medium text-slate-700 truncate">{paper.title}</span>
+          {editingTitle ? (
+            <input
+              autoFocus
+              type="text"
+              value={titleDraft}
+              onChange={e => setTitleDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const trimmed = titleDraft.trim()
+                  if (trimmed && trimmed !== paper.title) {
+                    papersApi.update(paper.id, { title: trimmed }).then(setPaper).catch(console.error)
+                  }
+                  setEditingTitle(false)
+                }
+                if (e.key === 'Escape') setEditingTitle(false)
+              }}
+              onBlur={() => {
+                const trimmed = titleDraft.trim()
+                if (trimmed && trimmed !== paper.title) {
+                  papersApi.update(paper.id, { title: trimmed }).then(setPaper).catch(console.error)
+                }
+                setEditingTitle(false)
+              }}
+              className="text-sm font-medium text-slate-700 bg-white border border-blue-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 flex-1 min-w-0"
+            />
+          ) : (
+            <span
+              className="text-sm font-medium text-slate-700 truncate cursor-default"
+              onDoubleClick={() => { setTitleDraft(paper.title); setEditingTitle(true) }}
+              title="Double-click to edit"
+            >
+              {paper.title}
+            </span>
+          )}
           {paper.arxivId && (
             <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
               arXiv

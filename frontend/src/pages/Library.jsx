@@ -10,9 +10,8 @@ function Icon({ name, className = '' }) {
 
 
 function itemYear(item) {
-  if (item.itemType === 'website') {
-    return item.publishedDate ? item.publishedDate.slice(0, 4) : '—'
-  }
+  if (item.publishedDate) return item.publishedDate.slice(0, 4)
+  if (item.itemType === 'website') return '—'
   return item.year || '—'
 }
 
@@ -23,9 +22,40 @@ function itemVenue(item) {
   return item.venue || ''
 }
 
-function PaperRow({ item, selected, onSelect }) {
+function PaperRow({ item, selected, onSelect, onItemUpdate }) {
   const status = statusConfig[item.status] || statusConfig['inbox']
   const isWebsite = item.itemType === 'website'
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [editingYear, setEditingYear] = useState(false)
+  const [yearDraft, setYearDraft] = useState('')
+
+  const api = isWebsite ? websitesApi : papersApi
+
+  const saveTitle = () => {
+    const trimmed = titleDraft.trim()
+    if (trimmed && trimmed !== item.title) {
+      api.update(item.id, { title: trimmed })
+        .then(updated => onItemUpdate?.(updated))
+        .catch(console.error)
+    }
+    setEditingTitle(false)
+  }
+
+  const saveYear = () => {
+    const val = yearDraft.trim()
+    const newDate = val || null
+    if (newDate !== (item.publishedDate || null)) {
+      const updates = { publishedDate: newDate }
+      if (!isWebsite && val && val.length >= 4) {
+        updates.year = parseInt(val.substring(0, 4), 10) || item.year
+      }
+      api.update(item.id, updates)
+        .then(updated => onItemUpdate?.(updated))
+        .catch(console.error)
+    }
+    setEditingYear(false)
+  }
 
   return (
     <tr
@@ -55,7 +85,29 @@ function PaperRow({ item, selected, onSelect }) {
       </td>
       <td className="px-2 py-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-slate-800 line-clamp-1">{item.title}</span>
+          {editingTitle ? (
+            <input
+              autoFocus
+              type="text"
+              value={titleDraft}
+              onChange={e => setTitleDraft(e.target.value)}
+              onClick={e => e.stopPropagation()}
+              onKeyDown={e => {
+                if (e.key === 'Enter') saveTitle()
+                if (e.key === 'Escape') setEditingTitle(false)
+              }}
+              onBlur={saveTitle}
+              className="text-sm font-medium text-slate-800 bg-white border border-blue-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 flex-1 min-w-0"
+            />
+          ) : (
+            <span
+              className="text-sm font-medium text-slate-800 line-clamp-1"
+              onDoubleClick={e => { e.stopPropagation(); setTitleDraft(item.title); setEditingTitle(true) }}
+              title="Double-click to edit"
+            >
+              {item.title}
+            </span>
+          )}
           {isWebsite && (
             <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
               Website
@@ -71,7 +123,35 @@ function PaperRow({ item, selected, onSelect }) {
       <td className="px-2 py-3 text-sm text-slate-500 max-w-[160px]">
         <span className="truncate block">{item.authors.slice(0, 2).join(', ')}{item.authors.length > 2 ? ', et al.' : ''}</span>
       </td>
-      <td className="px-2 py-3 text-sm text-slate-500">{itemYear(item)}</td>
+      <td className="px-2 py-3 text-sm text-slate-500">
+        {editingYear ? (
+          <input
+            autoFocus
+            type="date"
+            value={yearDraft}
+            onChange={e => setYearDraft(e.target.value)}
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => {
+              if (e.key === 'Enter') saveYear()
+              if (e.key === 'Escape') setEditingYear(false)
+            }}
+            onBlur={saveYear}
+            className="w-36 px-1 py-0.5 text-sm border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          />
+        ) : (
+          <span
+            onDoubleClick={e => {
+              e.stopPropagation()
+              setYearDraft(item.publishedDate || '')
+              setEditingYear(true)
+            }}
+            title="Double-click to edit"
+            className="cursor-default"
+          >
+            {itemYear(item)}
+          </span>
+        )}
+      </td>
       <td className="px-2 py-3 text-sm text-slate-500 max-w-[140px]">
         <span className="truncate block">{itemVenue(item)}</span>
       </td>
@@ -982,6 +1062,10 @@ export default function Library() {
                     item={item}
                     selected={selectedItem?.id === item.id}
                     onSelect={i => setSelectedItem(selectedItem?.id === i.id ? null : i)}
+                    onItemUpdate={updated => {
+                      setItems(prev => prev.map(it => it.id === updated.id ? { ...it, ...updated } : it))
+                      if (selectedItem?.id === updated.id) setSelectedItem(s => ({ ...s, ...updated }))
+                    }}
                   />
                 ))}
               </tbody>
