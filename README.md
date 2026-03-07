@@ -4,7 +4,7 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 
 ## Features
 
-- **Library management** — import papers via DOI/arXiv ID, organize into nested collections, tag, filter, and search
+- **Library management** — import papers and websites via DOI/arXiv ID/URL, organize into nested collections with drag-and-drop, rename collections inline, manage collection membership from the detail panel with an autocomplete picker
 - **PDF storage** — upload PDFs per paper; stored in Supabase Storage, rendered inline in the browser
 - **Paper metadata** — authors, year, venue, abstract, DOI, arXiv ID, GitHub repo, website URL
 - **Notes IDE** — per-paper note filesystem with folders and files, powered by a tiptap WYSIWYG editor with LaTeX support (KaTeX), task lists, syntax highlighting, and rich text formatting
@@ -151,10 +151,12 @@ researchos/
 │   └── src/
 │       ├── services/api.js  # Fetch wrapper: papersApi, collectionsApi, notesApi, chatApi
 │       ├── components/
-│       │   ├── layout/      # Layout, Sidebar, Header
-│       │   ├── PaperInfoPanel.jsx   # Shared paper metadata panel
+│       │   ├── layout/      # Layout, Sidebar (drag-drop collections + items), Header
+│       │   ├── PaperInfoPanel.jsx   # Paper/website metadata + CollectionsPicker
 │       │   ├── NotesPanel.jsx       # tiptap WYSIWYG note editor with file tree
 │       │   └── CopilotPanel.jsx     # AI copilot with diff-based note suggestions
+│       ├── context/
+│       │   └── LibraryContext.jsx  # Library + collection state provider
 │       └── pages/           # Dashboard, Library, Paper, Agents, Proposals
 └── CLAUDE.md                # AI agent constitution for this codebase
 ```
