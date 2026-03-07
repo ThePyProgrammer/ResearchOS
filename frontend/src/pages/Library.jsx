@@ -750,6 +750,8 @@ export default function Library() {
   const [titleFilter, setTitleFilter] = useState('')
   const [venueFilter, setVenueFilter] = useState('')
   const [tagFilters, setTagFilters] = useState(new Set())
+  const [sortKey, setSortKey] = useState(null)   // 'title' | 'date' | 'authors' | null
+  const [sortDir, setSortDir] = useState('asc')  // 'asc' | 'desc'
   const location = useLocation()
 
   // Derive active filters from URL — URL is the single source of truth
@@ -895,8 +897,38 @@ export default function Library() {
     if (yearFrom) result = result.filter(p => Number(itemYear(p)) >= Number(yearFrom))
     if (yearTo) result = result.filter(p => Number(itemYear(p)) <= Number(yearTo))
     if (tagFilters.size > 0) result = result.filter(p => [...tagFilters].every(t => p.tags.includes(t)))
+    if (sortKey) {
+      const dir = sortDir === 'asc' ? 1 : -1
+      result = [...result].sort((a, b) => {
+        if (sortKey === 'title') {
+          return dir * a.title.localeCompare(b.title)
+        }
+        if (sortKey === 'date') {
+          const da = a.publishedDate || ''
+          const db = b.publishedDate || ''
+          if (!da && !db) return 0
+          if (!da) return dir
+          if (!db) return -dir
+          return dir * da.localeCompare(db)
+        }
+        if (sortKey === 'authors') {
+          return dir * formatAuthors(a.authors).localeCompare(formatAuthors(b.authors))
+        }
+        return 0
+      })
+    }
     return result
-  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters])
+  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters, sortKey, sortDir])
+
+  function toggleSort(key) {
+    if (sortKey === key) {
+      if (sortDir === 'asc') setSortDir('desc')
+      else { setSortKey(null); setSortDir('asc') }
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
 
   function clearFilters() {
     setSourceFilter('all')
@@ -1161,9 +1193,24 @@ export default function Library() {
                     />
                   </th>
                   <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Title</th>
-                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Authors</th>
-                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Year</th>
+                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors" onClick={() => toggleSort('title')}>
+                    <span className="flex items-center gap-1">
+                      Title
+                      {sortKey === 'title' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
+                    </span>
+                  </th>
+                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors" onClick={() => toggleSort('authors')}>
+                    <span className="flex items-center gap-1">
+                      Authors
+                      {sortKey === 'authors' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
+                    </span>
+                  </th>
+                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors" onClick={() => toggleSort('date')}>
+                    <span className="flex items-center gap-1">
+                      Date
+                      {sortKey === 'date' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
+                    </span>
+                  </th>
                   <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Venue</th>
                   <th className="px-3 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Source</th>
                 </tr>
