@@ -131,6 +131,10 @@ export const chatApi = {
   list: (paperId) => apiFetch(`/papers/${paperId}/chat`),
   send: (paperId, data) => apiFetch(`/papers/${paperId}/chat`, { method: 'POST', body: data }),
   clear: (paperId) => apiFetch(`/papers/${paperId}/chat`, { method: 'DELETE' }),
+  /** Get text extraction status for a paper's PDF. */
+  getTextStatus: (paperId) => apiFetch(`/papers/${paperId}/text`),
+  /** Trigger PDF text extraction (downloads + processes PDF). */
+  extractText: (paperId) => apiFetch(`/papers/${paperId}/text`, { method: 'POST' }),
 }
 
 export const searchApi = {

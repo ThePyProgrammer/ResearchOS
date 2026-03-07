@@ -186,5 +186,7 @@ async def delete_pdf(paper_id: str):
         raise HTTPException(status_code=404, detail=NOT_FOUND)
 
     from services.pdf_service import delete_pdf as _delete
+    from services.pdf_text_service import delete_cached_text
     _delete(paper_id)
     paper_service.set_pdf_url(paper_id, None)
+    delete_cached_text(paper_id)

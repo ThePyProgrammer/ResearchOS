@@ -137,17 +137,37 @@ export default function CopilotPanel({ paperId, open, onToggle }) {
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [textStatus, setTextStatus] = useState(null) // { pageCount, charCount, extractedAt }
+  const [extracting, setExtracting] = useState(false)
   const scrollRef = useRef(null)
 
-  // Load chat history
+  // Load chat history + text extraction status
   useEffect(() => {
     if (!paperId) return
     setLoading(true)
-    chatApi.list(paperId)
-      .then(setMessages)
+    Promise.all([
+      chatApi.list(paperId),
+      chatApi.getTextStatus(paperId).catch(() => null),
+    ])
+      .then(([msgs, status]) => {
+        setMessages(msgs)
+        setTextStatus(status)
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [paperId])
+
+  async function handleExtract() {
+    setExtracting(true)
+    try {
+      const status = await chatApi.extractText(paperId)
+      setTextStatus(status)
+    } catch (err) {
+      console.error('Extraction failed:', err)
+    } finally {
+      setExtracting(false)
+    }
+  }
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -258,6 +278,36 @@ export default function CopilotPanel({ paperId, open, onToggle }) {
             <Icon name="chevron_right" className="text-[18px]" />
           </button>
         </div>
+      </div>
+
+      {/* PDF context status */}
+      <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/50">
+        {textStatus?.pageCount ? (
+          <div className="flex items-center gap-1.5">
+            <Icon name="check_circle" className="text-[13px] text-emerald-500" />
+            <span className="text-[10px] text-emerald-700 font-medium">
+              PDF indexed — {textStatus.pageCount} pages, {Math.round(textStatus.charCount / 1000)}k chars
+            </span>
+          </div>
+        ) : extracting ? (
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin" />
+            <span className="text-[10px] text-purple-700 font-medium">Extracting PDF text...</span>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Icon name="info" className="text-[13px] text-slate-400" />
+              <span className="text-[10px] text-slate-500">PDF not indexed</span>
+            </div>
+            <button
+              onClick={handleExtract}
+              className="text-[10px] text-purple-600 hover:text-purple-700 font-medium hover:underline"
+            >
+              Index now
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Messages area */}

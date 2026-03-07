@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 _TABLE = "chat_messages"
 
 SYSTEM_PROMPT = """You are a helpful research copilot embedded in a paper reading and note-taking IDE.
-You have context about the paper the user is currently reading.
-Help them understand the paper, answer questions, summarize sections, suggest related work,
+You have full access to the paper's extracted text content.
+Help the user understand the paper, answer questions, summarize sections, suggest related work,
 brainstorm ideas, and assist with writing notes.
 Be concise, accurate, and cite specifics from the paper when relevant.
+When referencing the paper, quote exact passages where possible.
 Format your responses in clean HTML suitable for display (use <p>, <strong>, <em>, <ul>, <li>, <code>, <pre>, <h3> tags).
 Do NOT use markdown formatting — use HTML tags directly."""
 
@@ -74,6 +75,7 @@ def generate_response(
     user_content: str,
     paper_title: str = "",
     paper_abstract: str = "",
+    pdf_url: Optional[str] = None,
     note_context: Optional[str] = None,
 ) -> ChatMessage:
     """Send user message to OpenAI with paper context and return assistant response."""
@@ -88,6 +90,20 @@ def generate_response(
     paper_ctx = f"Paper title: {paper_title}"
     if paper_abstract:
         paper_ctx += f"\n\nAbstract: {paper_abstract}"
+
+    # Add full PDF text if available
+    if pdf_url:
+        try:
+            from services.pdf_text_service import extract_and_cache
+            cached = extract_and_cache(paper_id, pdf_url)
+            if cached and cached.get("markdown"):
+                paper_ctx += (
+                    f"\n\n--- FULL PAPER TEXT ({cached.get('page_count', '?')} pages) ---\n"
+                    f"{cached['markdown']}"
+                )
+        except Exception:
+            logger.warning("Could not extract PDF text for paper %s, using abstract only", paper_id)
+
     if note_context:
         paper_ctx += f"\n\nCurrent note content:\n{note_context}"
     messages.append({"role": "system", "content": f"Paper context:\n{paper_ctx}"})
