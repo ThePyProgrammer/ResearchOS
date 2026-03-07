@@ -186,13 +186,13 @@ researchos/
 │       ├── components/
 │       │   ├── layout/
 │       │   │   ├── Layout.jsx   # Shell (Sidebar + Header + Outlet)
-│       │   │   ├── Sidebar.jsx  # Library switcher, collections tree, drag-drop
+│       │   │   ├── Sidebar.jsx  # Library switcher, collections tree (rename, drag-drop, item drops)
 │       │   │   └── Header.jsx   # Search, QuickAdd modal (paper/website toggle)
 │       │   ├── PaperInfoPanel.jsx  # Paper metadata + NamedLinks + CollectionsPicker
 │       │   ├── NotesPanel.jsx      # tiptap WYSIWYG note editor with file tree (generic: paper or website)
 │       │   └── CopilotPanel.jsx    # AI copilot with diff-based note suggestions
 │       └── pages/
-│           ├── Dashboard.jsx       # Activity feed + run stats
+│           ├── Dashboard.jsx       # Activity feed + run stats + papers-over-time chart (cumulative/daily)
 │           ├── Library.jsx         # Unified paper/website table + PaperDetail + WebsiteDetail
 │           ├── Paper.jsx           # PDF viewer + Notes IDE + AI Copilot
 │           ├── Website.jsx         # Live iframe + Notes IDE + Details panel
