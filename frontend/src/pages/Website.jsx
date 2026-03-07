@@ -1,15 +1,26 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { websitesApi, notesApi } from '../services/api'
-import { statusConfig } from '../components/PaperInfoPanel'
+import { statusConfig, NamedLinks } from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
 }
 
-function WebsiteInfoPanel({ site, onStatusChange }) {
+function WebsiteInfoPanel({ site, onUpdate, onStatusChange }) {
+  const [editingGithub, setEditingGithub] = useState(false)
+  const [githubDraft, setGithubDraft] = useState('')
+  const [descExpanded, setDescExpanded] = useState(false)
+
   const domain = (() => { try { return new URL(site.url).hostname.replace(/^www\./, '') } catch { return site.url } })()
+
+  const handleFieldSave = async (field, value) => {
+    try {
+      const updated = await websitesApi.update(site.id, { [field]: value })
+      onUpdate(updated)
+    } catch (err) { console.error(err) }
+  }
 
   const handleStatusChange = async (newStatus) => {
     try {
@@ -62,32 +73,71 @@ function WebsiteInfoPanel({ site, onStatusChange }) {
       {site.description && (
         <div>
           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Description</p>
-          <p className="text-xs text-slate-600 leading-relaxed">{site.description}</p>
+          <p className={`text-xs text-slate-600 leading-relaxed ${descExpanded ? '' : 'line-clamp-4'}`}>
+            {site.description}
+          </p>
+          <button onClick={() => setDescExpanded(e => !e)}
+            className="mt-1.5 text-[11px] text-teal-600 hover:text-teal-700 font-medium transition-colors">
+            {descExpanded ? 'Show less' : 'Read more'}
+          </button>
         </div>
       )}
 
       {/* Links */}
-      {(site.githubUrl || site.links?.length > 0) && (
-        <div>
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Links</p>
-          <div className="space-y-1.5">
-            {site.githubUrl && (
-              <a href={site.githubUrl} target="_blank" rel="noreferrer"
-                className="flex items-center gap-2 text-xs text-blue-600 hover:underline font-mono truncate">
-                <Icon name="code" className="text-[14px] text-slate-400 flex-shrink-0" />
-                {site.githubUrl.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')}
-              </a>
-            )}
-            {site.links?.map((l, i) => (
-              <a key={i} href={l.url} target="_blank" rel="noreferrer"
-                className="flex items-center gap-2 text-xs text-blue-600 hover:underline truncate">
-                <Icon name="link" className="text-[14px] text-slate-400 flex-shrink-0" />
-                {l.name || l.url}
-              </a>
-            ))}
-          </div>
+      <div>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Links</p>
+        <div className="space-y-2">
+          <NamedLinks
+            links={site.links || []}
+            onSave={links => handleFieldSave('links', links)}
+          />
+          {/* GitHub */}
+          {editingGithub ? (
+            <div className="flex gap-1.5 items-center">
+              <Icon name="code" className="text-[15px] text-slate-400 flex-shrink-0" />
+              <input
+                autoFocus type="url" value={githubDraft}
+                onChange={e => setGithubDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { handleFieldSave('github_url', githubDraft.trim() || null); setEditingGithub(false) }
+                  if (e.key === 'Escape') setEditingGithub(false)
+                }}
+                placeholder="https://github.com/owner/repo"
+                className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 font-mono"
+              />
+              <button onClick={() => { handleFieldSave('github_url', githubDraft.trim() || null); setEditingGithub(false) }}
+                className="px-2 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 flex-shrink-0">Save</button>
+              <button onClick={() => setEditingGithub(false)}
+                className="px-2 py-1 text-slate-400 text-xs rounded-lg hover:bg-slate-100 flex-shrink-0">✕</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 group">
+              <Icon name="code" className="text-[15px] text-slate-400 flex-shrink-0" />
+              {site.githubUrl ? (
+                <>
+                  <a href={site.githubUrl} target="_blank" rel="noreferrer"
+                    className="flex-1 text-xs text-blue-600 hover:underline truncate font-mono" title={site.githubUrl}>
+                    {site.githubUrl.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')}
+                  </a>
+                  <button onClick={() => { setGithubDraft(site.githubUrl || ''); setEditingGithub(true) }}
+                    className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-slate-500 flex-shrink-0 transition-opacity">
+                    <Icon name="edit" className="text-[13px]" />
+                  </button>
+                  <button onClick={() => handleFieldSave('github_url', null)}
+                    className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 flex-shrink-0 transition-opacity">
+                    <Icon name="close" className="text-[13px]" />
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => { setGithubDraft(''); setEditingGithub(true) }}
+                  className="text-xs text-slate-400 hover:text-blue-600 transition-colors">
+                  Add GitHub URL…
+                </button>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Tags */}
       {site.tags?.length > 0 && (
@@ -110,7 +160,7 @@ export default function Website() {
   const [site, setSite] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [sideTab, setSideTab] = useState('notes')
+  const [sideTab, setSideTab] = useState('details')
   const [notes, setNotes] = useState([])
   const [iframeError, setIframeError] = useState(false)
 
@@ -187,10 +237,9 @@ export default function Website() {
               <Icon name="code" className="text-[18px]" />
             </a>
           )}
-          <a href={site.url} target="_blank" rel="noreferrer" title="Open in new tab"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-lg transition-colors">
-            <Icon name="open_in_new" className="text-[14px]" />
-            Visit Site
+          <a href={site.url} target="_blank" rel="noreferrer" title="Open website"
+            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors flex items-center">
+            <Icon name="open_in_new" className="text-[18px]" />
           </a>
         </div>
       </div>
@@ -269,6 +318,7 @@ export default function Website() {
             {sideTab === 'details' && (
               <WebsiteInfoPanel
                 site={site}
+                onUpdate={setSite}
                 onStatusChange={newStatus => setSite(s => ({ ...s, status: newStatus }))}
               />
             )}
