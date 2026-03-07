@@ -5,6 +5,7 @@ import Library from './pages/Library'
 import Paper from './pages/Paper'
 import Agents from './pages/Agents'
 import Proposals from './pages/Proposals'
+import LibrarySettings from './pages/LibrarySettings'
 import { LibraryProvider } from './context/LibraryContext'
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="library" element={<Library />} />
+            <Route path="library/settings" element={<LibrarySettings />} />
             <Route path="agents" element={<Agents />} />
           </Route>
           <Route path="/" element={<LayoutBare />}>
