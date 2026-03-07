@@ -116,6 +116,102 @@ export function NamedLinks({ links = [], onSave }) {
   )
 }
 
+export function AuthorChips({ authors = [], onSave }) {
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [dragIdx, setDragIdx] = useState(null)
+
+  async function addAuthor() {
+    const name = draft.trim()
+    if (!name) return
+    await onSave([...authors, name])
+    setDraft('')
+    setAdding(false)
+  }
+
+  async function removeAuthor(idx) {
+    await onSave(authors.filter((_, i) => i !== idx))
+  }
+
+  function onDragStart(e, idx) {
+    setDragIdx(idx)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(idx))
+  }
+
+  function onDragOver(e, idx) {
+    e.preventDefault()
+    if (dragIdx === null || dragIdx === idx) return
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  async function onDrop(e, targetIdx) {
+    e.preventDefault()
+    if (dragIdx === null || dragIdx === targetIdx) { setDragIdx(null); return }
+    const next = [...authors]
+    const [moved] = next.splice(dragIdx, 1)
+    next.splice(targetIdx, 0, moved)
+    setDragIdx(null)
+    await onSave(next)
+  }
+
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Authors</p>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {authors.map((author, i) => (
+          <span
+            key={`${author}-${i}`}
+            draggable
+            onDragStart={e => onDragStart(e, i)}
+            onDragOver={e => onDragOver(e, i)}
+            onDrop={e => onDrop(e, i)}
+            onDragEnd={() => setDragIdx(null)}
+            className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 group cursor-grab active:cursor-grabbing transition-opacity ${
+              dragIdx === i ? 'opacity-40' : ''
+            }`}
+          >
+            <Icon name="person" className="text-[12px] text-slate-400" />
+            {author}
+            <button
+              onClick={() => removeAuthor(i)}
+              className="text-slate-400 hover:text-red-500 transition-colors ml-0.5"
+              title="Remove author"
+            >
+              <Icon name="close" className="text-[11px]" />
+            </button>
+          </span>
+        ))}
+        {authors.length === 0 && !adding && (
+          <span className="text-[11px] text-slate-400 italic">No authors</span>
+        )}
+      </div>
+      {adding ? (
+        <div className="flex gap-1.5 items-center">
+          <input
+            autoFocus
+            type="text"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') addAuthor()
+              if (e.key === 'Escape') { setAdding(false); setDraft('') }
+            }}
+            onBlur={() => { if (draft.trim()) addAuthor(); else setAdding(false) }}
+            placeholder="Author name…"
+            className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+          />
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} className="text-xs text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1">
+          <Icon name="add" className="text-[13px]" />
+          Add author…
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function EditableField({ label, value, onSave, type = 'text', placeholder = '', mono = false }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -428,10 +524,11 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
 
   return (
     <div className="p-4 space-y-5">
+      {/* Authors */}
+      <AuthorChips authors={paper.authors || []} onSave={v => handleFieldSave('authors', v)} />
+
       {/* Metadata */}
       <div className="space-y-2">
-        <EditableField label="Authors" value={paper.authors?.join(', ')} placeholder="Author 1, Author 2, …"
-          onSave={v => handleFieldSave('authors', v ? v.split(',').map(a => a.trim()).filter(Boolean) : [])} />
         <EditableField label="Date" value={paper.publishedDate || (paper.year ? String(paper.year) : '')}
           type={paper.publishedDate ? 'date' : 'date'} placeholder="2024-01-15"
           onSave={async v => {

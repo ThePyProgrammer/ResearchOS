@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { websitesApi, notesApi } from '../services/api'
-import { statusConfig, NamedLinks, EditableField, EditableTextArea } from '../components/PaperInfoPanel'
+import { statusConfig, NamedLinks, EditableField, EditableTextArea, AuthorChips } from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
 
@@ -31,6 +31,9 @@ function WebsiteInfoPanel({ site, onUpdate, onStatusChange }) {
 
   return (
     <div className="p-4 space-y-5 overflow-y-auto">
+      {/* Authors */}
+      <AuthorChips authors={site.authors || []} onSave={v => handleFieldSave('authors', v)} />
+
       {/* Metadata */}
       <div className="space-y-2">
         <EditableField label="Date" value={site.publishedDate} type="date" placeholder=""
@@ -39,8 +42,6 @@ function WebsiteInfoPanel({ site, onUpdate, onStatusChange }) {
           <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Domain</span>
           <a href={site.url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline truncate">{domain}</a>
         </div>
-        <EditableField label="Authors" value={site.authors?.join(', ')} placeholder="Author 1, Author 2, …"
-          onSave={v => handleFieldSave('authors', v ? v.split(',').map(a => a.trim()).filter(Boolean) : [])} />
       </div>
 
       {/* Status */}
