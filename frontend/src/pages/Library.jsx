@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, websitesApi, searchApi, notesApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
-import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker } from '../components/PaperInfoPanel'
+import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips } from '../components/PaperInfoPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -399,7 +399,6 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
   const [tab, setTab] = useState('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [descExpanded, setDescExpanded] = useState(false)
   const [editingGithub, setEditingGithub] = useState(false)
   const [githubDraft, setGithubDraft] = useState('')
   const [generatingNotes, setGeneratingNotes] = useState(false)
@@ -517,22 +516,19 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
 
         {tab === 'info' && (
           <div className="p-4 space-y-5">
+            {/* Authors */}
+            <AuthorChips authors={item.authors || []} onSave={v => handleFieldSave('authors', v)} />
+
             {/* Metadata */}
             <div className="space-y-2">
-              {item.publishedDate && (
-                <div className="flex gap-3 text-xs">
-                  <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Date</span>
-                  <span className="text-slate-700">{item.publishedDate}</span>
-                </div>
-              )}
+              <EditableField label="Date" value={item.publishedDate} type="date" placeholder=""
+                onSave={v => handleFieldSave('publishedDate', v)} />
               <div className="flex gap-3 text-xs">
                 <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Domain</span>
                 <a href={item.url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline truncate">{domain}</a>
               </div>
-              <div className="flex gap-3 text-xs">
-                <span className="text-slate-400 w-12 flex-shrink-0 pt-px">URL</span>
-                <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate font-mono" title={item.url}>{item.url}</a>
-              </div>
+              <EditableField label="URL" value={item.url} placeholder="https://…" mono
+                onSave={v => handleFieldSave('url', v)} />
             </div>
 
             {/* Status */}
@@ -561,18 +557,12 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
             />
 
             {/* Description */}
-            {item.description && (
-              <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Description</p>
-                <p className={`text-xs text-slate-600 leading-relaxed ${descExpanded ? '' : 'line-clamp-4'}`}>
-                  {item.description}
-                </p>
-                <button onClick={() => setDescExpanded(e => !e)}
-                  className="mt-1.5 text-[11px] text-teal-600 hover:text-teal-700 font-medium transition-colors">
-                  {descExpanded ? 'Show less' : 'Read more'}
-                </button>
-              </div>
-            )}
+            <EditableTextArea
+              label="Description"
+              value={item.description}
+              placeholder="Add description…"
+              onSave={v => handleFieldSave('description', v)}
+            />
 
             {/* Links */}
             <div>
