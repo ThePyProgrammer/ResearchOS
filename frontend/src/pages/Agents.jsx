@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { workflowsApi, runsApi } from '../services/api'
+import WindowModal from '../components/WindowModal'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -13,57 +14,56 @@ const statusConfig = {
 
 function ConfigModal({ workflow, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 className="text-base font-semibold text-slate-900">Configure: {workflow.name}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <Icon name="close" className="text-[20px]" />
-          </button>
+    <WindowModal
+      open={Boolean(workflow)}
+      onClose={onClose}
+      title={`Configure: ${workflow.name}`}
+      iconName="tune"
+      iconWrapClassName="bg-indigo-100"
+      iconClassName="text-[16px] text-indigo-600"
+      normalPanelClassName="w-full max-w-md rounded-2xl"
+    >
+      <div className="px-6 py-5 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Target Collection</label>
+          <select className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400">
+            <option>ML / Transformers</option>
+            <option>Multi-Agent Systems</option>
+            <option>RAG Optimization</option>
+            <option>New Collection...</option>
+          </select>
         </div>
-        <div className="px-6 py-5 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Target Collection</label>
-            <select className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400">
-              <option>ML / Transformers</option>
-              <option>Multi-Agent Systems</option>
-              <option>RAG Optimization</option>
-              <option>New Collection…</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Research Focus</label>
-            <textarea
-              placeholder="e.g. Multi-agent coordination patterns for LLM-based systems (2023+)"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-              rows={3}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Year filter (min)</label>
-            <input
-              type="number"
-              defaultValue={2023}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-            />
-          </div>
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
-            <strong>Required tools:</strong> {workflow.tools.join(', ')}. Estimated cost: ~$0.05–0.20 based on scope.
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Research Focus</label>
+          <textarea
+            placeholder="e.g. Multi-agent coordination patterns for LLM-based systems (2023+)"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+            rows={3}
+          />
         </div>
-        <div className="flex gap-3 px-6 pb-5">
-          <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-            Cancel
-          </button>
-          <button className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors">
-            Run Workflow
-          </button>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Year filter (min)</label>
+          <input
+            type="number"
+            defaultValue={2023}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+          />
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+          <strong>Required tools:</strong> {workflow.tools.join(', ')}. Estimated cost: ~$0.05-0.20 based on scope.
         </div>
       </div>
-    </div>
+      <div className="flex gap-3 px-6 pb-5">
+        <button onClick={onClose} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+          Cancel
+        </button>
+        <button className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors">
+          Run Workflow
+        </button>
+      </div>
+    </WindowModal>
   )
 }
-
 function WorkflowCard({ workflow, onConfigure }) {
   const status = statusConfig[workflow.status]
 
@@ -298,3 +298,5 @@ export default function Agents() {
     </div>
   )
 }
+
+

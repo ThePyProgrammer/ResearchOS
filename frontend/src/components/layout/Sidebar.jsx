@@ -4,6 +4,7 @@ import { NavLink, useNavigate, useSearchParams, useLocation } from 'react-router
 import { proposalsApi, papersApi, websitesApi } from '../../services/api'
 import { user } from '../../data/mockData'
 import { useLibrary } from '../../context/LibraryContext'
+import WindowModal from '../WindowModal'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -191,39 +192,42 @@ function CollectionModal({ parentName, onConfirm, onCancel }) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onCancel}>
-      <div className="bg-white rounded-xl shadow-xl w-80 p-5" onClick={e => e.stopPropagation()}>
-        <h2 className="text-sm font-semibold text-slate-800">
-          {parentName ? `New subcollection in "${parentName}"` : 'New collection'}
-        </h2>
-        <form onSubmit={handleSubmit} className="mt-3 space-y-3">
-          <input
-            autoFocus
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Collection name"
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-          />
-          <div className="flex gap-2 justify-end">
-            <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-50">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!name.trim() || saving}
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? 'Creating…' : 'Create'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
+    <WindowModal
+      open
+      onClose={onCancel}
+      title={parentName ? `New subcollection in "${parentName}"` : 'New collection'}
+      iconName="create_new_folder"
+      iconWrapClassName="bg-blue-100"
+      iconClassName="text-[16px] text-blue-600"
+      normalPanelClassName="w-full max-w-[20rem] rounded-xl"
+      fullscreenPanelClassName="w-[calc(100vw-1rem)] h-[calc(100vh-1rem)] rounded-xl"
+    >
+      <form onSubmit={handleSubmit} className="px-5 pb-5 pt-4 space-y-3">
+        <input
+          autoFocus
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="Collection name"
+          className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+        />
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-50">
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!name.trim() || saving}
+            className="px-3 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? 'Creating...' : 'Create'}
+          </button>
+        </div>
+      </form>
+    </WindowModal>,
     document.body
   )
 }
-
 function LibraryTree() {
   const { collections, createCollection, updateCollection, deleteCollection, refreshCollections, activeLibraryId } = useLibrary()
   const [searchParams] = useSearchParams()
@@ -709,3 +713,4 @@ export default function Sidebar({ collapsed, onToggle }) {
     </aside>
   )
 }
+

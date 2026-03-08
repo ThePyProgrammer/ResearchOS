@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { papersApi, websitesApi, searchApi } from '../../services/api'
 import { useLibrary } from '../../context/LibraryContext'
 import { AuthorChips } from '../PaperInfoPanel'
+import WindowModal from '../WindowModal'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -168,60 +169,43 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
   if (!open) return null
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="fixed inset-0 flex items-start justify-center pt-[12vh] z-50 pointer-events-none">
-        <div
-          className="pointer-events-auto w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 pt-5 pb-3">
-            <div className="flex items-center gap-2">
-              <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${mode === 'website' ? 'bg-teal-100' : mode === 'upload' ? 'bg-amber-100' : 'bg-blue-100'}`}>
-                <Icon name={mode === 'website' ? 'link' : mode === 'upload' ? 'upload_file' : 'add_circle'} className={`text-[16px] ${mode === 'website' ? 'text-teal-600' : mode === 'upload' ? 'text-amber-600' : 'text-blue-600'}`} />
-              </span>
-              <h2 className="text-sm font-semibold text-slate-800">Quick Add</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Mode toggle */}
-              <div className="flex bg-slate-100 rounded-lg p-0.5 text-[11px] font-semibold">
-                <button
-                  onClick={() => { setMode('paper'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'paper' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Import
-                </button>
-                <button
-                  onClick={() => { setMode('upload'); setInput(''); setState('idle'); setResult(null) }}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'upload' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Upload
-                </button>
-                <button
-                  onClick={() => { setMode('website'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'website' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Website
-                </button>
-              </div>
-              <button
-                onClick={onClose}
-                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-              >
-                <Icon name="close" className="text-[18px]" />
-              </button>
-            </div>
+    <WindowModal
+      open={open}
+      onClose={onClose}
+      title="Quick Add"
+      iconName={mode === 'website' ? 'link' : mode === 'upload' ? 'upload_file' : 'add_circle'}
+      iconWrapClassName={mode === 'website' ? 'bg-teal-100' : mode === 'upload' ? 'bg-amber-100' : 'bg-blue-100'}
+      iconClassName={`text-[16px] ${mode === 'website' ? 'text-teal-600' : mode === 'upload' ? 'text-amber-600' : 'text-blue-600'}`}
+      position="top"
+      normalPanelClassName="w-full max-w-lg rounded-2xl"
+    >
+      <form onSubmit={handleSubmit} className="px-5 pb-5 pt-4">
+        <div className="flex items-center justify-end mb-3">
+          <div className="flex bg-slate-100 rounded-lg p-0.5 text-[11px] font-semibold">
+            <button
+              type="button"
+              onClick={() => { setMode('paper'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
+              className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'paper' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Import
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('upload'); setInput(''); setState('idle'); setResult(null) }}
+              className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'upload' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Upload
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('website'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
+              className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'website' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Website
+            </button>
           </div>
+        </div>
 
-          {/* Body */}
-          <form onSubmit={handleSubmit} className="px-5 pb-5">
             {/* Upload mode: PDF picker + metadata fields */}
             {mode === 'upload' && state !== 'success' && (
               <div className="space-y-3">
@@ -468,10 +452,8 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
                 </button>
               </div>
             </div>
-          </form>
-        </div>
-      </div>
-    </>
+      </form>
+    </WindowModal>
   )
 }
 

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, websitesApi, searchApi, notesApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips } from '../components/PaperInfoPanel'
+import WindowModal from '../components/WindowModal'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -1429,17 +1430,18 @@ export default function Library() {
 
       {/* Delete confirmation modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !bulkDeleting && setShowDeleteModal(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-[400px] p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <Icon name="delete" className="text-[20px] text-red-600" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">Delete {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}?</h3>
-                <p className="text-xs text-slate-500 mt-0.5">This action cannot be undone. All selected papers and websites will be permanently removed.</p>
-              </div>
-            </div>
+        <WindowModal
+          open={showDeleteModal}
+          onClose={() => { if (!bulkDeleting) setShowDeleteModal(false) }}
+          title={`Delete ${selectedIds.size} item${selectedIds.size !== 1 ? 's' : ''}`}
+          iconName="delete"
+          iconWrapClassName="bg-red-100"
+          iconClassName="text-[16px] text-red-600"
+          normalPanelClassName="w-full max-w-[400px] rounded-xl"
+          disableClose={bulkDeleting}
+        >
+          <div className="p-6">
+            <p className="text-xs text-slate-500 mb-4">This action cannot be undone. All selected papers and websites will be permanently removed.</p>
             <div className="max-h-32 overflow-y-auto mb-4 border border-slate-100 rounded-lg">
               {items.filter(i => selectedIds.has(i.id)).map(i => (
                 <div key={i.id} className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-600 border-b border-slate-50 last:border-0">
@@ -1465,158 +1467,166 @@ export default function Library() {
               </button>
             </div>
           </div>
-        </div>
+        </WindowModal>
       )}
 
       {/* Move to collection modal */}
       {showMoveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!bulkMoving) { setShowMoveModal(false); setMoveSearch('') } }}>
-          <div className="bg-white rounded-xl shadow-xl w-[360px]" onClick={e => e.stopPropagation()}>
-            <div className="px-4 pt-4 pb-3">
-              <p className="text-xs font-semibold text-slate-500 mb-2">
-                Add {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} to collection
-              </p>
-              <div className="relative">
-                <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-slate-400 pointer-events-none" />
-                <input
-                  autoFocus
-                  type="text"
-                  value={moveSearch}
-                  onChange={e => setMoveSearch(e.target.value)}
-                  placeholder="Search collections..."
-                  className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 focus:bg-white"
-                  onKeyDown={e => {
-                    if (e.key === 'Escape') { setShowMoveModal(false); setMoveSearch('') }
-                  }}
-                />
-              </div>
+        <WindowModal
+          open={showMoveModal}
+          onClose={() => { if (!bulkMoving) { setShowMoveModal(false); setMoveSearch('') } }}
+          title={`Add ${selectedIds.size} item${selectedIds.size !== 1 ? 's' : ''} to collection`}
+          iconName="library_add"
+          iconWrapClassName="bg-blue-100"
+          iconClassName="text-[16px] text-blue-600"
+          normalPanelClassName="w-full max-w-[360px] rounded-xl"
+          disableClose={bulkMoving}
+        >
+          <div className="px-4 pt-4 pb-3">
+            <div className="relative">
+              <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-slate-400 pointer-events-none" />
+              <input
+                autoFocus
+                type="text"
+                value={moveSearch}
+                onChange={e => setMoveSearch(e.target.value)}
+                placeholder="Search collections..."
+                className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 focus:bg-white"
+                onKeyDown={e => {
+                  if (e.key === 'Escape') { setShowMoveModal(false); setMoveSearch('') }
+                }}
+              />
             </div>
-            {bulkMoving ? (
-              <div className="flex items-center justify-center py-6 text-slate-400">
-                <span className="animate-spin inline-block w-4 h-4 border-2 border-slate-300 border-t-blue-600 rounded-full mr-2" />
-                <span className="text-sm">Moving...</span>
-              </div>
-            ) : (
-              <div className="max-h-52 overflow-y-auto border-t border-slate-100">
-                {(() => {
-                  const matches = collections.filter(c =>
-                    c.name.toLowerCase().includes(moveSearch.toLowerCase())
-                  )
-                  if (matches.length === 0) {
-                    return (
-                      <div className="px-4 py-6 text-center text-xs text-slate-400">
-                        {collections.length === 0 ? 'No collections yet.' : 'No matching collections.'}
-                      </div>
-                    )
-                  }
-                  return matches.map(col => (
-                    <button
-                      key={col.id}
-                      onClick={() => handleBulkMove(col.id)}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-blue-50 transition-colors group"
-                    >
-                      <Icon name="folder" className="text-[16px] text-slate-400 group-hover:text-blue-500" />
-                      <span className="text-sm text-slate-700 group-hover:text-blue-700 truncate flex-1">{col.name}</span>
-                      {col.paperCount != null && (
-                        <span className="text-[10px] text-slate-400 flex-shrink-0">{col.paperCount}</span>
-                      )}
-                    </button>
-                  ))
-                })()}
-              </div>
-            )}
           </div>
-        </div>
+          {bulkMoving ? (
+            <div className="flex items-center justify-center py-6 text-slate-400">
+              <span className="animate-spin inline-block w-4 h-4 border-2 border-slate-300 border-t-blue-600 rounded-full mr-2" />
+              <span className="text-sm">Moving...</span>
+            </div>
+          ) : (
+            <div className="max-h-52 overflow-y-auto border-t border-slate-100">
+              {(() => {
+                const matches = collections.filter(c =>
+                  c.name.toLowerCase().includes(moveSearch.toLowerCase())
+                )
+                if (matches.length === 0) {
+                  return (
+                    <div className="px-4 py-6 text-center text-xs text-slate-400">
+                      {collections.length === 0 ? 'No collections yet.' : 'No matching collections.'}
+                    </div>
+                  )
+                }
+                return matches.map(col => (
+                  <button
+                    key={col.id}
+                    onClick={() => handleBulkMove(col.id)}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-blue-50 transition-colors group"
+                  >
+                    <Icon name="folder" className="text-[16px] text-slate-400 group-hover:text-blue-500" />
+                    <span className="text-sm text-slate-700 group-hover:text-blue-700 truncate flex-1">{col.name}</span>
+                    {col.paperCount != null && (
+                      <span className="text-[10px] text-slate-400 flex-shrink-0">{col.paperCount}</span>
+                    )}
+                  </button>
+                ))
+              })()}
+            </div>
+          )}
+        </WindowModal>
       )}
 
       {/* Fetch PDFs modal */}
       {showFetchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => {}}>
-          <div className="bg-white rounded-xl shadow-xl w-[480px] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">Fetching PDFs</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {(() => {
-                    const vals = Object.values(fetchStatuses)
-                    const done = vals.filter(s => s === 'done').length
-                    const failed = vals.filter(s => s !== 'done' && s !== 'pending' && s !== 'fetching' && s !== 'skipped' && s !== 'no_url').length
-                    const total = vals.filter(s => s !== 'skipped' && s !== 'no_url').length
-                    const inProgress = vals.some(s => s === 'fetching' || s === 'pending')
-                    if (!inProgress) return `Complete — ${done} succeeded, ${failed} failed`
-                    return `${done + failed} of ${total} processed...`
-                  })()}
-                </p>
-              </div>
-              {!Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending') && (
-                <button
-                  onClick={() => { setShowFetchModal(false); setFetchStatuses({}) }}
-                  className="p-1.5 rounded text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <Icon name="close" className="text-[18px]" />
-                </button>
-              )}
-            </div>
+        <WindowModal
+          open={showFetchModal}
+          onClose={() => {
+            if (!Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending')) {
+              setShowFetchModal(false)
+              setFetchStatuses({})
+            }
+          }}
+          title="Fetching PDFs"
+          iconName="cloud_download"
+          iconWrapClassName="bg-blue-100"
+          iconClassName="text-[16px] text-blue-600"
+          normalPanelClassName="w-full max-w-[480px] max-h-[80vh] rounded-xl"
+          bodyClassName="flex flex-col min-h-0"
+          closeOnBackdrop={false}
+          disableClose={Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending')}
+        >
+          <div className="px-5 pt-4 pb-3">
+            <p className="text-xs text-slate-500 mt-0.5">
+              {(() => {
+                const vals = Object.values(fetchStatuses)
+                const done = vals.filter(s => s === 'done').length
+                const failed = vals.filter(s => s !== 'done' && s !== 'pending' && s !== 'fetching' && s !== 'skipped' && s !== 'no_url').length
+                const total = vals.filter(s => s !== 'skipped' && s !== 'no_url').length
+                const inProgress = vals.some(s => s === 'fetching' || s === 'pending')
+                if (!inProgress) return `Complete - ${done} succeeded, ${failed} failed`
+                return `${done + failed} of ${total} processed...`
+              })()}
+            </p>
+          </div>
 
-            {/* Progress bar */}
-            {(() => {
-              const vals = Object.values(fetchStatuses)
-              const total = vals.filter(s => s !== 'skipped' && s !== 'no_url').length
-              const completed = vals.filter(s => s !== 'pending' && s !== 'fetching' && s !== 'skipped' && s !== 'no_url').length
-              const pct = total > 0 ? (completed / total) * 100 : 0
+          {/* Progress bar */}
+          {(() => {
+            const vals = Object.values(fetchStatuses)
+            const total = vals.filter(s => s !== 'skipped' && s !== 'no_url').length
+            const completed = vals.filter(s => s !== 'pending' && s !== 'fetching' && s !== 'skipped' && s !== 'no_url').length
+            const pct = total > 0 ? (completed / total) * 100 : 0
+            return (
+              <div className="mx-5 mb-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            )
+          })()}
+
+          <div className="flex-1 overflow-y-auto border-t border-slate-100 divide-y divide-slate-50">
+            {items.filter(i => i.id in fetchStatuses).map(item => {
+              const status = fetchStatuses[item.id]
               return (
-                <div className="mx-5 mb-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-600 rounded-full transition-all duration-300"
-                    style={{ width: `${pct}%` }}
-                  />
+                <div key={item.id} className="flex items-center gap-3 px-5 py-2.5">
+                  <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                    {status === 'pending' && <Icon name="schedule" className="text-[16px] text-slate-300" />}
+                    {status === 'fetching' && <span className="animate-spin inline-block w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full" />}
+                    {status === 'done' && <Icon name="check_circle" className="text-[16px] text-emerald-500" />}
+                    {status === 'skipped' && <Icon name="skip_next" className="text-[16px] text-slate-300" />}
+                    {status === 'no_url' && <Icon name="link_off" className="text-[16px] text-slate-300" />}
+                    {status !== 'pending' && status !== 'fetching' && status !== 'done' && status !== 'skipped' && status !== 'no_url' && (
+                      <Icon name="error" className="text-[16px] text-red-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-slate-700 truncate">{item.title}</p>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {status === 'pending' && 'Waiting...'}
+                      {status === 'fetching' && 'Downloading PDF...'}
+                      {status === 'done' && 'Uploaded to storage'}
+                      {status === 'skipped' && 'Already in storage'}
+                      {status === 'no_url' && 'No PDF URL available'}
+                      {status !== 'pending' && status !== 'fetching' && status !== 'done' && status !== 'skipped' && status !== 'no_url' && status}
+                    </p>
+                  </div>
                 </div>
               )
-            })()}
-
-            <div className="flex-1 overflow-y-auto border-t border-slate-100 divide-y divide-slate-50">
-              {items.filter(i => i.id in fetchStatuses).map(item => {
-                const status = fetchStatuses[item.id]
-                return (
-                  <div key={item.id} className="flex items-center gap-3 px-5 py-2.5">
-                    <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                      {status === 'pending' && <Icon name="schedule" className="text-[16px] text-slate-300" />}
-                      {status === 'fetching' && <span className="animate-spin inline-block w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full" />}
-                      {status === 'done' && <Icon name="check_circle" className="text-[16px] text-emerald-500" />}
-                      {status === 'skipped' && <Icon name="skip_next" className="text-[16px] text-slate-300" />}
-                      {status === 'no_url' && <Icon name="link_off" className="text-[16px] text-slate-300" />}
-                      {status !== 'pending' && status !== 'fetching' && status !== 'done' && status !== 'skipped' && status !== 'no_url' && (
-                        <Icon name="error" className="text-[16px] text-red-400" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-slate-700 truncate">{item.title}</p>
-                      <p className="text-[10px] text-slate-400 truncate">
-                        {status === 'pending' && 'Waiting...'}
-                        {status === 'fetching' && 'Downloading PDF...'}
-                        {status === 'done' && 'Uploaded to storage'}
-                        {status === 'skipped' && 'Already in storage'}
-                        {status === 'no_url' && 'No PDF URL available'}
-                        {status !== 'pending' && status !== 'fetching' && status !== 'done' && status !== 'skipped' && status !== 'no_url' && status}
-                      </p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="px-5 py-3 border-t border-slate-100">
-              <button
-                onClick={() => { setShowFetchModal(false); setFetchStatuses({}) }}
-                disabled={Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending')}
-                className="w-full py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
-              >
-                {Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending') ? 'Processing...' : 'Close'}
-              </button>
-            </div>
+            })}
           </div>
-        </div>
+
+          <div className="px-5 py-3 border-t border-slate-100">
+            <button
+              onClick={() => { setShowFetchModal(false); setFetchStatuses({}) }}
+              disabled={Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending')}
+              className="w-full py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              {Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending') ? 'Processing...' : 'Close'}
+            </button>
+          </div>
+        </WindowModal>
       )}
     </div>
   )
 }
+
