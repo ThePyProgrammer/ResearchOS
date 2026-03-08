@@ -210,3 +210,43 @@ researchos/
 │           └── Proposals.jsx       # Agent proposals approve/reject
 └── CLAUDE.md                # AI agent constitution for this codebase
 ```
+
+## Roadmap
+
+Scoped for a single-user, local research OS (no auth, no collaboration, no multi-tenancy).
+
+### Phase 1 — Library Interchange
+- **BibTeX/RIS/CSL-JSON import** — bulk-import existing libraries from Zotero, Mendeley, or other reference managers
+- **BibTeX/CSL-JSON export** — export collections for use in LaTeX, Word, or other tools
+- **Duplicate detection** — fuzzy matching on title + authors + year to flag potential duplicates on import
+
+### Phase 2 — Scholarly Discovery
+- **OpenAlex integration** — "find related papers" via citation graph, co-citation, and semantic similarity; API key + budget-aware querying
+- **Semantic Scholar integration** — citation graph expansion, SPECTER2 embeddings, paper recommendations
+- **Unpaywall integration** — automatic open-access PDF resolution by DOI
+
+### Phase 3 — Literature Review Automation
+- **Prompt-to-collection pipeline** — define a research question → auto-generate search queries → fetch candidates from OpenAlex/Semantic Scholar → screen with LLM scoring → propose a curated collection
+- **Continuous refresh** — scheduled re-runs that propose new papers added since the last run
+- **Provider-aware throttling** — centralized rate-limit management across Crossref, arXiv, OpenAlex, Semantic Scholar
+
+### Phase 4 — Search & Retrieval
+- **Hybrid search** — combine full-text (PostgreSQL tsvector or OpenSearch) with vector similarity (pgvector) for semantic retrieval over abstracts and full-text chunks
+- **Embedding pipeline** — background jobs to embed abstracts and PDF text chunks; backfill existing papers
+- **Advanced filters** — search by citation count, author affiliation, date range, and semantic similarity
+
+### Phase 5 — PDF Annotations
+- **In-document highlights** — select text or regions in the PDF viewer and save highlights with color coding
+- **Anchored comments** — attach notes to specific PDF locations (page, bounding box) rather than floating notes
+- **Annotation export** — export highlights and comments as markdown or structured data
+
+### Phase 6 — Agent Runtime Hardening
+- **Durable workflow execution** — Temporal-style persistence so long-running agent workflows survive restarts, with retries and timeouts
+- **ag-ui-protocol streaming** — replace polling with structured event streaming for real-time agent UI updates
+- **Workflow catalog expansion** — additional workflow types: research planning, experiment design, gap analysis, report generation
+- **Structured run artifacts** — typed outputs (paper lists, review drafts, experiment plans) stored as first-class objects linked to runs
+
+### Phase 7 — Advanced PDF Processing
+- **GROBID integration** — structured PDF parsing for extracting reference lists, section structure, tables, and figures
+- **Citation graph from PDFs** — build internal citation edges from extracted references, linking to existing library items
+- **Full-text chunking** — section-aware chunking for better RAG and copilot context
