@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import uuid
@@ -12,17 +13,48 @@ from services.db import get_client
 logger = logging.getLogger(__name__)
 
 _TABLE = "notes"
-_AUTO_NOTE_NAME = "AI Overview"
+_AUTO_FOLDER_NAME = "AI Notes"
 
 _BASE_SYSTEM_PROMPT = """\
 You are a research note-taker embedded in a paper and article management system.
-Write comprehensive, well-structured notes about the given item.
+Your job is to produce a well-organized set of notes as separate files, optionally grouped into folders.
 
-Output ONLY valid HTML suitable for a rich-text editor (tiptap).
+IMPORTANT: Create MULTIPLE separate note files — do NOT put everything into one file.
+Each file should cover a single focused topic or aspect of the item.
+Use folders to group related notes when there are enough files to warrant organization.
+
+Good structures look like:
+- "Summary" (file) — high-level 2-3 paragraph overview
+- "Key Contributions" (file) — main contributions and novelty
+- "Methodology" (folder)
+  - "Approach" (file) — detailed methodology description
+  - "Experimental Setup" (file) — datasets, baselines, metrics
+- "Results & Analysis" (file) — key findings and takeaways
+- "Limitations & Future Work" (file)
+- "Key Equations" (file) — important formulas explained
+- "Related Work" (file) — context in the broader field
+
+Adapt the structure to the content — a math-heavy paper needs a "Key Equations" file,
+a systems paper needs an "Architecture" file, a survey needs a "Taxonomy" file, etc.
+Aim for 3-8 files total. Use folders only when grouping 2+ related files.
+
+Respond with a JSON object (no markdown fencing) with this schema:
+{
+  "notes": [
+    {
+      "name": "file or folder name",
+      "type": "file" or "folder",
+      "content": "HTML content (only for files, omit for folders)",
+      "children": [ ...nested notes... ]  // only for folders, omit for files
+    }
+  ]
+}
+
+For file content, output valid HTML suitable for a tiptap rich-text editor.
 Use these tags: <h2>, <h3>, <p>, <strong>, <em>, <ul>, <li>, <ol>, <code>, <blockquote>.
-For mathematical expressions use LaTeX with dollar delimiters: $...$ inline, $$...$$ display.
-Do NOT include <html>, <body>, or <head> tags — output the inner HTML content only.
-Do NOT include any preamble or explanation — output the HTML note directly."""
+For math use LaTeX: $...$ inline, $$...$$ display.
+Do NOT include <html>, <body>, or <head> tags.
+Each file's content should be focused and self-contained — NOT a giant dump of everything."""
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +139,8 @@ def _get_custom_prompt(library_id: Optional[str]) -> Optional[str]:
     return None
 
 
-def _call_openai(system: str, user_msg: str) -> str:
+def _call_openai_json(system: str, user_msg: str) -> dict:
+    """Call OpenAI and parse a JSON response with the multi-note structure."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set")
@@ -118,39 +151,113 @@ def _call_openai(system: str, user_msg: str) -> str:
             {"role": "system", "content": system},
             {"role": "user", "content": user_msg},
         ],
-        max_tokens=2048,
+        response_format={"type": "json_object"},
+        max_tokens=4096,
         temperature=0.4,
     )
-    return response.choices[0].message.content or "<p>No content generated.</p>"
+    raw = response.choices[0].message.content or "{}"
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse AI notes JSON, wrapping as single note")
+        return {"notes": [{"name": "AI Overview", "type": "file", "content": raw}]}
 
 
-def _replace_auto_note(html_content: str, paper_id: Optional[str], website_id: Optional[str]) -> Note:
-    """Delete any existing AI Overview for this item and create a fresh one."""
-    query = get_client().table(_TABLE).select("id").eq("name", _AUTO_NOTE_NAME)
+def _delete_auto_folder(paper_id: Optional[str], website_id: Optional[str]) -> None:
+    """Delete the existing 'AI Notes' folder (and all children) for this item."""
+    query = get_client().table(_TABLE).select("id").eq("name", _AUTO_FOLDER_NAME).eq("type", "folder")
     if paper_id:
         query = query.eq("paper_id", paper_id)
     elif website_id:
         query = query.eq("website_id", website_id)
     for row in query.execute().data:
         delete_note(row["id"])
-    return create_note(
-        NoteCreate(name=_AUTO_NOTE_NAME, content=html_content),
-        paper_id=paper_id,
-        website_id=website_id,
-    )
+
+    # Also clean up legacy single "AI Overview" notes
+    query2 = get_client().table(_TABLE).select("id").eq("name", "AI Overview")
+    if paper_id:
+        query2 = query2.eq("paper_id", paper_id)
+    elif website_id:
+        query2 = query2.eq("website_id", website_id)
+    for row in query2.execute().data:
+        delete_note(row["id"])
 
 
-def generate_notes(paper_id: str, library_id: Optional[str] = None) -> Note:
-    """Generate an AI overview note for a paper."""
-    paper_row = get_client().table("papers").select("*").eq("id", paper_id).execute()
-    if not paper_row.data:
-        raise ValueError(f"Paper {paper_id} not found")
-    paper = paper_row.data[0]
+def _create_notes_from_tree(
+    notes_tree: list[dict],
+    paper_id: Optional[str],
+    website_id: Optional[str],
+    parent_id: Optional[str] = None,
+) -> list[Note]:
+    """Recursively create notes/folders from the LLM's JSON tree structure."""
+    created: list[Note] = []
+    for item in notes_tree:
+        name = item.get("name", "Untitled")
+        note_type = item.get("type", "file")
+        content = item.get("content", "") if note_type == "file" else ""
 
+        note = create_note(
+            NoteCreate(name=name, type=note_type, content=content, parent_id=parent_id),
+            paper_id=paper_id,
+            website_id=website_id,
+        )
+        created.append(note)
+
+        # Recurse into children for folders
+        if note_type == "folder" and item.get("children"):
+            children = _create_notes_from_tree(
+                item["children"], paper_id, website_id, parent_id=note.id,
+            )
+            created.extend(children)
+
+    return created
+
+
+def _generate_multi_notes(
+    paper_id: Optional[str],
+    website_id: Optional[str],
+    library_id: Optional[str],
+    user_msg: str,
+) -> list[Note]:
+    """Core generation: call LLM, parse JSON tree, create folder structure."""
     custom_prompt = _get_custom_prompt(library_id)
     system = _BASE_SYSTEM_PROMPT
     if custom_prompt:
         system += f"\n\nAdditional instructions from the researcher:\n{custom_prompt}"
+
+    result = _call_openai_json(system, user_msg)
+    notes_tree = result.get("notes", [])
+
+    if not notes_tree:
+        # Fallback: create a single summary note
+        notes_tree = [{"name": "Summary", "type": "file", "content": "<p>No content generated.</p>"}]
+
+    # Delete previous auto-generated notes
+    _delete_auto_folder(paper_id, website_id)
+
+    # Create the "AI Notes" root folder
+    root_folder = create_note(
+        NoteCreate(name=_AUTO_FOLDER_NAME, type="folder"),
+        paper_id=paper_id,
+        website_id=website_id,
+    )
+
+    # Create all notes inside the folder
+    created = _create_notes_from_tree(notes_tree, paper_id, website_id, parent_id=root_folder.id)
+
+    logger.info(
+        "Generated %d AI notes in folder %s (paper=%s website=%s)",
+        len(created), root_folder.id, paper_id, website_id,
+    )
+    return [root_folder] + created
+
+
+def generate_notes(paper_id: str, library_id: Optional[str] = None) -> list[Note]:
+    """Generate AI notes for a paper as a multi-file structure."""
+    paper_row = get_client().table("papers").select("*").eq("id", paper_id).execute()
+    if not paper_row.data:
+        raise ValueError(f"Paper {paper_id} not found")
+    paper = paper_row.data[0]
 
     authors = paper.get("authors") or []
     authors_str = (
@@ -177,23 +284,15 @@ def generate_notes(paper_id: str, library_id: Optional[str] = None) -> Note:
     except Exception:
         pass
 
-    html_content = _call_openai(system, user_msg)
-    note = _replace_auto_note(html_content, paper_id=paper_id, website_id=None)
-    logger.info("Generated AI notes for paper %s (note %s)", paper_id, note.id)
-    return note
+    return _generate_multi_notes(paper_id=paper_id, website_id=None, library_id=library_id, user_msg=user_msg)
 
 
-def generate_notes_for_website(website_id: str, library_id: Optional[str] = None) -> Note:
-    """Generate an AI overview note for a website."""
+def generate_notes_for_website(website_id: str, library_id: Optional[str] = None) -> list[Note]:
+    """Generate AI notes for a website as a multi-file structure."""
     site_row = get_client().table("websites").select("*").eq("id", website_id).execute()
     if not site_row.data:
         raise ValueError(f"Website {website_id} not found")
     site = site_row.data[0]
-
-    custom_prompt = _get_custom_prompt(library_id)
-    system = _BASE_SYSTEM_PROMPT
-    if custom_prompt:
-        system += f"\n\nAdditional instructions from the researcher:\n{custom_prompt}"
 
     authors = site.get("authors") or []
     authors_str = (
@@ -209,7 +308,4 @@ def generate_notes_for_website(website_id: str, library_id: Optional[str] = None
     if site.get("description"):
         user_msg += f"\nDescription:\n{site['description']}"
 
-    html_content = _call_openai(system, user_msg)
-    note = _replace_auto_note(html_content, paper_id=None, website_id=website_id)
-    logger.info("Generated AI notes for website %s (note %s)", website_id, note.id)
-    return note
+    return _generate_multi_notes(paper_id=None, website_id=website_id, library_id=library_id, user_msg=user_msg)

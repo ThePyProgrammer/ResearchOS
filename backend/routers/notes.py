@@ -36,9 +36,9 @@ class GenerateNotesRequest(BaseModel):
 
 @router.post("/papers/{paper_id}/notes/generate", status_code=201)
 async def generate_paper_notes(paper_id: str, data: GenerateNotesRequest):
-    """Generate an AI overview note for a paper."""
+    """Generate AI notes for a paper as a multi-file structure."""
     try:
-        note = note_service.generate_notes(paper_id, library_id=data.library_id)
+        notes = note_service.generate_notes(paper_id, library_id=data.library_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -46,7 +46,7 @@ async def generate_paper_notes(paper_id: str, data: GenerateNotesRequest):
     except Exception as exc:
         logger.exception("Note generation failed for paper %s", paper_id)
         raise HTTPException(status_code=500, detail=f"Note generation failed: {exc}") from exc
-    return JSONResponse(note.model_dump(by_alias=True), status_code=201)
+    return JSONResponse([n.model_dump(by_alias=True) for n in notes], status_code=201)
 
 
 # ---------------------------------------------------------------------------
@@ -67,9 +67,9 @@ async def create_website_note(website_id: str, data: NoteCreate):
 
 @router.post("/websites/{website_id}/notes/generate", status_code=201)
 async def generate_website_notes(website_id: str, data: GenerateNotesRequest):
-    """Generate an AI overview note for a website."""
+    """Generate AI notes for a website as a multi-file structure."""
     try:
-        note = note_service.generate_notes_for_website(website_id, library_id=data.library_id)
+        notes = note_service.generate_notes_for_website(website_id, library_id=data.library_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -77,7 +77,7 @@ async def generate_website_notes(website_id: str, data: GenerateNotesRequest):
     except Exception as exc:
         logger.exception("Note generation failed for website %s", website_id)
         raise HTTPException(status_code=500, detail=f"Note generation failed: {exc}") from exc
-    return JSONResponse(note.model_dump(by_alias=True), status_code=201)
+    return JSONResponse([n.model_dump(by_alias=True) for n in notes], status_code=201)
 
 
 # ---------------------------------------------------------------------------
