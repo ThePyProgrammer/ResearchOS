@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -13,6 +13,62 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/papers", tags=["papers"])
 
 NOT_FOUND = {"error": "not_found", "detail": "Paper not found"}
+
+
+def _auto_download_pdf(paper_id: str, pdf_url: str) -> None:
+    """Background task: download PDF from external URL and upload to Supabase Storage."""
+    import httpx
+    from services.pdf_service import upload_pdf
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; ResearchOS/0.1; mailto:researchos@localhost)",
+        "Accept": "application/pdf,*/*",
+    }
+    try:
+        with httpx.Client(headers=headers, timeout=60.0, follow_redirects=True) as client:
+            resp = client.get(pdf_url)
+            resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "")
+            is_pdf = "pdf" in content_type or resp.content[:5] == b"%PDF-"
+            if not is_pdf:
+                logger.warning("Auto-download: response for paper %s is not a PDF (content-type: %s, first bytes: %r)", paper_id, content_type, resp.content[:10])
+                return
+            stored_url = upload_pdf(paper_id, resp.content)
+            paper_service.update_paper(paper_id, PaperUpdate(pdf_url=stored_url))
+            logger.info("Auto-downloaded PDF for paper %s → %s", paper_id, stored_url)
+    except Exception:
+        logger.exception("Auto-download: failed to download PDF for paper %s from %s", paper_id, pdf_url)
+
+
+def _auto_download_and_process(paper_id: str, library_id: Optional[str], pdf_url: Optional[str]) -> None:
+    """Background task: download PDF to Supabase, then generate notes if enabled."""
+    if pdf_url:
+        _auto_download_pdf(paper_id, pdf_url)
+    _auto_generate_notes(paper_id, library_id, pdf_url)
+
+
+def _auto_generate_notes(paper_id: str, library_id: Optional[str], pdf_url: Optional[str]) -> None:
+    """Background task: extract PDF text then generate AI notes if auto-note is enabled."""
+    from services import library_service, note_service
+    from services.pdf_text_service import extract_and_cache
+
+    if not library_id:
+        return
+    library = library_service.get_library(library_id)
+    if not library or not library.auto_note_enabled:
+        return
+
+    if pdf_url:
+        try:
+            extract_and_cache(paper_id, pdf_url)
+        except Exception:
+            logger.warning("Auto-note: PDF text extraction failed for paper %s, generating from metadata only", paper_id)
+
+    try:
+        notes = note_service.generate_notes(paper_id, library_id=library_id)
+        logger.info("Auto-note: generated %d notes for paper %s", len(notes), paper_id)
+    except Exception:
+        logger.exception("Auto-note: generation failed for paper %s", paper_id)
 
 
 @router.get("")
@@ -58,7 +114,7 @@ class ImportRequest(BaseModel):
 
 
 @router.post("/import", status_code=201)
-async def import_paper(data: ImportRequest):
+async def import_paper(data: ImportRequest, background_tasks: BackgroundTasks):
     """
     Resolve a DOI, arXiv ID, or URL to paper metadata and add it to the library.
 
@@ -132,6 +188,14 @@ async def import_paper(data: ImportRequest):
         action_href=f"/library/paper/{paper.id}",
         library_id=paper.library_id,
     )
+
+    # Auto-download PDF and generate AI notes in the background
+    if paper.pdf_url:
+        logger.info("Queuing auto-download for paper %s from %s", paper.id, paper.pdf_url)
+        background_tasks.add_task(_auto_download_and_process, paper.id, paper.library_id, paper.pdf_url)
+    else:
+        logger.info("No pdf_url for paper %s, skipping auto-download", paper.id)
+
     return JSONResponse(
         {**paper.model_dump(by_alias=True), "already_exists": False},
         status_code=201,
@@ -184,7 +248,7 @@ async def delete_paper(paper_id: str):
 
 
 @router.post("/{paper_id}/pdf", status_code=200)
-async def upload_pdf(paper_id: str, file: UploadFile = File(...)):
+async def upload_pdf(paper_id: str, background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """Upload a PDF file for a paper and store it in Supabase Storage."""
     paper = paper_service.get_paper(paper_id)
     if paper is None:
@@ -198,6 +262,10 @@ async def upload_pdf(paper_id: str, file: UploadFile = File(...)):
     paper_service.set_pdf_url(paper_id, pdf_url)
 
     updated = paper_service.get_paper(paper_id)
+
+    # Auto-generate AI notes in the background if the library has it enabled
+    background_tasks.add_task(_auto_generate_notes, updated.id, updated.library_id, pdf_url)
+
     return JSONResponse(updated.model_dump(by_alias=True))
 
 
