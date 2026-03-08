@@ -218,46 +218,44 @@ async def _fetch_arxiv(arxiv_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# OpenReview → API v2
+# OpenReview → API v2 with v1 fallback
 # ---------------------------------------------------------------------------
 
-async def _fetch_openreview(note_id: str) -> dict:
-    """Resolve an OpenReview note ID to paper metadata via the OpenReview API v2."""
-    api_url = f"https://api2.openreview.net/notes?id={note_id}"
+def _parse_openreview_note(note: dict, note_id: str) -> dict:
+    """Parse an OpenReview note (v1 or v2 format) into a paper metadata dict."""
+    from datetime import datetime, timezone
 
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-        resp = await client.get(api_url)
-        if resp.status_code == 404:
-            raise ValueError(f"OpenReview note '{note_id}' not found.")
-        resp.raise_for_status()
-        data = resp.json()
-
-    notes = data.get("notes", [])
-    if not notes:
-        raise ValueError(f"OpenReview note '{note_id}' not found.")
-
-    note = notes[0]
     content = note.get("content", {})
 
-    # Helper: OpenReview v2 wraps values in {"value": ...}
+    # Detect API version: v2 wraps values in {"value": ...}, v1 uses bare values
+    sample = content.get("title")
+    is_v2 = isinstance(sample, dict) and "value" in sample
+
     def val(key: str, default=""):
-        v = content.get(key, {})
-        return v.get("value", default) if isinstance(v, dict) else (v or default)
+        v = content.get(key, default)
+        if is_v2 and isinstance(v, dict):
+            return v.get("value", default)
+        return v if v is not None else default
 
     title = val("title")
     if not title:
         raise ValueError(f"OpenReview returned no title for note '{note_id}'.")
 
     # Authors
-    raw_authors = content.get("authors", {})
-    authors_list = raw_authors.get("value", []) if isinstance(raw_authors, dict) else (raw_authors or [])
+    raw_authors = content.get("authors", [] if not is_v2 else {})
+    if is_v2 and isinstance(raw_authors, dict):
+        authors_list = raw_authors.get("value", [])
+    elif isinstance(raw_authors, list):
+        authors_list = raw_authors
+    else:
+        authors_list = []
     authors = [a for a in authors_list if isinstance(a, str)]
 
     # Abstract
-    abstract = val("abstract")
+    abstract = val("abstract", "")
 
     # Venue
-    venue = val("venue") or val("venueid") or "OpenReview"
+    venue = val("venue", "") or val("venueid", "") or "OpenReview"
 
     # Date — use pdate (publication timestamp ms) or cdate (creation timestamp ms)
     year = 0
@@ -265,14 +263,13 @@ async def _fetch_openreview(note_id: str) -> dict:
     for ts_key in ("pdate", "cdate", "tcdate"):
         ts = note.get(ts_key)
         if ts and isinstance(ts, (int, float)):
-            from datetime import datetime, timezone
             dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
             year = dt.year
             published_date = dt.strftime("%Y-%m-%d")
             break
 
     # PDF URL
-    pdf_value = val("pdf")
+    pdf_value = val("pdf", "")
     pdf_url = None
     if pdf_value:
         if pdf_value.startswith("http"):
@@ -291,6 +288,28 @@ async def _fetch_openreview(note_id: str) -> dict:
         "abstract": abstract[:2000] if abstract else None,
         "pdf_url": pdf_url,
     }
+
+
+async def _fetch_openreview(note_id: str) -> dict:
+    """Resolve an OpenReview note ID, trying API v2 first then falling back to v1."""
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        # Try API v2 first
+        resp = await client.get(f"https://api2.openreview.net/notes?id={note_id}")
+        if resp.status_code == 200:
+            data = resp.json()
+            notes = data.get("notes", [])
+            if notes:
+                return _parse_openreview_note(notes[0], note_id)
+
+        # Fall back to API v1 for older papers
+        resp = await client.get(f"https://api.openreview.net/notes?id={note_id}")
+        if resp.status_code == 200:
+            data = resp.json()
+            notes = data.get("notes", [])
+            if notes:
+                return _parse_openreview_note(notes[0], note_id)
+
+    raise ValueError(f"OpenReview note '{note_id}' not found on v2 or v1 API.")
 
 
 # ---------------------------------------------------------------------------
