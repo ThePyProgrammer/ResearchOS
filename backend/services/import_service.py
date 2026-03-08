@@ -363,16 +363,6 @@ async def _fetch_zenodo(record_id: str) -> dict:
         resource = metadata.get("resource_type") or {}
         venue = resource.get("title") or "Zenodo"
 
-    # PDF URL — find the first PDF file in the record
-    pdf_url = None
-    files = data.get("files", [])
-    for f in files:
-        key = (f.get("key") or "").lower()
-        if key.endswith(".pdf"):
-            links = f.get("links", {})
-            pdf_url = links.get("self") or f.get("links", {}).get("download")
-            break
-
     return {
         "title": title,
         "authors": authors,
@@ -382,7 +372,7 @@ async def _fetch_zenodo(record_id: str) -> dict:
         "doi": doi or None,
         "arxiv_id": None,
         "abstract": abstract[:2000] if abstract else None,
-        "pdf_url": pdf_url,
+        "pdf_url": None,
     }
 
 
