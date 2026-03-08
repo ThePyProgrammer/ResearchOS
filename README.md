@@ -4,11 +4,15 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 
 ## Features
 
-- **Library management** — import papers and websites via DOI/arXiv ID/URL, organize into nested collections with drag-and-drop, rename collections inline, manage collection membership from the detail panel with an autocomplete picker
+- **Library management** — import papers and websites via DOI/arXiv ID/URL/OpenReview/Zenodo, organize into nested collections with drag-and-drop, rename collections inline, manage collection membership from the detail panel with an autocomplete picker
+- **Multi-select & bulk actions** — checkbox-based multi-select with select-all, bulk delete with confirmation modal, bulk add-to-collection with autocomplete dropdown, bulk PDF fetch with live per-item status modal
 - **Multiple libraries** — create and switch between independent libraries; active library persisted to localStorage
 - **Websites as first-class items** — blog posts, articles, and any URL live alongside papers in the library with their own metadata (domain, published date, description, GitHub URL, named links), displayed with teal accent color
-- **PDF storage** — upload PDFs per paper; stored in Supabase Storage, rendered inline in the browser
-- **Paper metadata** — authors, year, venue, abstract, DOI, arXiv ID, GitHub repo, website URL, named links
+- **PDF upload with metadata extraction** — upload PDFs directly via drag-and-drop or file picker; LLM-powered metadata extraction (title, authors, date, venue, abstract, DOI) auto-fills the form using pymupdf4llm + OpenAI, with title-case normalization that preserves acronyms
+- **PDF storage** — upload PDFs per paper; stored in Supabase Storage, rendered inline in the browser; auto-downloaded from source on import (arXiv, OpenReview, etc.); manual fetch-to-storage for papers imported before auto-download
+- **Paper metadata** — authors (academic format: "Last Name et al."), published date, venue, abstract, DOI, arXiv ID, GitHub repo, website URL, named links; author chips support drag-reorder, double-click edit, and comma-paste auto-split
+- **Sortable columns** — click Title, Authors, or Date column headers to sort ascending/descending/default
+- **Advanced filters** — filter by status, source, PDF availability (has PDF / no PDF), title, venue, year range, and tags
 - **Notes IDE** — per-item (paper and website) note filesystem with folders and files, powered by a tiptap WYSIWYG editor with LaTeX support (KaTeX), task lists, syntax highlighting, and rich text formatting
 - **AI Auto-Note-Taker** — per-library setting (enable/disable + custom prompt); generates a structured "AI Overview" note for any paper or website with one click using `gpt-4o-mini`; uses cached PDF text when available
 - **AI copilot** — context-aware research assistant embedded in the notes IDE for both papers and websites; has full access to extracted PDF text (papers) or website metadata (websites), understands your notes, and can suggest diffs (edits to existing notes or new files) that you accept or reject individually
@@ -115,8 +119,10 @@ All routes are prefixed `/api`. Responses are camelCase JSON.
 | GET | `/api/papers` | List papers; `?library_id=&collection_id=&status=&search=` |
 | POST | `/api/papers` | Create paper |
 | GET/PATCH/DELETE | `/api/papers/{id}` | Single paper |
-| POST | `/api/papers/import` | Resolve DOI/arXiv/URL and add to library |
+| POST | `/api/papers/import` | Resolve DOI/arXiv/URL/OpenReview/Zenodo and add to library |
+| POST | `/api/papers/extract-metadata` | Extract metadata from uploaded PDF via LLM |
 | POST | `/api/papers/{id}/pdf` | Upload PDF (multipart/form-data) |
+| POST | `/api/papers/{id}/pdf/fetch` | Download PDF from external URL and upload to Supabase Storage |
 | DELETE | `/api/papers/{id}/pdf` | Remove PDF |
 | GET | `/api/websites` | List websites; `?library_id=&collection_id=&status=` |
 | POST | `/api/websites` | Create website |
@@ -165,7 +171,8 @@ researchos/
 │   │   ├── db.py            # Supabase client singleton (lru_cache)
 │   │   ├── pdf_service.py   # Upload/delete PDFs in Supabase Storage
 │   │   ├── pdf_text_service.py  # PDF→markdown extraction via pymupdf4llm
-│   │   ├── import_service.py    # Resolve DOI/arXiv/URL metadata + website og:* extraction
+│   │   ├── pdf_metadata_service.py  # LLM-powered metadata extraction from uploaded PDFs
+│   │   ├── import_service.py    # Resolve DOI/arXiv/OpenReview/Zenodo/URL metadata + website og:* extraction
 │   │   ├── note_service.py      # CRUD + AI generation for paper and website notes
 │   │   ├── chat_service.py      # AI copilot: OpenAI chat + tool calling for note suggestions
 │   │   └── ...              # paper, website, library, collection, workflow, run, proposal, activity
@@ -189,7 +196,7 @@ researchos/
 │       │   ├── layout/
 │       │   │   ├── Layout.jsx   # Shell (Sidebar + Header + Outlet)
 │       │   │   ├── Sidebar.jsx  # Library switcher, collections tree (rename, drag-drop, item drops)
-│       │   │   └── Header.jsx   # Search, QuickAdd modal (paper/website toggle)
+│       │   │   └── Header.jsx   # Search, QuickAdd modal (Import/Upload/Website modes)
 │       │   ├── PaperInfoPanel.jsx  # Paper metadata + NamedLinks + CollectionsPicker
 │       │   ├── NotesPanel.jsx      # tiptap WYSIWYG note editor with file tree (generic: paper or website)
 │       │   └── CopilotPanel.jsx    # AI copilot with diff-based note suggestions
