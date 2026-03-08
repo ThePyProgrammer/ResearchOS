@@ -14,7 +14,7 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Sortable columns** — click Title, Authors, or Date column headers to sort ascending/descending/default
 - **Advanced filters** — filter by status, source, PDF availability (has PDF / no PDF), title, venue, year range, and tags
 - **Notes IDE** — per-item (paper and website) note filesystem with folders and files, powered by a tiptap WYSIWYG editor with LaTeX support (KaTeX), task lists, syntax highlighting, and rich text formatting
-- **AI Auto-Note-Taker** — per-library setting (enable/disable + custom prompt); generates a structured "AI Overview" note for any paper or website with one click using `gpt-4o-mini`; uses cached PDF text when available
+- **AI Auto-Note-Taker** — per-library setting (enable/disable + custom prompt); generates a multi-file note structure (3-8 focused files in an "AI Notes" folder, with optional subfolders) for any paper or website using `gpt-4o-mini`; uses cached PDF text when available; auto-runs on import (when PDF is available) and on PDF upload when enabled; can also be triggered manually
 - **AI copilot** — context-aware research assistant embedded in the notes IDE for both papers and websites; has full access to extracted PDF text (papers) or website metadata (websites), understands your notes, and can suggest diffs (edits to existing notes or new files) that you accept or reject individually
 - **PDF text extraction** — automatic PDF-to-markdown conversion via pymupdf4llm, cached in the database for fast copilot access
 - **Website viewer** — `/library/website/:id` renders the live site in an iframe alongside the Notes IDE, AI Copilot, and a Details panel; falls back gracefully when the site blocks embedding
@@ -142,8 +142,8 @@ All routes are prefixed `/api`. Responses are camelCase JSON.
 | GET | `/api/user` | User profile |
 | GET/POST | `/api/papers/{id}/notes` | List / create notes for a paper |
 | GET/POST | `/api/websites/{id}/notes` | List / create notes for a website |
-| POST | `/api/papers/{id}/notes/generate` | AI-generate an overview note for a paper |
-| POST | `/api/websites/{id}/notes/generate` | AI-generate an overview note for a website |
+| POST | `/api/papers/{id}/notes/generate` | AI-generate multi-file notes for a paper |
+| POST | `/api/websites/{id}/notes/generate` | AI-generate multi-file notes for a website |
 | PATCH/DELETE | `/api/notes/{id}` | Update / delete a note |
 | GET/POST/DELETE | `/api/papers/{id}/chat` | List / send / clear copilot chat for a paper |
 | GET/POST/DELETE | `/api/websites/{id}/chat` | List / send / clear copilot chat for a website |
