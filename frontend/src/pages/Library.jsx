@@ -35,7 +35,7 @@ function itemVenue(item) {
   return item.venue || ''
 }
 
-function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate }) {
+function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, onOpen }) {
   const status = statusConfig[item.status] || statusConfig['inbox']
   const isWebsite = item.itemType === 'website'
   const [editingTitle, setEditingTitle] = useState(false)
@@ -78,6 +78,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate }) 
         e.dataTransfer.effectAllowed = 'copy'
       }}
       onClick={() => onSelect(item)}
+      onDoubleClick={() => onOpen?.(item)}
       className={`cursor-pointer transition-colors ${
         selected ? 'bg-blue-50' : checked ? 'bg-blue-50/50' : 'hover:bg-slate-50'
       }`}
@@ -89,6 +90,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate }) 
           checked={checked}
           onChange={() => onCheck(item)}
           onClick={e => e.stopPropagation()}
+          onDoubleClick={e => e.stopPropagation()}
         />
       </td>
       <td className="px-2 py-3">
@@ -776,6 +778,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
 export default function Library() {
   const { activeLibraryId, collections, refreshCollections } = useLibrary()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [selectedItem, setSelectedItem] = useState(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1368,6 +1371,7 @@ export default function Library() {
                     checked={selectedIds.has(item.id)}
                     onSelect={i => setSelectedItem(selectedItem?.id === i.id ? null : i)}
                     onCheck={toggleCheck}
+                    onOpen={i => navigate(i.itemType === 'website' ? `/library/website/${i.id}` : `/library/paper/${i.id}`)}
                     onItemUpdate={updated => {
                       setItems(prev => prev.map(it => it.id === updated.id ? { ...it, ...updated } : it))
                       if (selectedItem?.id === updated.id) setSelectedItem(s => ({ ...s, ...updated }))

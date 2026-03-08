@@ -13,6 +13,8 @@ wheels/
 .claude/
 CLAUDE.md
 
+AGENTS.md
+
 aero/
 
 node_modules/
