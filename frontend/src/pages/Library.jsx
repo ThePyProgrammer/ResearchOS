@@ -890,6 +890,29 @@ export default function Library() {
     let result = urlQuery ? items : items.filter(p => filterTab === 'all' || p.status === filterTab)
     if (activeCollection === 'inbox') result = result.filter(p => p.status === 'inbox')
     else if (activeCollection === 'unfiled') result = result.filter(p => p.collections.length === 0)
+    else if (activeCollection === 'duplicates') {
+      const buckets = new Map()
+      const addBucket = (key, id) => {
+        if (!buckets.has(key)) buckets.set(key, [])
+        buckets.get(key).push(id)
+      }
+      for (const item of items) {
+        if (item.doi) addBucket(`doi:${item.doi.trim().toLowerCase()}`, item.id)
+        if (item.arxivId) addBucket(`arxiv:${item.arxivId.trim().toLowerCase()}`, item.id)
+        if (item.url) {
+          try {
+            const u = new URL(item.url)
+            addBucket(`url:${(u.hostname + u.pathname).replace(/\/$/, '').toLowerCase()}`, item.id)
+          } catch {}
+        }
+        if (item.title) addBucket(`title:${item.title.trim().toLowerCase().replace(/\s+/g, ' ')}`, item.id)
+      }
+      const dupIds = new Set()
+      for (const ids of buckets.values()) {
+        if (ids.length >= 2) ids.forEach(id => dupIds.add(id))
+      }
+      result = result.filter(i => dupIds.has(i.id))
+    }
     else if (activeCollection !== 'all') result = result.filter(p => p.collections.includes(activeCollection))
     if (sourceFilter !== 'all') result = result.filter(p => p.source === sourceFilter)
     if (titleFilter) result = result.filter(p => p.title.toLowerCase().includes(titleFilter.toLowerCase()))

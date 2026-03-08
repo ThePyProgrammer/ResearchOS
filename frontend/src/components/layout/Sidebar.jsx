@@ -552,9 +552,10 @@ function LibraryTree() {
         Quick Access
       </p>
       {[
-        { id: 'all',     icon: 'collections_bookmark', label: 'All Papers' },
-        { id: 'inbox',   icon: 'inbox',                label: 'Inbox' },
-        { id: 'unfiled', icon: 'folder_off',           label: 'Unfiled' },
+        { id: 'all',        icon: 'collections_bookmark', label: 'All Papers' },
+        { id: 'inbox',      icon: 'inbox',                label: 'Inbox' },
+        { id: 'unfiled',    icon: 'folder_off',           label: 'Unfiled' },
+        { id: 'duplicates', icon: 'content_copy',         label: 'Duplicates' },
       ].map(item => (
         <button
           key={item.id}
