@@ -37,7 +37,7 @@ const TYPE_META = {
 // ---------------------------------------------------------------------------
 // Quick-Add modal
 // ---------------------------------------------------------------------------
-function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
+function QuickAddModal({ open, onClose, onAdded, onOpenAnother, collectionId, libraryId }) {
   const [mode, setMode] = useState('paper') // 'paper' | 'website' | 'upload'
   const [input, setInput] = useState('')
   const [state, setState] = useState('idle') // idle | loading | success | duplicate | error
@@ -180,7 +180,16 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
       normalPanelClassName="w-full max-w-lg rounded-2xl"
     >
       <form onSubmit={handleSubmit} className="px-5 pb-5 pt-4">
-        <div className="flex items-center justify-end mb-3">
+        <div className="flex items-center justify-between mb-3">
+          <button
+            type="button"
+            onClick={() => onOpenAnother?.()}
+            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-slate-500 bg-slate-100 rounded-md hover:bg-slate-200 hover:text-slate-700 transition-colors"
+            title="Open another Quick Add window"
+          >
+            <Icon name="add" className="text-[14px]" />
+            New window
+          </button>
           <div className="flex bg-slate-100 rounded-lg p-0.5 text-[11px] font-semibold">
             <button
               type="button"
@@ -466,7 +475,8 @@ export default function Header() {
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [quickAddWindows, setQuickAddWindows] = useState([])
+  const quickAddCounterRef = useRef(0)
   const containerRef = useRef(null)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -523,6 +533,16 @@ export default function Header() {
     setDropdownOpen(false)
     setQuery('')
     navigate(`/library/paper/${paper.id}`)
+  }
+
+  const openQuickAddWindow = () => {
+    quickAddCounterRef.current += 1
+    const id = `quick-add-${quickAddCounterRef.current}`
+    setQuickAddWindows(prev => [...prev, id])
+  }
+
+  const closeQuickAddWindow = (id) => {
+    setQuickAddWindows(prev => prev.filter(winId => winId !== id))
   }
 
   return (
@@ -625,7 +645,7 @@ export default function Header() {
 
           {/* Quick Add */}
           <button
-            onClick={() => setQuickAddOpen(true)}
+            onClick={openQuickAddWindow}
             className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
           >
             <Icon name="add" className="text-[18px]" />
@@ -634,16 +654,20 @@ export default function Header() {
         </div>
       </header>
 
-      <QuickAddModal
-        open={quickAddOpen}
-        onClose={() => setQuickAddOpen(false)}
-        onAdded={() => {
-          refreshCollections()
-          navigate(activeCollectionId ? `/library?col=${activeCollectionId}` : '/library')
-        }}
-        collectionId={activeCollectionId}
-        libraryId={activeLibraryId}
-      />
+      {quickAddWindows.map(winId => (
+        <QuickAddModal
+          key={winId}
+          open
+          onClose={() => closeQuickAddWindow(winId)}
+          onOpenAnother={openQuickAddWindow}
+          onAdded={() => {
+            refreshCollections()
+            navigate(activeCollectionId ? `/library?col=${activeCollectionId}` : '/library')
+          }}
+          collectionId={activeCollectionId}
+          libraryId={activeLibraryId}
+        />
+      ))}
     </>
   )
 }
