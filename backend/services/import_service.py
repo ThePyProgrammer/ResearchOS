@@ -32,6 +32,7 @@ _DOI_RE = re.compile(r"\b(10\.\d{4,9}/\S+)")
 _ARXIV_BARE_RE = re.compile(r"^(\d{4}\.\d{4,5})(v\d+)?$")
 _ARXIV_URL_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5}(?:v\d+)?)")
 _OPENREVIEW_URL_RE = re.compile(r"openreview\.net/(?:forum|pdf)\?id=([A-Za-z0-9_-]+)")
+_ZENODO_URL_RE = re.compile(r"zenodo\.org/records?/(\d+)")
 
 
 def detect_type(identifier: str) -> tuple[str, str]:
@@ -293,6 +294,80 @@ async def _fetch_openreview(note_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Zenodo → REST API
+# ---------------------------------------------------------------------------
+
+async def _fetch_zenodo(record_id: str) -> dict:
+    """Resolve a Zenodo record ID to paper metadata via the Zenodo REST API."""
+    api_url = f"https://zenodo.org/api/records/{record_id}"
+
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        resp = await client.get(api_url)
+        if resp.status_code == 404:
+            raise ValueError(f"Zenodo record '{record_id}' not found.")
+        resp.raise_for_status()
+        data = resp.json()
+
+    metadata = data.get("metadata", {})
+
+    title = (metadata.get("title") or "").strip()
+    if not title:
+        raise ValueError(f"Zenodo returned no title for record '{record_id}'.")
+
+    # Authors
+    creators = metadata.get("creators") or []
+    authors = [c.get("name", "") for c in creators if c.get("name")]
+
+    # Abstract (may contain HTML)
+    raw_abstract = (metadata.get("description") or "").strip()
+    abstract = re.sub(r"<[^>]+>", " ", raw_abstract).strip()
+    abstract = re.sub(r"\s{2,}", " ", abstract)
+
+    # Date
+    year = 0
+    published_date = None
+    pub_date_str = metadata.get("publication_date", "")
+    if pub_date_str:
+        published_date = pub_date_str[:10]  # YYYY-MM-DD
+        try:
+            year = int(pub_date_str[:4])
+        except (ValueError, TypeError):
+            pass
+
+    # DOI
+    doi = metadata.get("doi")
+
+    # Venue — use journal title if available, otherwise resource type
+    journal = metadata.get("journal") or {}
+    venue = journal.get("title") or ""
+    if not venue:
+        resource = metadata.get("resource_type") or {}
+        venue = resource.get("title") or "Zenodo"
+
+    # PDF URL — find the first PDF file in the record
+    pdf_url = None
+    files = data.get("files", [])
+    for f in files:
+        key = (f.get("key") or "").lower()
+        if key.endswith(".pdf"):
+            links = f.get("links", {})
+            pdf_url = links.get("self") or f.get("links", {}).get("download")
+            break
+
+    return {
+        "title": title,
+        "authors": authors,
+        "year": year,
+        "published_date": published_date,
+        "venue": venue,
+        "doi": doi or None,
+        "arxiv_id": None,
+        "abstract": abstract[:2000] if abstract else None,
+        "pdf_url": pdf_url,
+    }
+
+
+# ---------------------------------------------------------------------------
 # URL → sniff then meta-tag extraction
 # ---------------------------------------------------------------------------
 
@@ -414,6 +489,11 @@ async def _fetch_url(url: str) -> dict:
     m = _OPENREVIEW_URL_RE.search(url)
     if m:
         return await _fetch_openreview(m.group(1))
+
+    # 2c. Delegate Zenodo URLs immediately
+    m = _ZENODO_URL_RE.search(url)
+    if m:
+        return await _fetch_zenodo(m.group(1))
 
     # 3. Fetch the page
     headers = {
