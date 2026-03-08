@@ -42,19 +42,21 @@ function createDefaultQuickAddSnapshot() {
     input: '',
     state: 'idle',
     uploadMeta: { title: '', authors: [], date: '', venue: '' },
+    bibtexState: 'idle', // idle | parsing | preview | importing | done | error
   }
 }
 
 function normalizeQuickAddSnapshot(snapshot) {
   const base = createDefaultQuickAddSnapshot()
   if (!snapshot || typeof snapshot !== 'object') return base
-  const mode = ['paper', 'website', 'upload'].includes(snapshot.mode) ? snapshot.mode : base.mode
+  const mode = ['paper', 'website', 'upload', 'bibtex'].includes(snapshot.mode) ? snapshot.mode : base.mode
   const state = ['idle', 'success', 'duplicate', 'error'].includes(snapshot.state) ? snapshot.state : base.state
   const uploadMetaRaw = snapshot.uploadMeta && typeof snapshot.uploadMeta === 'object' ? snapshot.uploadMeta : {}
   return {
     mode,
     state,
     input: typeof snapshot.input === 'string' ? snapshot.input : base.input,
+    bibtexState: ['idle', 'parsing', 'preview', 'importing', 'done', 'error'].includes(snapshot.bibtexState) ? snapshot.bibtexState : 'idle',
     uploadMeta: {
       title: typeof uploadMetaRaw.title === 'string' ? uploadMetaRaw.title : '',
       authors: Array.isArray(uploadMetaRaw.authors) ? uploadMetaRaw.authors.filter(a => typeof a === 'string') : [],
@@ -69,7 +71,7 @@ function normalizeQuickAddSnapshot(snapshot) {
 // ---------------------------------------------------------------------------
 function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChange, onClose, onAdded, onOpenAnother, collectionId, libraryId }) {
   const initialSnapshot = normalizeQuickAddSnapshot(snapshot)
-  const [mode, setMode] = useState(initialSnapshot.mode) // 'paper' | 'website' | 'upload'
+  const [mode, setMode] = useState(initialSnapshot.mode) // 'paper' | 'website' | 'upload' | 'bibtex'
   const [input, setInput] = useState(initialSnapshot.input)
   const [state, setState] = useState(initialSnapshot.state) // idle | loading | success | duplicate | error
   const [result, setResult] = useState(null)
@@ -82,6 +84,14 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
   const fileInputRef = useRef(null)
   const [draggingOver, setDraggingOver] = useState(false)
   const [extracting, setExtracting] = useState(false)
+
+  // BibTeX mode state
+  const [bibtexFile, setBibtexFile] = useState(null)
+  const [bibtexEntries, setBibtexEntries] = useState([]) // parsed preview entries
+  const [bibtexSelected, setBibtexSelected] = useState(new Set()) // selected indices
+  const [bibtexState, setBibtexState] = useState(initialSnapshot.bibtexState) // idle | parsing | preview | importing | done | error
+  const [bibtexResults, setBibtexResults] = useState(null) // import results
+  const bibtexFileInputRef = useRef(null)
 
   const detectedType = mode === 'paper' ? detectType(input) : null
 
@@ -98,6 +108,11 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
       setPdfFile(null)
       setUploadMeta({ title: '', authors: [], date: '', venue: '' })
       setExtracting(false)
+      setBibtexFile(null)
+      setBibtexEntries([])
+      setBibtexSelected(new Set())
+      setBibtexState('idle')
+      setBibtexResults(null)
     }
   }, [open])
 
@@ -115,12 +130,61 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
       input,
       state: state === 'loading' ? 'idle' : state,
       uploadMeta,
+      bibtexState: ['parsing', 'importing'].includes(bibtexState) ? 'idle' : bibtexState,
     })
-  }, [mode, input, state, uploadMeta, onSnapshotChange])
+  }, [mode, input, state, uploadMeta, bibtexState, onSnapshotChange])
+
+  async function handleBibtexParse(file) {
+    if (!file) return
+    setBibtexFile(file)
+    setBibtexState('parsing')
+    setBibtexEntries([])
+    setBibtexSelected(new Set())
+    setError('')
+
+    try {
+      const entries = await papersApi.parseBibtex(file)
+      setBibtexEntries(entries)
+      // Auto-select all non-duplicate, non-error entries
+      const selected = new Set()
+      entries.forEach((e, i) => {
+        if (e.paper && !e.duplicate && !e.error) selected.add(i)
+      })
+      setBibtexSelected(selected)
+      setBibtexState('preview')
+    } catch (err) {
+      setError(err.message || 'Failed to parse BibTeX file')
+      setBibtexState('error')
+    }
+  }
+
+  async function handleBibtexConfirm() {
+    const selectedEntries = bibtexEntries
+      .filter((_, i) => bibtexSelected.has(i))
+      .map(e => e.paper)
+      .filter(Boolean)
+
+    if (selectedEntries.length === 0) return
+
+    setBibtexState('importing')
+    setError('')
+
+    try {
+      const results = await papersApi.confirmBibtex(selectedEntries, libraryId)
+      setBibtexResults(results)
+      setBibtexState('done')
+      const createdCount = results.filter(r => r.status === 'created').length
+      if (createdCount > 0) onAdded?.()
+    } catch (err) {
+      setError(err.message || 'Import failed')
+      setBibtexState('error')
+    }
+  }
 
   async function handleSubmit(e) {
     e?.preventDefault()
     if (mode === 'upload') return handleUploadSubmit()
+    if (mode === 'bibtex') return
     const trimmed = input.trim()
     if (!trimmed || state === 'loading') return
 
@@ -214,9 +278,9 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
       onClose={onClose}
       title="Quick Add"
       initialMode={startMinimized ? 'minimized' : 'normal'}
-      iconName={mode === 'website' ? 'link' : mode === 'upload' ? 'upload_file' : 'add_circle'}
-      iconWrapClassName={mode === 'website' ? 'bg-teal-100' : mode === 'upload' ? 'bg-amber-100' : 'bg-blue-100'}
-      iconClassName={`text-[16px] ${mode === 'website' ? 'text-teal-600' : mode === 'upload' ? 'text-amber-600' : 'text-blue-600'}`}
+      iconName={mode === 'bibtex' ? 'description' : mode === 'website' ? 'link' : mode === 'upload' ? 'upload_file' : 'add_circle'}
+      iconWrapClassName={mode === 'bibtex' ? 'bg-green-100' : mode === 'website' ? 'bg-teal-100' : mode === 'upload' ? 'bg-amber-100' : 'bg-blue-100'}
+      iconClassName={`text-[16px] ${mode === 'bibtex' ? 'text-green-600' : mode === 'website' ? 'text-teal-600' : mode === 'upload' ? 'text-amber-600' : 'text-blue-600'}`}
       position="top"
       normalPanelClassName="w-full max-w-lg rounded-2xl"
     >
@@ -248,6 +312,13 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
             </button>
             <button
               type="button"
+              onClick={() => { setMode('bibtex'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
+              className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'bibtex' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              BibTeX
+            </button>
+            <button
+              type="button"
               onClick={() => { setMode('website'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
               className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'website' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
@@ -255,6 +326,212 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
             </button>
           </div>
         </div>
+
+            {/* BibTeX mode */}
+            {mode === 'bibtex' && (
+              <div className="space-y-3">
+                {/* File picker (idle or error state) */}
+                {(bibtexState === 'idle' || bibtexState === 'error') && (
+                  <>
+                    <input
+                      ref={bibtexFileInputRef}
+                      type="file"
+                      accept=".bib,.bibtex"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        if (f) handleBibtexParse(f)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => bibtexFileInputRef.current?.click()}
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDraggingOver(true) }}
+                      onDragEnter={(e) => { e.preventDefault(); setDraggingOver(true) }}
+                      onDragLeave={() => setDraggingOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setDraggingOver(false)
+                        const f = e.dataTransfer.files?.[0]
+                        if (f) handleBibtexParse(f)
+                      }}
+                      className={`w-full flex flex-col items-center justify-center gap-1 px-4 py-6 border-2 border-dashed rounded-xl text-sm transition-colors ${
+                        draggingOver
+                          ? 'border-blue-400 bg-blue-50 text-blue-600'
+                          : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-blue-300 hover:bg-blue-50'
+                      }`}
+                    >
+                      <Icon name={draggingOver ? 'file_download' : 'description'} className="text-[24px]" />
+                      {draggingOver ? 'Drop .bib file here' : 'Click or drag & drop a .bib file'}
+                      <span className="text-[11px] text-slate-400">Exported from Zotero, Mendeley, Google Scholar, etc.</span>
+                    </button>
+                  </>
+                )}
+
+                {/* Parsing spinner */}
+                {bibtexState === 'parsing' && (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <svg className="animate-spin w-6 h-6 text-blue-500" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                    <span className="text-sm text-slate-500">Parsing {bibtexFile?.name}...</span>
+                  </div>
+                )}
+
+                {/* Preview table */}
+                {bibtexState === 'preview' && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-500">
+                        {bibtexEntries.length} {bibtexEntries.length === 1 ? 'entry' : 'entries'} found in <span className="font-medium text-slate-700">{bibtexFile?.name}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setBibtexState('idle'); setBibtexFile(null); setBibtexEntries([]); setBibtexSelected(new Set()) }}
+                        className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        Choose different file
+                      </button>
+                    </div>
+
+                    {/* Select all / deselect all */}
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={bibtexSelected.size > 0 && bibtexSelected.size === bibtexEntries.filter(e => e.paper && !e.error).length}
+                          ref={el => {
+                            if (el) {
+                              const validCount = bibtexEntries.filter(e => e.paper && !e.error).length
+                              el.indeterminate = bibtexSelected.size > 0 && bibtexSelected.size < validCount
+                            }
+                          }}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              const all = new Set()
+                              bibtexEntries.forEach((entry, i) => { if (entry.paper && !entry.error) all.add(i) })
+                              setBibtexSelected(all)
+                            } else {
+                              setBibtexSelected(new Set())
+                            }
+                          }}
+                          className="rounded border-slate-300"
+                        />
+                        Select all
+                      </label>
+                      <span className="text-[11px] text-slate-400">
+                        {bibtexSelected.size} selected
+                        {bibtexEntries.some(e => e.duplicate) && (
+                          <> · <span className="text-amber-600">{bibtexEntries.filter(e => e.duplicate).length} duplicates</span></>
+                        )}
+                        {bibtexEntries.some(e => e.error) && (
+                          <> · <span className="text-red-500">{bibtexEntries.filter(e => e.error).length} errors</span></>
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Entry list */}
+                    <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+                      {bibtexEntries.map((entry, i) => (
+                        <label
+                          key={entry.key || i}
+                          className={`flex items-start gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 transition-colors ${
+                            entry.error ? 'opacity-50' : ''
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={bibtexSelected.has(i)}
+                            disabled={!entry.paper || !!entry.error}
+                            onChange={() => {
+                              setBibtexSelected(prev => {
+                                const next = new Set(prev)
+                                if (next.has(i)) next.delete(i)
+                                else next.add(i)
+                                return next
+                              })
+                            }}
+                            className="mt-0.5 rounded border-slate-300"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-medium text-slate-800 truncate">
+                                {entry.paper?.title || entry.key}
+                              </span>
+                              {entry.duplicate && (
+                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
+                                  DUPLICATE
+                                </span>
+                              )}
+                              {entry.error && (
+                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 shrink-0">
+                                  ERROR
+                                </span>
+                              )}
+                            </div>
+                            {entry.paper && (
+                              <p className="text-[11px] text-slate-400 truncate">
+                                {entry.paper.authors?.slice(0, 2).join(', ')}
+                                {entry.paper.authors?.length > 2 ? ' et al.' : ''}
+                                {entry.paper.year ? ` · ${entry.paper.year}` : ''}
+                                {entry.paper.venue && entry.paper.venue !== 'Unknown' ? ` · ${entry.paper.venue}` : ''}
+                              </p>
+                            )}
+                            {entry.error && (
+                              <p className="text-[10px] text-red-500">{entry.error}</p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Importing spinner */}
+                {bibtexState === 'importing' && (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <svg className="animate-spin w-6 h-6 text-blue-500" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                    <span className="text-sm text-slate-500">Importing {bibtexSelected.size} papers...</span>
+                  </div>
+                )}
+
+                {/* Done state */}
+                {bibtexState === 'done' && bibtexResults && (
+                  <div className="space-y-2">
+                    <div className="rounded-xl px-4 py-3 bg-emerald-50 border border-emerald-200">
+                      <div className="flex items-center gap-2">
+                        <Icon name="check_circle" className="text-[20px] text-emerald-500" />
+                        <div>
+                          <p className="text-xs font-semibold text-emerald-700">
+                            {bibtexResults.filter(r => r.status === 'created').length} papers imported
+                          </p>
+                          {bibtexResults.some(r => r.status === 'failed') && (
+                            <p className="text-[11px] text-red-600 mt-0.5">
+                              {bibtexResults.filter(r => r.status === 'failed').length} failed
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error state */}
+                {bibtexState === 'error' && error && (
+                  <div className="rounded-xl px-4 py-3 flex items-start gap-3 bg-red-50 border border-red-200">
+                    <Icon name="error" className="text-[20px] text-red-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-red-700">BibTeX import failed</p>
+                      <p className="text-xs text-red-600 mt-0.5">{error}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Upload mode: PDF picker + metadata fields */}
             {mode === 'upload' && state !== 'success' && (
@@ -460,14 +737,16 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
             {/* Action row */}
             <div className="mt-4 flex items-center justify-between">
               <p className="text-[11px] text-slate-400">
-                {mode === 'upload'
-                  ? 'Upload a PDF and fill in the metadata manually'
-                  : mode === 'website'
-                    ? 'Fetches title, description and author from the page'
-                    : 'Supports DOI, arXiv ID, arXiv URL, and paper page URLs'}
+                {mode === 'bibtex'
+                  ? 'Import papers from a .bib file (Zotero, Mendeley, etc.)'
+                  : mode === 'upload'
+                    ? 'Upload a PDF and fill in the metadata manually'
+                    : mode === 'website'
+                      ? 'Fetches title, description and author from the page'
+                      : 'Supports DOI, arXiv ID, arXiv URL, and paper page URLs'}
               </p>
               <div className="flex items-center gap-2">
-                {(state === 'success' || state === 'duplicate') && (
+                {(state === 'success' || state === 'duplicate') && mode !== 'bibtex' && (
                   <button
                     type="button"
                     onClick={() => { setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
@@ -476,30 +755,53 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
                     Add another
                   </button>
                 )}
-                <button
-                  type="submit"
-                  disabled={
-                    mode === 'upload'
-                      ? !uploadMeta.title.trim() || state === 'loading'
-                      : !input.trim() || state === 'loading'
-                  }
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
-                >
-                  {state === 'loading' ? (
-                    <>
-                      <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                      </svg>
-                      {mode === 'upload' ? 'Uploading…' : 'Looking up…'}
-                    </>
-                  ) : (
-                    <>
-                      <Icon name={mode === 'upload' ? 'upload' : 'add'} className="text-[14px]" />
-                      {mode === 'upload' ? 'Upload Paper' : mode === 'website' ? 'Add Website' : 'Add Paper'}
-                    </>
-                  )}
-                </button>
+                {mode === 'bibtex' && bibtexState === 'done' && (
+                  <button
+                    type="button"
+                    onClick={() => { setBibtexState('idle'); setBibtexFile(null); setBibtexEntries([]); setBibtexSelected(new Set()); setBibtexResults(null) }}
+                    className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Import another file
+                  </button>
+                )}
+                {mode === 'bibtex' ? (
+                  bibtexState === 'preview' && (
+                    <button
+                      type="button"
+                      onClick={handleBibtexConfirm}
+                      disabled={bibtexSelected.size === 0}
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
+                    >
+                      <Icon name="download" className="text-[14px]" />
+                      Import {bibtexSelected.size} {bibtexSelected.size === 1 ? 'paper' : 'papers'}
+                    </button>
+                  )
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={
+                      mode === 'upload'
+                        ? !uploadMeta.title.trim() || state === 'loading'
+                        : !input.trim() || state === 'loading'
+                    }
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
+                  >
+                    {state === 'loading' ? (
+                      <>
+                        <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                        {mode === 'upload' ? 'Uploading…' : 'Looking up…'}
+                      </>
+                    ) : (
+                      <>
+                        <Icon name={mode === 'upload' ? 'upload' : 'add'} className="text-[14px]" />
+                        {mode === 'upload' ? 'Upload Paper' : mode === 'website' ? 'Add Website' : 'Add Paper'}
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
       </form>

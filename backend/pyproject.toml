@@ -15,4 +15,5 @@ dependencies = [
     "pymupdf>=1.27.1",
     "docling-core>=2.67.1",
     "pymupdf4llm>=0.3.4",
+    "bibtexparser>=2.0.0b7",
 ]

@@ -46,6 +46,21 @@ export const papersApi = {
   },
   removePdf: (id) => apiFetch(`/papers/${id}/pdf`, { method: 'DELETE' }),
   fetchPdf: (id) => apiFetch(`/papers/${id}/pdf/fetch`, { method: 'POST' }),
+  /** Parse a .bib file and return preview entries with duplicate detection. */
+  parseBibtex: async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`${BASE}/papers/import-bibtex/parse`, { method: 'POST', body: formData })
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`
+      try { const err = await res.json(); detail = err.detail || detail } catch (_) {}
+      throw new Error(detail)
+    }
+    return res.json()
+  },
+  /** Confirm BibTeX import with selected entries. */
+  confirmBibtex: (entries, libraryId) =>
+    apiFetch('/papers/import-bibtex/confirm', { method: 'POST', body: { entries, library_id: libraryId || null } }),
   /** Extract metadata from a PDF file (File object) using LLM. */
   extractMetadata: async (file) => {
     const formData = new FormData()

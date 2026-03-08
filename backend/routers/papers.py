@@ -203,6 +203,137 @@ async def import_paper(data: ImportRequest, background_tasks: BackgroundTasks):
 
 
 # ---------------------------------------------------------------------------
+# BibTeX import: parse → preview → confirm
+# ---------------------------------------------------------------------------
+
+@router.post("/import-bibtex/parse")
+async def parse_bibtex(file: UploadFile = File(...)):
+    """
+    Parse a .bib file and return a preview of entries with duplicate detection.
+
+    Returns a list of entries, each with:
+      - key: BibTeX citation key
+      - paper: parsed paper data (or null if unparseable)
+      - duplicate: true if a paper with the same DOI or arXiv ID already exists
+      - duplicateId: ID of the existing paper if duplicate
+      - error: parse error message (or null)
+    """
+    from services.bibtex_service import parse_bibtex as _parse
+
+    content_bytes = await file.read()
+    try:
+        content = content_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            content = content_bytes.decode("latin-1")
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Could not decode file: {exc}") from exc
+
+    try:
+        entries = _parse(content)
+    except Exception as exc:
+        logger.exception("Failed to parse BibTeX file")
+        raise HTTPException(status_code=422, detail=f"BibTeX parse failed: {exc}") from exc
+
+    if not entries:
+        raise HTTPException(status_code=422, detail="No entries found in the BibTeX file")
+
+    # Load existing papers for deduplication
+    existing_papers = paper_service.list_papers()
+    existing_dois = {}
+    existing_arxiv_ids = {}
+    for p in existing_papers:
+        if p.doi:
+            existing_dois[p.doi.lower()] = p.id
+        if p.arxiv_id:
+            existing_arxiv_ids[p.arxiv_id] = p.id
+
+    result = []
+    for entry in entries:
+        item = {
+            "key": entry.key,
+            "paper": entry.paper.model_dump(by_alias=True) if entry.paper else None,
+            "duplicate": False,
+            "duplicateId": None,
+            "error": entry.error,
+        }
+
+        if entry.paper:
+            # Check DOI duplicate
+            if entry.paper.doi and entry.paper.doi.lower() in existing_dois:
+                item["duplicate"] = True
+                item["duplicateId"] = existing_dois[entry.paper.doi.lower()]
+            # Check arXiv ID duplicate
+            elif entry.paper.arxiv_id and entry.paper.arxiv_id in existing_arxiv_ids:
+                item["duplicate"] = True
+                item["duplicateId"] = existing_arxiv_ids[entry.paper.arxiv_id]
+
+        result.append(item)
+
+    return JSONResponse(result)
+
+
+class BibtexConfirmRequest(BaseModel):
+    entries: list[dict]  # List of paper data objects (camelCase) to import
+    library_id: Optional[str] = None
+
+
+@router.post("/import-bibtex/confirm", status_code=201)
+async def confirm_bibtex_import(data: BibtexConfirmRequest, background_tasks: BackgroundTasks):
+    """
+    Create papers from confirmed BibTeX entries.
+
+    Accepts the paper objects from the parse preview (after user selection).
+    Returns a list of created papers with import status.
+    """
+    if not data.entries:
+        raise HTTPException(status_code=422, detail="No entries to import")
+
+    results = []
+    for entry_data in data.entries:
+        try:
+            paper_create = PaperCreate.model_validate(entry_data)
+            if data.library_id:
+                paper_create.library_id = data.library_id
+            paper = paper_service.create_paper(paper_create)
+
+            activity_service.log_activity(
+                type="human",
+                icon="upload_file",
+                icon_color="text-green-600",
+                icon_bg="bg-green-50",
+                title=f"Imported \"{paper.title}\" from BibTeX",
+                detail=", ".join(paper.authors[:2]) + (" et al." if len(paper.authors) > 2 else "") if paper.authors else None,
+                action_label="View paper",
+                action_href=f"/library/paper/{paper.id}",
+                library_id=paper.library_id,
+            )
+
+            # Queue background PDF download + auto-notes
+            if paper.pdf_url:
+                background_tasks.add_task(
+                    _auto_download_and_process, paper.id, paper.library_id, paper.pdf_url
+                )
+
+            results.append({
+                **paper.model_dump(by_alias=True),
+                "status": "created",
+            })
+        except Exception as exc:
+            logger.warning("Failed to import BibTeX entry: %s", exc)
+            results.append({
+                "title": entry_data.get("title", "Unknown"),
+                "status": "failed",
+                "error": str(exc),
+            })
+
+    created_count = sum(1 for r in results if r.get("status") == "created")
+    logger.info("BibTeX import: %d/%d papers created", created_count, len(data.entries))
+
+    return JSONResponse(results, status_code=201)
+
+
+# ---------------------------------------------------------------------------
 # PDF metadata extraction (GROBID-like, via pymupdf4llm + OpenAI)
 # ---------------------------------------------------------------------------
 
