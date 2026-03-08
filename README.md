@@ -5,7 +5,8 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 ## Features
 
 - **Library management** — import papers and websites via DOI/arXiv ID/URL/OpenReview/Zenodo, organize into nested collections with drag-and-drop, rename collections inline, manage collection membership from the detail panel with an autocomplete picker
-- **Multi-select & bulk actions** — checkbox-based multi-select with select-all, bulk delete with confirmation modal, bulk add-to-collection with autocomplete dropdown, bulk PDF fetch with live per-item status modal
+- **Multi-select & bulk actions** � checkbox-based multi-select with select-all, bulk delete with confirmation modal, bulk add-to-collection with autocomplete dropdown, bulk PDF fetch with live per-item status modal
+- **Direct item navigation** � double-click any library row to jump directly to the dedicated reader/viewer page (/library/paper/:id or /library/website/:id)
 - **Multiple libraries** — create and switch between independent libraries; active library persisted to localStorage
 - **Websites as first-class items** — blog posts, articles, and any URL live alongside papers in the library with their own metadata (domain, published date, description, GitHub URL, named links), displayed with teal accent color
 - **PDF upload with metadata extraction** — upload PDFs directly via drag-and-drop or file picker; LLM-powered metadata extraction (title, authors, date, venue, abstract, DOI) auto-fills the form using pymupdf4llm + OpenAI, with title-case normalization that preserves acronyms
@@ -18,7 +19,9 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **AI copilot** — context-aware research assistant embedded in the notes IDE for both papers and websites; has full access to extracted PDF text (papers) or website metadata (websites), understands your notes, and can suggest diffs (edits to existing notes or new files) that you accept or reject individually
 - **PDF text extraction** — automatic PDF-to-markdown conversion via pymupdf4llm, cached in the database for fast copilot access
 - **Website viewer** — `/library/website/:id` renders the live site in an iframe alongside the Notes IDE, AI Copilot, and a Details panel; falls back gracefully when the site blocks embedding
-- **Library settings page** — rename library, configure AI Auto-Note-Taker (toggle + custom prompt), delete library with name-confirmation guard
+- **Library settings page** � rename library, configure AI Auto-Note-Taker (toggle + custom prompt), delete library with name-confirmation guard
+- **Windowed modals** � key modals behave like lightweight windows with minimize/fullscreen/close controls; minimized windows dock along the bottom and tile horizontally
+- **Multi-window Quick Add + persistence** � run multiple Quick Add windows at once (including spawning from inside an open Quick Add), persist each window's form state in localStorage, and restore previously open windows in minimized state after refresh
 - **Agent workflows** — run multi-step research workflows (literature review, gap analysis, etc.) powered by OpenAI via pydantic-ai
 - **Human-in-the-loop proposals** — agents propose changes (tagging, collection assignment, status updates) that you approve or reject with a diff view
 - **Activity feed** — full audit trail of agent and human actions with provenance
@@ -196,7 +199,8 @@ researchos/
 │       │   ├── layout/
 │       │   │   ├── Layout.jsx   # Shell (Sidebar + Header + Outlet)
 │       │   │   ├── Sidebar.jsx  # Library switcher, collections tree (rename, drag-drop, item drops)
-│       │   │   └── Header.jsx   # Search, QuickAdd modal (Import/Upload/Website modes)
+        Header.jsx   # Search + multi-window Quick Add (state persisted in localStorage)
+|       |   |- WindowModal.jsx   # Reusable windowed modal shell (minimize/fullscreen/close + docked minimization)
 │       │   ├── PaperInfoPanel.jsx  # Paper metadata + NamedLinks + CollectionsPicker
 │       │   ├── NotesPanel.jsx      # tiptap WYSIWYG note editor with file tree (generic: paper or website)
 │       │   └── CopilotPanel.jsx    # AI copilot with diff-based note suggestions
@@ -250,3 +254,4 @@ Scoped for a single-user, local research OS (no auth, no collaboration, no multi
 - **GROBID integration** — structured PDF parsing for extracting reference lists, section structure, tables, and figures
 - **Citation graph from PDFs** — build internal citation edges from extracted references, linking to existing library items
 - **Full-text chunking** — section-aware chunking for better RAG and copilot context
+
