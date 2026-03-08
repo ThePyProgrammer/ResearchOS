@@ -131,6 +131,12 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate }) 
               Run #{item.agentRun?.runNumber}
             </span>
           )}
+          {!isWebsite && (!item.pdfUrl || !item.pdfUrl.includes('/storage/v1/object/public/pdfs/')) && (
+            <span className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-medium flex-shrink-0 flex items-center gap-0.5" title="No PDF in storage">
+              <Icon name="picture_as_pdf" className="text-[10px]" />
+              No PDF
+            </span>
+          )}
         </div>
       </td>
       <td className="px-2 py-3 text-sm text-slate-500 max-w-[160px]">
@@ -189,8 +195,26 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
   const [generatingNotes, setGeneratingNotes] = useState(false)
   const [notesGenerated, setNotesGenerated] = useState(false)
   const [notesError, setNotesError] = useState(null)
+  const [fetchingPdf, setFetchingPdf] = useState(false)
+  const [fetchPdfError, setFetchPdfError] = useState(null)
   const { activeLibrary, activeLibraryId } = useLibrary()
   const navigate = useNavigate()
+
+  const hasPdfInStorage = paper.pdfUrl?.includes('/storage/v1/object/public/pdfs/')
+  const hasExternalPdf = paper.pdfUrl && !hasPdfInStorage
+
+  const handleFetchPdf = async () => {
+    setFetchingPdf(true)
+    setFetchPdfError(null)
+    try {
+      const updated = await papersApi.fetchPdf(paper.id)
+      onPaperUpdate(updated)
+    } catch (err) {
+      setFetchPdfError(err.message || 'Failed to fetch PDF')
+    } finally {
+      setFetchingPdf(false)
+    }
+  }
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -298,6 +322,32 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
               </a>
             )}
           </div>
+
+          {/* Fetch PDF to storage */}
+          {!hasPdfInStorage && hasExternalPdf && (
+            <div className="space-y-1.5">
+              <button
+                onClick={handleFetchPdf}
+                disabled={fetchingPdf}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 border border-blue-200 bg-blue-50 text-blue-700 text-xs font-medium rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
+              >
+                {fetchingPdf ? (
+                  <>
+                    <span className="animate-spin inline-block w-3 h-3 border-2 border-blue-300 border-t-blue-600 rounded-full" />
+                    Fetching PDF...
+                  </>
+                ) : (
+                  <>
+                    <Icon name="cloud_download" className="text-[14px]" />
+                    Fetch PDF to Storage
+                  </>
+                )}
+              </button>
+              {fetchPdfError && (
+                <p className="text-[11px] text-red-500 text-center">{fetchPdfError}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -731,6 +781,7 @@ export default function Library() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [sourceFilter, setSourceFilter] = useState('all')
+  const [pdfFilter, setPdfFilter] = useState('all') // 'all' | 'has_pdf' | 'no_pdf'
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -738,6 +789,8 @@ export default function Library() {
   const [moveSearch, setMoveSearch] = useState('')
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkMoving, setBulkMoving] = useState(false)
+  const [showFetchModal, setShowFetchModal] = useState(false)
+  const [fetchStatuses, setFetchStatuses] = useState({}) // { paperId: 'pending' | 'fetching' | 'done' | 'skipped' | error string }
 
   // Listen for item changes from sidebar drag-drop
   useEffect(() => {
@@ -879,8 +932,39 @@ export default function Library() {
     }
   }
 
+  const handleBulkFetchPdfs = async () => {
+    const selected = items.filter(i => selectedIds.has(i.id) && i.itemType !== 'website')
+    // Build initial statuses
+    const initial = {}
+    for (const item of selected) {
+      if (!item.pdfUrl) {
+        initial[item.id] = 'no_url'
+      } else if (item.pdfUrl.includes('/storage/v1/object/public/pdfs/')) {
+        initial[item.id] = 'skipped'
+      } else {
+        initial[item.id] = 'pending'
+      }
+    }
+    setFetchStatuses(initial)
+    setShowFetchModal(true)
+
+    const toFetch = selected.filter(i => initial[i.id] === 'pending')
+    for (const item of toFetch) {
+      setFetchStatuses(prev => ({ ...prev, [item.id]: 'fetching' }))
+      try {
+        const updated = await papersApi.fetchPdf(item.id)
+        setItems(prev => prev.map(p => p.id === updated.id ? updated : p))
+        if (selectedItem?.id === updated.id) setSelectedItem(updated)
+        setFetchStatuses(prev => ({ ...prev, [item.id]: 'done' }))
+      } catch (err) {
+        setFetchStatuses(prev => ({ ...prev, [item.id]: err.message || 'Failed' }))
+      }
+    }
+  }
+
   const allTags = useMemo(() => [...new Set(items.flatMap(p => p.tags))].sort(), [items])
   const activeFilterCount = (sourceFilter !== 'all' ? 1 : 0)
+    + (pdfFilter !== 'all' ? 1 : 0)
     + (yearFrom || yearTo ? 1 : 0)
     + (titleFilter ? 1 : 0)
     + (venueFilter ? 1 : 0)
@@ -915,6 +999,8 @@ export default function Library() {
     }
     else if (activeCollection !== 'all') result = result.filter(p => p.collections.includes(activeCollection))
     if (sourceFilter !== 'all') result = result.filter(p => p.source === sourceFilter)
+    if (pdfFilter === 'has_pdf') result = result.filter(p => p.pdfUrl?.includes('/storage/v1/object/public/pdfs/'))
+    if (pdfFilter === 'no_pdf') result = result.filter(p => !p.pdfUrl || !p.pdfUrl.includes('/storage/v1/object/public/pdfs/'))
     if (titleFilter) result = result.filter(p => p.title.toLowerCase().includes(titleFilter.toLowerCase()))
     if (venueFilter) result = result.filter(p => itemVenue(p).toLowerCase().includes(venueFilter.toLowerCase()))
     if (yearFrom) result = result.filter(p => Number(itemYear(p)) >= Number(yearFrom))
@@ -941,7 +1027,7 @@ export default function Library() {
       })
     }
     return result
-  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters, sortKey, sortDir])
+  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters, sortKey, sortDir])
 
   function toggleSort(key) {
     if (sortKey === key) {
@@ -955,6 +1041,7 @@ export default function Library() {
 
   function clearFilters() {
     setSourceFilter('all')
+    setPdfFilter('all')
     setYearFrom('')
     setYearTo('')
     setTitleFilter('')
@@ -1055,6 +1142,33 @@ export default function Library() {
                       {opt.label}
                       <span className={`text-[10px] font-bold px-1 rounded ${
                         sourceFilter === opt.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
+                      }`}>{opt.count}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* PDF */}
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">PDF</span>
+                <div className="flex gap-1.5">
+                  {[
+                    { id: 'all', label: 'All', count: items.length },
+                    { id: 'has_pdf', label: 'Has PDF', count: items.filter(p => p.pdfUrl?.includes('/storage/v1/object/public/pdfs/')).length },
+                    { id: 'no_pdf', label: 'No PDF', count: items.filter(p => !p.pdfUrl || !p.pdfUrl.includes('/storage/v1/object/public/pdfs/')).length },
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setPdfFilter(opt.id)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        pdfFilter === opt.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      {opt.label}
+                      <span className={`text-[10px] font-bold px-1 rounded ${
+                        pdfFilter === opt.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
                       }`}>{opt.count}</span>
                     </button>
                   ))}
@@ -1175,6 +1289,13 @@ export default function Library() {
               >
                 <Icon name="library_add" className="text-[14px]" />
                 Add to Collection...
+              </button>
+              <button
+                onClick={handleBulkFetchPdfs}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <Icon name="cloud_download" className="text-[14px]" />
+                Fetch PDFs
               </button>
               <button
                 onClick={() => setShowDeleteModal(true)}
@@ -1400,6 +1521,95 @@ export default function Library() {
                 })()}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Fetch PDFs modal */}
+      {showFetchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => {}}>
+          <div className="bg-white rounded-xl shadow-xl w-[480px] max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Fetching PDFs</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {(() => {
+                    const vals = Object.values(fetchStatuses)
+                    const done = vals.filter(s => s === 'done').length
+                    const failed = vals.filter(s => s !== 'done' && s !== 'pending' && s !== 'fetching' && s !== 'skipped' && s !== 'no_url').length
+                    const total = vals.filter(s => s !== 'skipped' && s !== 'no_url').length
+                    const inProgress = vals.some(s => s === 'fetching' || s === 'pending')
+                    if (!inProgress) return `Complete — ${done} succeeded, ${failed} failed`
+                    return `${done + failed} of ${total} processed...`
+                  })()}
+                </p>
+              </div>
+              {!Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending') && (
+                <button
+                  onClick={() => { setShowFetchModal(false); setFetchStatuses({}) }}
+                  className="p-1.5 rounded text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <Icon name="close" className="text-[18px]" />
+                </button>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            {(() => {
+              const vals = Object.values(fetchStatuses)
+              const total = vals.filter(s => s !== 'skipped' && s !== 'no_url').length
+              const completed = vals.filter(s => s !== 'pending' && s !== 'fetching' && s !== 'skipped' && s !== 'no_url').length
+              const pct = total > 0 ? (completed / total) * 100 : 0
+              return (
+                <div className="mx-5 mb-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              )
+            })()}
+
+            <div className="flex-1 overflow-y-auto border-t border-slate-100 divide-y divide-slate-50">
+              {items.filter(i => i.id in fetchStatuses).map(item => {
+                const status = fetchStatuses[item.id]
+                return (
+                  <div key={item.id} className="flex items-center gap-3 px-5 py-2.5">
+                    <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                      {status === 'pending' && <Icon name="schedule" className="text-[16px] text-slate-300" />}
+                      {status === 'fetching' && <span className="animate-spin inline-block w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full" />}
+                      {status === 'done' && <Icon name="check_circle" className="text-[16px] text-emerald-500" />}
+                      {status === 'skipped' && <Icon name="skip_next" className="text-[16px] text-slate-300" />}
+                      {status === 'no_url' && <Icon name="link_off" className="text-[16px] text-slate-300" />}
+                      {status !== 'pending' && status !== 'fetching' && status !== 'done' && status !== 'skipped' && status !== 'no_url' && (
+                        <Icon name="error" className="text-[16px] text-red-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-slate-700 truncate">{item.title}</p>
+                      <p className="text-[10px] text-slate-400 truncate">
+                        {status === 'pending' && 'Waiting...'}
+                        {status === 'fetching' && 'Downloading PDF...'}
+                        {status === 'done' && 'Uploaded to storage'}
+                        {status === 'skipped' && 'Already in storage'}
+                        {status === 'no_url' && 'No PDF URL available'}
+                        {status !== 'pending' && status !== 'fetching' && status !== 'done' && status !== 'skipped' && status !== 'no_url' && status}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-100">
+              <button
+                onClick={() => { setShowFetchModal(false); setFetchStatuses({}) }}
+                disabled={Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending')}
+                className="w-full py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                {Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending') ? 'Processing...' : 'Close'}
+              </button>
+            </div>
           </div>
         </div>
       )}

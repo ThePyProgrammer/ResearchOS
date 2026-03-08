@@ -281,3 +281,41 @@ async def delete_pdf(paper_id: str):
     _delete(paper_id)
     paper_service.set_pdf_url(paper_id, None)
     delete_cached_text(paper_id)
+
+
+@router.post("/{paper_id}/pdf/fetch", status_code=200)
+async def fetch_pdf(paper_id: str):
+    """Download a paper's PDF from its external pdf_url and upload to Supabase Storage."""
+    paper = paper_service.get_paper(paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    if not paper.pdf_url:
+        raise HTTPException(status_code=422, detail="Paper has no PDF URL to fetch from")
+    if "/storage/v1/object/public/pdfs/" in paper.pdf_url:
+        raise HTTPException(status_code=422, detail="PDF is already in storage")
+
+    import httpx
+    from services.pdf_service import upload_pdf as _upload
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; ResearchOS/0.1; mailto:researchos@localhost)",
+        "Accept": "application/pdf,*/*",
+    }
+    try:
+        async with httpx.AsyncClient(headers=headers, timeout=60.0, follow_redirects=True) as client:
+            resp = await client.get(paper.pdf_url)
+            resp.raise_for_status()
+            is_pdf = "pdf" in resp.headers.get("content-type", "") or resp.content[:5] == b"%PDF-"
+            if not is_pdf:
+                raise HTTPException(status_code=422, detail="Remote URL did not return a PDF")
+            stored_url = _upload(paper_id, resp.content)
+            paper_service.update_paper(paper_id, PaperUpdate(pdf_url=stored_url))
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to download PDF: {exc.response.status_code}") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch PDF: {exc}") from exc
+
+    updated = paper_service.get_paper(paper_id)
+    return JSONResponse(updated.model_dump(by_alias=True))

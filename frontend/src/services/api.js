@@ -45,6 +45,7 @@ export const papersApi = {
     return res.json()
   },
   removePdf: (id) => apiFetch(`/papers/${id}/pdf`, { method: 'DELETE' }),
+  fetchPdf: (id) => apiFetch(`/papers/${id}/pdf/fetch`, { method: 'POST' }),
   /** Extract metadata from a PDF file (File object) using LLM. */
   extractMetadata: async (file) => {
     const formData = new FormData()
