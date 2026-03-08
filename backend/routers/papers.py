@@ -138,6 +138,28 @@ async def import_paper(data: ImportRequest):
     )
 
 
+# ---------------------------------------------------------------------------
+# PDF metadata extraction (GROBID-like, via pymupdf4llm + OpenAI)
+# ---------------------------------------------------------------------------
+
+@router.post("/extract-metadata")
+async def extract_metadata(file: UploadFile = File(...)):
+    """Extract metadata (title, authors, date, venue, abstract, DOI) from a PDF using LLM."""
+    if file.content_type not in ("application/pdf", "application/octet-stream"):
+        raise HTTPException(status_code=422, detail="Only PDF files are accepted")
+
+    from services.pdf_metadata_service import extract_metadata_from_bytes
+
+    file_bytes = await file.read()
+    try:
+        meta = extract_metadata_from_bytes(file_bytes)
+    except Exception as exc:
+        logger.exception("Failed to extract metadata from uploaded PDF")
+        raise HTTPException(status_code=502, detail=f"Metadata extraction failed: {exc}") from exc
+
+    return JSONResponse(meta)
+
+
 @router.get("/{paper_id}")
 async def get_paper(paper_id: str):
     paper = paper_service.get_paper(paper_id)

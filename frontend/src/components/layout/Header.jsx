@@ -49,6 +49,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
   const [uploadMeta, setUploadMeta] = useState({ title: '', authors: [], date: '', venue: '' })
   const fileInputRef = useRef(null)
   const [draggingOver, setDraggingOver] = useState(false)
+  const [extracting, setExtracting] = useState(false)
 
   const detectedType = mode === 'paper' ? detectType(input) : null
 
@@ -64,6 +65,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
       setMode('paper')
       setPdfFile(null)
       setUploadMeta({ title: '', authors: [], date: '', venue: '' })
+      setExtracting(false)
     }
   }, [open])
 
@@ -144,6 +146,25 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
     }
   }
 
+  async function handleExtractMetadata(file) {
+    if (!file || extracting) return
+    setExtracting(true)
+    try {
+      const meta = await papersApi.extractMetadata(file)
+      setUploadMeta(prev => ({
+        title: meta.title || prev.title,
+        authors: meta.authors?.length ? meta.authors : prev.authors,
+        date: meta.date || prev.date,
+        venue: meta.venue || prev.venue,
+      }))
+    } catch (err) {
+      // Silently fail — user can still fill in manually
+      console.warn('Metadata extraction failed:', err)
+    } finally {
+      setExtracting(false)
+    }
+  }
+
   if (!open) return null
 
   return (
@@ -214,10 +235,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
                     const f = e.target.files?.[0]
                     if (f) {
                       setPdfFile(f)
-                      if (!uploadMeta.title) {
-                        const name = f.name.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ')
-                        setUploadMeta(prev => ({ ...prev, title: name }))
-                      }
+                      handleExtractMetadata(f)
                     }
                   }}
                 />
@@ -233,10 +251,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
                     const f = e.dataTransfer.files?.[0]
                     if (f && (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))) {
                       setPdfFile(f)
-                      if (!uploadMeta.title) {
-                        const name = f.name.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ')
-                        setUploadMeta(prev => ({ ...prev, title: name }))
-                      }
+                      handleExtractMetadata(f)
                     }
                   }}
                   className={`w-full flex flex-col items-center justify-center gap-1 px-4 py-4 border-2 border-dashed rounded-xl text-sm transition-colors ${
@@ -250,6 +265,30 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
                   <Icon name={pdfFile ? 'check_circle' : draggingOver ? 'file_download' : 'upload_file'} className="text-[20px]" />
                   {pdfFile ? pdfFile.name : draggingOver ? 'Drop PDF here' : 'Click or drag & drop a PDF (optional)'}
                 </button>
+
+                {/* Extracting indicator / re-extract button */}
+                {pdfFile && (
+                  <div className="flex items-center gap-2">
+                    {extracting ? (
+                      <div className="flex items-center gap-1.5 text-[11px] text-blue-600">
+                        <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                        Extracting metadata from PDF…
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleExtractMetadata(pdfFile)}
+                        className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-blue-600 transition-colors"
+                      >
+                        <Icon name="auto_awesome" className="text-[13px]" />
+                        Re-extract metadata
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Title (required) */}
                 <input

@@ -45,6 +45,18 @@ export const papersApi = {
     return res.json()
   },
   removePdf: (id) => apiFetch(`/papers/${id}/pdf`, { method: 'DELETE' }),
+  /** Extract metadata from a PDF file (File object) using LLM. */
+  extractMetadata: async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`${BASE}/papers/extract-metadata`, { method: 'POST', body: formData })
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`
+      try { const err = await res.json(); detail = err.detail || detail } catch (_) {}
+      throw new Error(detail)
+    }
+    return res.json()
+  },
 }
 
 export const librariesApi = {
