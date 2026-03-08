@@ -34,20 +34,51 @@ const TYPE_META = {
   url: { label: 'URL', bg: 'bg-blue-100', text: 'text-blue-700' },
 }
 
+const QUICK_ADD_WINDOWS_STORAGE_KEY = 'researchos.quickAdd.windows.v1'
+
+function createDefaultQuickAddSnapshot() {
+  return {
+    mode: 'paper',
+    input: '',
+    state: 'idle',
+    uploadMeta: { title: '', authors: [], date: '', venue: '' },
+  }
+}
+
+function normalizeQuickAddSnapshot(snapshot) {
+  const base = createDefaultQuickAddSnapshot()
+  if (!snapshot || typeof snapshot !== 'object') return base
+  const mode = ['paper', 'website', 'upload'].includes(snapshot.mode) ? snapshot.mode : base.mode
+  const state = ['idle', 'success', 'duplicate', 'error'].includes(snapshot.state) ? snapshot.state : base.state
+  const uploadMetaRaw = snapshot.uploadMeta && typeof snapshot.uploadMeta === 'object' ? snapshot.uploadMeta : {}
+  return {
+    mode,
+    state,
+    input: typeof snapshot.input === 'string' ? snapshot.input : base.input,
+    uploadMeta: {
+      title: typeof uploadMetaRaw.title === 'string' ? uploadMetaRaw.title : '',
+      authors: Array.isArray(uploadMetaRaw.authors) ? uploadMetaRaw.authors.filter(a => typeof a === 'string') : [],
+      date: typeof uploadMetaRaw.date === 'string' ? uploadMetaRaw.date : '',
+      venue: typeof uploadMetaRaw.venue === 'string' ? uploadMetaRaw.venue : '',
+    },
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Quick-Add modal
 // ---------------------------------------------------------------------------
-function QuickAddModal({ open, onClose, onAdded, onOpenAnother, collectionId, libraryId }) {
-  const [mode, setMode] = useState('paper') // 'paper' | 'website' | 'upload'
-  const [input, setInput] = useState('')
-  const [state, setState] = useState('idle') // idle | loading | success | duplicate | error
+function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChange, onClose, onAdded, onOpenAnother, collectionId, libraryId }) {
+  const initialSnapshot = normalizeQuickAddSnapshot(snapshot)
+  const [mode, setMode] = useState(initialSnapshot.mode) // 'paper' | 'website' | 'upload'
+  const [input, setInput] = useState(initialSnapshot.input)
+  const [state, setState] = useState(initialSnapshot.state) // idle | loading | success | duplicate | error
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const inputRef = useRef(null)
 
   // Upload mode state
   const [pdfFile, setPdfFile] = useState(null)
-  const [uploadMeta, setUploadMeta] = useState({ title: '', authors: [], date: '', venue: '' })
+  const [uploadMeta, setUploadMeta] = useState(initialSnapshot.uploadMeta)
   const fileInputRef = useRef(null)
   const [draggingOver, setDraggingOver] = useState(false)
   const [extracting, setExtracting] = useState(false)
@@ -77,6 +108,15 @@ function QuickAddModal({ open, onClose, onAdded, onOpenAnother, collectionId, li
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
+
+  useEffect(() => {
+    onSnapshotChange?.({
+      mode,
+      input,
+      state: state === 'loading' ? 'idle' : state,
+      uploadMeta,
+    })
+  }, [mode, input, state, uploadMeta, onSnapshotChange])
 
   async function handleSubmit(e) {
     e?.preventDefault()
@@ -173,6 +213,7 @@ function QuickAddModal({ open, onClose, onAdded, onOpenAnother, collectionId, li
       open={open}
       onClose={onClose}
       title="Quick Add"
+      initialMode={startMinimized ? 'minimized' : 'normal'}
       iconName={mode === 'website' ? 'link' : mode === 'upload' ? 'upload_file' : 'add_circle'}
       iconWrapClassName={mode === 'website' ? 'bg-teal-100' : mode === 'upload' ? 'bg-amber-100' : 'bg-blue-100'}
       iconClassName={`text-[16px] ${mode === 'website' ? 'text-teal-600' : mode === 'upload' ? 'text-amber-600' : 'text-blue-600'}`}
@@ -483,6 +524,37 @@ export default function Header() {
   const activeCollectionId = searchParams.get('col') || null
   const { activeLibraryId } = useLibrary()
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(QUICK_ADD_WINDOWS_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return
+      const windows = parsed
+        .filter(w => w && typeof w === 'object' && typeof w.id === 'string')
+        .map(w => ({ id: w.id, snapshot: normalizeQuickAddSnapshot(w.snapshot), startMinimized: true }))
+      if (windows.length > 0) {
+        setQuickAddWindows(windows)
+        const maxSuffix = windows.reduce((max, w) => {
+          const n = parseInt(String(w.id).replace('quick-add-', ''), 10)
+          return Number.isFinite(n) ? Math.max(max, n) : max
+        }, 0)
+        quickAddCounterRef.current = Math.max(quickAddCounterRef.current, maxSuffix)
+      }
+    } catch {
+      // ignore malformed localStorage payload
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      const serializable = quickAddWindows.map(w => ({ id: w.id, snapshot: w.snapshot }))
+      localStorage.setItem(QUICK_ADD_WINDOWS_STORAGE_KEY, JSON.stringify(serializable))
+    } catch {
+      // ignore storage write failures
+    }
+  }, [quickAddWindows])
+
   // Debounced lexical search → quick dropdown (no API key needed)
   useEffect(() => {
     if (query.length < 2) {
@@ -538,11 +610,18 @@ export default function Header() {
   const openQuickAddWindow = () => {
     quickAddCounterRef.current += 1
     const id = `quick-add-${quickAddCounterRef.current}`
-    setQuickAddWindows(prev => [...prev, id])
+    setQuickAddWindows(prev => [...prev, { id, snapshot: createDefaultQuickAddSnapshot(), startMinimized: false }])
   }
 
   const closeQuickAddWindow = (id) => {
-    setQuickAddWindows(prev => prev.filter(winId => winId !== id))
+    setQuickAddWindows(prev => prev.filter(win => win.id !== id))
+  }
+
+  const updateQuickAddWindowSnapshot = (id, nextSnapshot) => {
+    const normalized = normalizeQuickAddSnapshot(nextSnapshot)
+    setQuickAddWindows(prev =>
+      prev.map(win => (win.id === id ? { ...win, snapshot: normalized, startMinimized: false } : win))
+    )
   }
 
   return (
@@ -654,11 +733,14 @@ export default function Header() {
         </div>
       </header>
 
-      {quickAddWindows.map(winId => (
+      {quickAddWindows.map(win => (
         <QuickAddModal
-          key={winId}
+          key={win.id}
           open
-          onClose={() => closeQuickAddWindow(winId)}
+          startMinimized={Boolean(win.startMinimized)}
+          snapshot={win.snapshot}
+          onSnapshotChange={snapshot => updateQuickAddWindowSnapshot(win.id, snapshot)}
+          onClose={() => closeQuickAddWindow(win.id)}
           onOpenAnother={openQuickAddWindow}
           onAdded={() => {
             refreshCollections()

@@ -30,6 +30,7 @@ export default function WindowModal({
   title,
   onClose,
   children,
+  initialMode = 'normal',
   iconName = 'dock_to_right',
   iconWrapClassName = 'bg-blue-100',
   iconClassName = 'text-[16px] text-blue-600',
@@ -47,9 +48,11 @@ export default function WindowModal({
   backdropClassName = 'bg-black/30 backdrop-blur-sm',
   zIndexClassName = 'z-50',
 }) {
-  const [mode, setMode] = useState('normal') // normal | minimized | fullscreen
+  const safeInitialMode = ['normal', 'minimized', 'fullscreen'].includes(initialMode) ? initialMode : 'normal'
+  const [mode, setMode] = useState(safeInitialMode) // normal | minimized | fullscreen
   const [, setDockVersion] = useState(0)
   const windowIdRef = useRef(null)
+  const wasOpenRef = useRef(false)
   const minimized = mode === 'minimized'
   const fullscreen = mode === 'fullscreen'
 
@@ -59,8 +62,9 @@ export default function WindowModal({
   }
 
   useEffect(() => {
-    if (open) setMode('normal')
-  }, [open])
+    if (open && !wasOpenRef.current) setMode(safeInitialMode)
+    wasOpenRef.current = open
+  }, [open, safeInitialMode])
 
   useEffect(() => {
     const onDockChange = () => setDockVersion(v => v + 1)
