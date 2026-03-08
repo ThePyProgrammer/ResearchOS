@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { papersApi, websitesApi, searchApi } from '../../services/api'
 import { useLibrary } from '../../context/LibraryContext'
+import { AuthorChips } from '../PaperInfoPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -36,12 +37,18 @@ const TYPE_META = {
 // Quick-Add modal
 // ---------------------------------------------------------------------------
 function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
-  const [mode, setMode] = useState('paper') // 'paper' | 'website'
+  const [mode, setMode] = useState('paper') // 'paper' | 'website' | 'upload'
   const [input, setInput] = useState('')
   const [state, setState] = useState('idle') // idle | loading | success | duplicate | error
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const inputRef = useRef(null)
+
+  // Upload mode state
+  const [pdfFile, setPdfFile] = useState(null)
+  const [uploadMeta, setUploadMeta] = useState({ title: '', authors: [], date: '', venue: '' })
+  const fileInputRef = useRef(null)
+  const [draggingOver, setDraggingOver] = useState(false)
 
   const detectedType = mode === 'paper' ? detectType(input) : null
 
@@ -55,6 +62,8 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
       setResult(null)
       setError('')
       setMode('paper')
+      setPdfFile(null)
+      setUploadMeta({ title: '', authors: [], date: '', venue: '' })
     }
   }, [open])
 
@@ -68,6 +77,7 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
 
   async function handleSubmit(e) {
     e?.preventDefault()
+    if (mode === 'upload') return handleUploadSubmit()
     const trimmed = input.trim()
     if (!trimmed || state === 'loading') return
 
@@ -101,6 +111,39 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
     }
   }
 
+  async function handleUploadSubmit() {
+    if (!uploadMeta.title.trim() || state === 'loading') return
+    setState('loading')
+    setError('')
+    setResult(null)
+
+    try {
+      const paperData = {
+        title: uploadMeta.title.trim(),
+        authors: uploadMeta.authors,
+        year: uploadMeta.date ? new Date(uploadMeta.date).getFullYear() : 0,
+        published_date: uploadMeta.date || null,
+        venue: uploadMeta.venue.trim() || 'Unknown',
+        status: 'inbox',
+        source: 'human',
+        collections: collectionId && collectionId !== 'unfiled' ? [collectionId] : [],
+        library_id: libraryId || null,
+      }
+      const paper = await papersApi.create(paperData)
+
+      if (pdfFile) {
+        await papersApi.uploadPdf(paper.id, pdfFile)
+      }
+
+      setResult(paper)
+      setState('success')
+      onAdded?.(paper)
+    } catch (err) {
+      setState('error')
+      setError(err.message || 'Failed to create paper.')
+    }
+  }
+
   if (!open) return null
 
   return (
@@ -120,8 +163,8 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
           {/* Header */}
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <div className="flex items-center gap-2">
-              <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${mode === 'website' ? 'bg-teal-100' : 'bg-blue-100'}`}>
-                <Icon name={mode === 'website' ? 'link' : 'add_circle'} className={`text-[16px] ${mode === 'website' ? 'text-teal-600' : 'text-blue-600'}`} />
+              <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${mode === 'website' ? 'bg-teal-100' : mode === 'upload' ? 'bg-amber-100' : 'bg-blue-100'}`}>
+                <Icon name={mode === 'website' ? 'link' : mode === 'upload' ? 'upload_file' : 'add_circle'} className={`text-[16px] ${mode === 'website' ? 'text-teal-600' : mode === 'upload' ? 'text-amber-600' : 'text-blue-600'}`} />
               </span>
               <h2 className="text-sm font-semibold text-slate-800">Quick Add</h2>
             </div>
@@ -129,13 +172,19 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
               {/* Mode toggle */}
               <div className="flex bg-slate-100 rounded-lg p-0.5 text-[11px] font-semibold">
                 <button
-                  onClick={() => { setMode('paper'); setInput(''); setState('idle'); setResult(null) }}
+                  onClick={() => { setMode('paper'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
                   className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'paper' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  Paper
+                  Import
                 </button>
                 <button
-                  onClick={() => { setMode('website'); setInput(''); setState('idle'); setResult(null) }}
+                  onClick={() => { setMode('upload'); setInput(''); setState('idle'); setResult(null) }}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'upload' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Upload
+                </button>
+                <button
+                  onClick={() => { setMode('website'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
                   className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'website' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   Website
@@ -152,53 +201,145 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
 
           {/* Body */}
           <form onSubmit={handleSubmit} className="px-5 pb-5">
-            {/* Input row */}
-            <div className="relative">
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value)
-                  if (state !== 'idle') {
-                    setState('idle')
-                    setResult(null)
-                    setError('')
-                  }
-                }}
-                placeholder={mode === 'website' ? 'Paste a website URL…' : 'Paste DOI, arXiv ID, or URL…'}
-                disabled={state === 'loading'}
-                className="w-full px-4 py-3 pr-[4.5rem] bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60 transition"
-              />
-              {/* Type badge */}
-              {detectedType && state === 'idle' && (
-                <span
-                  className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${TYPE_META[detectedType].bg} ${TYPE_META[detectedType].text}`}
+            {/* Upload mode: PDF picker + metadata fields */}
+            {mode === 'upload' && state !== 'success' && (
+              <div className="space-y-3">
+                {/* PDF file picker + drop zone */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) {
+                      setPdfFile(f)
+                      if (!uploadMeta.title) {
+                        const name = f.name.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ')
+                        setUploadMeta(prev => ({ ...prev, title: name }))
+                      }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDraggingOver(true) }}
+                  onDragEnter={(e) => { e.preventDefault(); setDraggingOver(true) }}
+                  onDragLeave={() => setDraggingOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setDraggingOver(false)
+                    const f = e.dataTransfer.files?.[0]
+                    if (f && (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))) {
+                      setPdfFile(f)
+                      if (!uploadMeta.title) {
+                        const name = f.name.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ')
+                        setUploadMeta(prev => ({ ...prev, title: name }))
+                      }
+                    }
+                  }}
+                  className={`w-full flex flex-col items-center justify-center gap-1 px-4 py-4 border-2 border-dashed rounded-xl text-sm transition-colors ${
+                    pdfFile
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                      : draggingOver
+                        ? 'border-blue-400 bg-blue-50 text-blue-600'
+                        : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-blue-300 hover:bg-blue-50'
+                  }`}
                 >
-                  {TYPE_META[detectedType].label}
-                </span>
-              )}
-            </div>
+                  <Icon name={pdfFile ? 'check_circle' : draggingOver ? 'file_download' : 'upload_file'} className="text-[20px]" />
+                  {pdfFile ? pdfFile.name : draggingOver ? 'Drop PDF here' : 'Click or drag & drop a PDF (optional)'}
+                </button>
 
-            {/* Examples */}
-            {state === 'idle' && !input && mode === 'paper' && (
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {[
-                  { label: '10.48550/arXiv.1706.03762', type: 'doi' },
-                  { label: '2303.08774', type: 'arxiv' },
-                  { label: 'arxiv.org/abs/2310.06825', type: 'arxiv' },
-                ].map(({ label, type }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => setInput(label)}
-                    className={`text-[11px] px-2 py-0.5 rounded-full border font-mono transition-colors
-                      ${TYPE_META[type].bg} ${TYPE_META[type].text} border-transparent hover:opacity-80`}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {/* Title (required) */}
+                <input
+                  type="text"
+                  value={uploadMeta.title}
+                  onChange={(e) => setUploadMeta(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Title *"
+                  disabled={state === 'loading'}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60 transition"
+                />
+
+                {/* Authors */}
+                <AuthorChips
+                  authors={uploadMeta.authors}
+                  onSave={(newAuthors) => setUploadMeta(prev => ({ ...prev, authors: newAuthors }))}
+                />
+
+                {/* Date + Venue in a row */}
+                <div className="flex gap-3">
+                  <input
+                    type="date"
+                    value={uploadMeta.date}
+                    onChange={(e) => setUploadMeta(prev => ({ ...prev, date: e.target.value }))}
+                    disabled={state === 'loading'}
+                    className="w-40 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60 transition"
+                  />
+                  <input
+                    type="text"
+                    value={uploadMeta.venue}
+                    onChange={(e) => setUploadMeta(prev => ({ ...prev, venue: e.target.value }))}
+                    placeholder="Venue / Journal"
+                    disabled={state === 'loading'}
+                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60 transition"
+                  />
+                </div>
               </div>
+            )}
+
+            {/* Import/Website mode: identifier input */}
+            {mode !== 'upload' && (
+              <>
+                {/* Input row */}
+                <div className="relative">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={input}
+                    onChange={(e) => {
+                      setInput(e.target.value)
+                      if (state !== 'idle') {
+                        setState('idle')
+                        setResult(null)
+                        setError('')
+                      }
+                    }}
+                    placeholder={mode === 'website' ? 'Paste a website URL…' : 'Paste DOI, arXiv ID, or URL…'}
+                    disabled={state === 'loading'}
+                    className="w-full px-4 py-3 pr-[4.5rem] bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60 transition"
+                  />
+                  {/* Type badge */}
+                  {detectedType && state === 'idle' && (
+                    <span
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${TYPE_META[detectedType].bg} ${TYPE_META[detectedType].text}`}
+                    >
+                      {TYPE_META[detectedType].label}
+                    </span>
+                  )}
+                </div>
+
+                {/* Examples */}
+                {state === 'idle' && !input && mode === 'paper' && (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {[
+                      { label: '10.48550/arXiv.1706.03762', type: 'doi' },
+                      { label: '2303.08774', type: 'arxiv' },
+                      { label: 'arxiv.org/abs/2310.06825', type: 'arxiv' },
+                    ].map(({ label, type }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => setInput(label)}
+                        className={`text-[11px] px-2 py-0.5 rounded-full border font-mono transition-colors
+                          ${TYPE_META[type].bg} ${TYPE_META[type].text} border-transparent hover:opacity-80`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
             {/* Success state */}
@@ -246,13 +387,17 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
             {/* Action row */}
             <div className="mt-4 flex items-center justify-between">
               <p className="text-[11px] text-slate-400">
-                {mode === 'website' ? 'Fetches title, description and author from the page' : 'Supports DOI, arXiv ID, arXiv URL, and paper page URLs'}
+                {mode === 'upload'
+                  ? 'Upload a PDF and fill in the metadata manually'
+                  : mode === 'website'
+                    ? 'Fetches title, description and author from the page'
+                    : 'Supports DOI, arXiv ID, arXiv URL, and paper page URLs'}
               </p>
               <div className="flex items-center gap-2">
                 {(state === 'success' || state === 'duplicate') && (
                   <button
                     type="button"
-                    onClick={() => { setInput(''); setState('idle'); setResult(null) }}
+                    onClick={() => { setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
                     className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                   >
                     Add another
@@ -260,7 +405,11 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
                 )}
                 <button
                   type="submit"
-                  disabled={!input.trim() || state === 'loading'}
+                  disabled={
+                    mode === 'upload'
+                      ? !uploadMeta.title.trim() || state === 'loading'
+                      : !input.trim() || state === 'loading'
+                  }
                   className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors"
                 >
                   {state === 'loading' ? (
@@ -269,12 +418,12 @@ function QuickAddModal({ open, onClose, onAdded, collectionId, libraryId }) {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
                       </svg>
-                      Looking up…
+                      {mode === 'upload' ? 'Uploading…' : 'Looking up…'}
                     </>
                   ) : (
                     <>
-                      <Icon name="add" className="text-[14px]" />
-                      {mode === 'website' ? 'Add Website' : 'Add Paper'}
+                      <Icon name={mode === 'upload' ? 'upload' : 'add'} className="text-[14px]" />
+                      {mode === 'upload' ? 'Upload Paper' : mode === 'website' ? 'Add Website' : 'Add Paper'}
                     </>
                   )}
                 </button>

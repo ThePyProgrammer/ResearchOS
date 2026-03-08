@@ -120,17 +120,48 @@ export function AuthorChips({ authors = [], onSave }) {
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
   const [dragIdx, setDragIdx] = useState(null)
+  const [editIdx, setEditIdx] = useState(null)
+  const [editDraft, setEditDraft] = useState('')
 
-  async function addAuthor() {
-    const name = draft.trim()
+  async function addAuthor(value = draft) {
+    const name = value.trim()
     if (!name) return
     await onSave([...authors, name])
     setDraft('')
     setAdding(false)
   }
 
+  async function addMultipleAuthors(text) {
+    const names = text.split(',').map(n => n.trim()).filter(Boolean)
+    if (names.length === 0) return
+    await onSave([...authors, ...names])
+    setDraft('')
+    setAdding(false)
+  }
+
   async function removeAuthor(idx) {
     await onSave(authors.filter((_, i) => i !== idx))
+  }
+
+  function startEdit(idx) {
+    setEditIdx(idx)
+    setEditDraft(authors[idx])
+  }
+
+  async function commitEdit() {
+    const name = editDraft.trim()
+    if (name && name !== authors[editIdx]) {
+      const next = [...authors]
+      next[editIdx] = name
+      await onSave(next)
+    }
+    setEditIdx(null)
+    setEditDraft('')
+  }
+
+  function cancelEdit() {
+    setEditIdx(null)
+    setEditDraft('')
   }
 
   function onDragStart(e, idx) {
@@ -160,27 +191,45 @@ export function AuthorChips({ authors = [], onSave }) {
       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Authors</p>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {authors.map((author, i) => (
-          <span
-            key={`${author}-${i}`}
-            draggable
-            onDragStart={e => onDragStart(e, i)}
-            onDragOver={e => onDragOver(e, i)}
-            onDrop={e => onDrop(e, i)}
-            onDragEnd={() => setDragIdx(null)}
-            className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 group cursor-grab active:cursor-grabbing transition-opacity ${
-              dragIdx === i ? 'opacity-40' : ''
-            }`}
-          >
-            <Icon name="person" className="text-[12px] text-slate-400" />
-            {author}
-            <button
-              onClick={() => removeAuthor(i)}
-              className="text-slate-400 hover:text-red-500 transition-colors ml-0.5"
-              title="Remove author"
+          editIdx === i ? (
+            <input
+              key={`edit-${i}`}
+              autoFocus
+              type="text"
+              value={editDraft}
+              onChange={e => setEditDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') commitEdit()
+                if (e.key === 'Escape') cancelEdit()
+              }}
+              onBlur={commitEdit}
+              className="px-2 py-0.5 text-[11px] border border-blue-400 rounded-full bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 w-32"
+            />
+          ) : (
+            <span
+              key={`${author}-${i}`}
+              draggable
+              onDragStart={e => onDragStart(e, i)}
+              onDragOver={e => onDragOver(e, i)}
+              onDrop={e => onDrop(e, i)}
+              onDragEnd={() => setDragIdx(null)}
+              onDoubleClick={() => startEdit(i)}
+              className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 group cursor-grab active:cursor-grabbing transition-opacity ${
+                dragIdx === i ? 'opacity-40' : ''
+              }`}
+              title="Double-click to edit"
             >
-              <Icon name="close" className="text-[11px]" />
-            </button>
-          </span>
+              <Icon name="person" className="text-[12px] text-slate-400" />
+              {author}
+              <button
+                onClick={() => removeAuthor(i)}
+                className="text-slate-400 hover:text-red-500 transition-colors ml-0.5"
+                title="Remove author"
+              >
+                <Icon name="close" className="text-[11px]" />
+              </button>
+            </span>
+          )
         ))}
         {authors.length === 0 && !adding && (
           <span className="text-[11px] text-slate-400 italic">No authors</span>
@@ -192,13 +241,27 @@ export function AuthorChips({ authors = [], onSave }) {
             autoFocus
             type="text"
             value={draft}
-            onChange={e => setDraft(e.target.value)}
+            onChange={e => {
+              const val = e.target.value
+              if (val.includes(',')) {
+                addMultipleAuthors(val)
+              } else {
+                setDraft(val)
+              }
+            }}
+            onPaste={e => {
+              const pasted = e.clipboardData.getData('text')
+              if (pasted.includes(',')) {
+                e.preventDefault()
+                addMultipleAuthors(draft + pasted)
+              }
+            }}
             onKeyDown={e => {
               if (e.key === 'Enter') addAuthor()
               if (e.key === 'Escape') { setAdding(false); setDraft('') }
             }}
             onBlur={() => { if (draft.trim()) addAuthor(); else setAdding(false) }}
-            placeholder="Author name…"
+            placeholder="Author name or paste comma-separated…"
             className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
           />
         </div>
