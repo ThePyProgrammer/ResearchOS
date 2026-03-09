@@ -388,20 +388,81 @@ def paper_to_bibtex(paper) -> str:
     return f"@{entry_type}{{{key},\n{fields_str}\n}}"
 
 
-def export_bibtex(papers: list) -> str:
-    """Convert a list of Paper models to a complete BibTeX file string."""
-    # Ensure unique citation keys
+def website_to_bibtex(website) -> str:
+    """Convert a Website model to a BibTeX @misc entry string."""
+    # Build a pseudo-paper-like object for _make_citation_key
+    year = 0
+    if website.published_date:
+        m = re.search(r"((?:19|20)\d{2})", website.published_date)
+        if m:
+            year = int(m.group(1))
+
+    class _KeyHelper:
+        def __init__(self, title, authors, yr):
+            self.title = title
+            self.authors = authors
+            self.year = yr
+
+    key = _make_citation_key(_KeyHelper(website.title, website.authors, year))
+
+    fields = []
+    fields.append(f"  title={{{_escape_bibtex(website.title)}}}")
+
+    if website.authors:
+        fields.append(f"  author={{{_escape_bibtex(_format_authors_bibtex(website.authors))}}}")
+
+    if year:
+        fields.append(f"  year={{{year}}}")
+
+    fields.append(f"  url={{{website.url}}}")
+
+    if website.description:
+        fields.append(f"  note={{{_escape_bibtex(website.description)}}}")
+
+    if website.published_date:
+        fields.append(f"  howpublished={{\\url{{{website.url}}}}}")
+
+    fields_str = ",\n".join(fields)
+    return f"@misc{{{key},\n{fields_str}\n}}"
+
+
+def _item_to_bibtex(item) -> str:
+    """Convert a Paper or Website to a BibTeX entry string."""
+    if getattr(item, "item_type", None) == "website":
+        return website_to_bibtex(item)
+    return paper_to_bibtex(item)
+
+
+def _item_citation_key(item) -> str:
+    """Get the citation key for a Paper or Website."""
+    if getattr(item, "item_type", None) == "website":
+        year = 0
+        if item.published_date:
+            m = re.search(r"((?:19|20)\d{2})", item.published_date)
+            if m:
+                year = int(m.group(1))
+
+        class _KeyHelper:
+            def __init__(self, title, authors, yr):
+                self.title = title
+                self.authors = authors
+                self.year = yr
+
+        return _make_citation_key(_KeyHelper(item.title, item.authors, year))
+    return _make_citation_key(item)
+
+
+def export_bibtex(items: list) -> str:
+    """Convert a list of Paper and/or Website models to a complete BibTeX file string."""
     seen_keys: dict[str, int] = {}
     entries = []
 
-    for paper in papers:
-        entry = paper_to_bibtex(paper)
-        # Extract the key and deduplicate
-        key = _make_citation_key(paper)
+    for item in items:
+        entry = _item_to_bibtex(item)
+        key = _item_citation_key(item)
         if key in seen_keys:
             seen_keys[key] += 1
-            # Replace first occurrence of the key with a suffixed version
-            new_key = f"{key}{chr(96 + seen_keys[key])}"  # key, keyb, keyc, ...
+            new_key = f"{key}{chr(96 + seen_keys[key])}"
             entry = entry.replace(f"{{{key},", f"{{{new_key},", 1)
         else:
             seen_keys[key] = 1

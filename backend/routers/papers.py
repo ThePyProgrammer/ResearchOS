@@ -91,33 +91,44 @@ async def list_papers(
 async def export_bibtex_file(
     library_id: Optional[str] = None,
     collection_id: Optional[str] = None,
-    ids: Optional[str] = Query(None, description="Comma-separated paper IDs to export"),
+    ids: Optional[str] = Query(None, description="Comma-separated paper/website IDs to export"),
 ):
     """
-    Export papers as a downloadable .bib file.
+    Export papers and websites as a downloadable .bib file.
 
+    Accepts both paper IDs (p_*) and website IDs (w_*).
     Filter by library_id, collection_id, or a specific set of comma-separated IDs.
     """
+    from services import website_service
     from services.bibtex_service import export_bibtex
 
     if ids:
-        # Export specific papers by ID
         id_list = [i.strip() for i in ids.split(",") if i.strip()]
-        papers = []
-        for pid in id_list:
-            p = paper_service.get_paper(pid)
-            if p:
-                papers.append(p)
+        items = []
+        for item_id in id_list:
+            if item_id.startswith("w_"):
+                w = website_service.get_website(item_id)
+                if w:
+                    items.append(w)
+            else:
+                p = paper_service.get_paper(item_id)
+                if p:
+                    items.append(p)
     else:
         papers = paper_service.list_papers(
             library_id=library_id,
             collection_id=collection_id,
         )
+        websites = website_service.list_websites(
+            library_id=library_id,
+            collection_id=collection_id,
+        )
+        items = list(papers) + list(websites)
 
-    if not papers:
-        raise HTTPException(status_code=404, detail="No papers to export")
+    if not items:
+        raise HTTPException(status_code=404, detail="No items to export")
 
-    bib_content = export_bibtex(papers)
+    bib_content = export_bibtex(items)
 
     return Response(
         content=bib_content,

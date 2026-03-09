@@ -1346,13 +1346,13 @@ export default function Library() {
               </button>
               <button
                 onClick={async () => {
-                  const paperIds = [...selectedIds].filter(id => id.startsWith('p_'))
-                  if (paperIds.length === 0) return
+                  const itemIds = [...selectedIds]
+                  if (itemIds.length === 0) return
                   setExportLoading(true)
                   setExportEntries([])
                   setShowExportModal(true)
                   try {
-                    const text = await papersApi.exportBibtex({ ids: paperIds })
+                    const text = await papersApi.exportBibtex({ ids: itemIds })
                     setExportEntries(parseBibtexEntries(text))
                   } catch (_err) {
                     setExportEntries([])
@@ -1360,7 +1360,7 @@ export default function Library() {
                     setExportLoading(false)
                   }
                 }}
-                disabled={![...selectedIds].some(id => id.startsWith('p_'))}
+                disabled={selectedIds.size === 0}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <Icon name="download" className="text-[14px]" />
