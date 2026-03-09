@@ -464,8 +464,12 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
                                 {entry.paper?.title || entry.key}
                               </span>
                               {entry.duplicate && (
-                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
-                                  DUPLICATE
+                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0" title={
+                                  entry.duplicateMatchField
+                                    ? `${entry.duplicateConfidence === 'exact' ? 'Exact' : 'Likely'} match on ${entry.duplicateMatchField === 'doi' ? 'DOI' : entry.duplicateMatchField === 'arxiv_id' ? 'arXiv ID' : 'title'}`
+                                    : 'Duplicate detected'
+                                }>
+                                  {entry.duplicateConfidence === 'likely' ? 'LIKELY DUPLICATE' : 'DUPLICATE'}
                                 </span>
                               )}
                               {entry.error && (
@@ -721,6 +725,12 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
                       {result.authors.slice(0, 3).join(', ')}
                       {result.authors.length > 3 ? ` +${result.authors.length - 3} more` : ''}
                       {result.year ? ` · ${result.year}` : ''}
+                    </p>
+                  )}
+                  {state === 'duplicate' && result.duplicates?.length > 0 && (
+                    <p className="text-[11px] text-amber-600 mt-1">
+                      Matched by {result.duplicates[0].matchField === 'doi' ? 'DOI' : result.duplicates[0].matchField === 'arxiv_id' ? 'arXiv ID' : 'title'}
+                      {result.duplicates[0].confidence === 'likely' ? ' (likely match)' : ' (exact match)'}
                     </p>
                   )}
                 </div>

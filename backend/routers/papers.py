@@ -138,7 +138,25 @@ async def export_bibtex_file(
 
 
 @router.post("", status_code=201)
-async def create_paper(data: PaperCreate):
+async def create_paper(data: PaperCreate, check_duplicates: bool = Query(False)):
+    # Optional dedup check — frontend can pass ?check_duplicates=true to get warnings
+    if check_duplicates:
+        from services.dedup_service import find_duplicates
+        duplicates = find_duplicates(
+            title=data.title,
+            doi=data.doi,
+            arxiv_id=data.arxiv_id,
+            library_id=data.library_id,
+        )
+        if duplicates:
+            return JSONResponse(
+                {
+                    "duplicates": [d.to_dict() for d in duplicates],
+                    "paper": data.model_dump(by_alias=True),
+                },
+                status_code=409,
+            )
+
     paper = paper_service.create_paper(data)
     activity_service.log_activity(
         type="human",
@@ -195,21 +213,27 @@ async def import_paper(data: ImportRequest, background_tasks: BackgroundTasks):
             detail="Could not extract a title from that identifier.",
         )
 
-    # Deduplicate: skip if a paper with the same arxiv_id or DOI already exists
-    existing_papers = paper_service.list_papers()
+    # Deduplicate: check DOI, arXiv ID, and normalized title
+    from services.dedup_service import find_duplicates
+
     arxiv_id = meta.get("arxiv_id")
     doi = meta.get("doi")
-    for existing in existing_papers:
-        if arxiv_id and existing.arxiv_id == arxiv_id:
-            return JSONResponse(
-                {**existing.model_dump(by_alias=True), "already_exists": True},
-                status_code=200,
-            )
-        if doi and existing.doi == doi:
-            return JSONResponse(
-                {**existing.model_dump(by_alias=True), "already_exists": True},
-                status_code=200,
-            )
+    duplicates = find_duplicates(
+        title=meta["title"],
+        doi=doi,
+        arxiv_id=arxiv_id,
+        library_id=data.library_id,
+    )
+    if duplicates:
+        best = duplicates[0]
+        return JSONResponse(
+            {
+                **best.paper.model_dump(by_alias=True),
+                "already_exists": True,
+                "duplicates": [d.to_dict() for d in duplicates],
+            },
+            status_code=200,
+        )
 
     paper_create = PaperCreate(
         title=meta["title"],
@@ -256,15 +280,6 @@ async def import_paper(data: ImportRequest, background_tasks: BackgroundTasks):
 # BibTeX import: parse → preview → confirm
 # ---------------------------------------------------------------------------
 
-def _normalize_title(title: str) -> str:
-    """Normalize a title for fuzzy dedup: lowercase, strip punctuation, collapse whitespace."""
-    import re as _re
-    t = title.lower().strip()
-    t = _re.sub(r"[^a-z0-9\s]", "", t)
-    t = _re.sub(r"\s+", " ", t).strip()
-    return t
-
-
 @router.post("/import-bibtex/parse")
 async def parse_bibtex(file: UploadFile = File(...), library_id: Optional[str] = None):
     """
@@ -280,9 +295,12 @@ async def parse_bibtex(file: UploadFile = File(...), library_id: Optional[str] =
       - paper: parsed paper data (or null if unparseable)
       - duplicate: true if a matching paper already exists
       - duplicateId: ID of the existing paper if duplicate
+      - duplicateConfidence: "exact" or "likely"
+      - duplicateMatchField: "doi", "arxiv_id", or "title"
       - error: parse error message (or null)
     """
     from services.bibtex_service import parse_bibtex as _parse
+    from services.dedup_service import find_duplicates
 
     content_bytes = await file.read()
     try:
@@ -302,20 +320,6 @@ async def parse_bibtex(file: UploadFile = File(...), library_id: Optional[str] =
     if not entries:
         raise HTTPException(status_code=422, detail="No entries found in the BibTeX file")
 
-    # Load existing papers for deduplication (scoped to library if provided)
-    existing_papers = paper_service.list_papers(library_id=library_id)
-    existing_dois: dict[str, str] = {}
-    existing_arxiv_ids: dict[str, str] = {}
-    existing_titles: dict[str, str] = {}
-    for p in existing_papers:
-        if p.doi:
-            existing_dois[p.doi.lower()] = p.id
-        if p.arxiv_id:
-            existing_arxiv_ids[p.arxiv_id] = p.id
-        norm = _normalize_title(p.title)
-        if norm:
-            existing_titles[norm] = p.id
-
     result = []
     for entry in entries:
         item = {
@@ -323,24 +327,24 @@ async def parse_bibtex(file: UploadFile = File(...), library_id: Optional[str] =
             "paper": entry.paper.model_dump(by_alias=True) if entry.paper else None,
             "duplicate": False,
             "duplicateId": None,
+            "duplicateConfidence": None,
+            "duplicateMatchField": None,
             "error": entry.error,
         }
 
         if entry.paper:
-            # 1. Check DOI duplicate
-            if entry.paper.doi and entry.paper.doi.lower() in existing_dois:
+            dupes = find_duplicates(
+                title=entry.paper.title,
+                doi=entry.paper.doi,
+                arxiv_id=entry.paper.arxiv_id,
+                library_id=library_id,
+            )
+            if dupes:
+                best = dupes[0]
                 item["duplicate"] = True
-                item["duplicateId"] = existing_dois[entry.paper.doi.lower()]
-            # 2. Check arXiv ID duplicate
-            elif entry.paper.arxiv_id and entry.paper.arxiv_id in existing_arxiv_ids:
-                item["duplicate"] = True
-                item["duplicateId"] = existing_arxiv_ids[entry.paper.arxiv_id]
-            # 3. Check normalized title duplicate
-            else:
-                norm = _normalize_title(entry.paper.title)
-                if norm and norm in existing_titles:
-                    item["duplicate"] = True
-                    item["duplicateId"] = existing_titles[norm]
+                item["duplicateId"] = best.paper.id
+                item["duplicateConfidence"] = best.confidence
+                item["duplicateMatchField"] = best.match_field
 
         result.append(item)
 
@@ -358,12 +362,14 @@ async def confirm_bibtex_import(data: BibtexConfirmRequest, background_tasks: Ba
     Create papers from confirmed BibTeX entries.
 
     Accepts the paper objects from the parse preview (after user selection).
+    Performs intra-batch dedup to avoid creating duplicates within the same import.
     Returns a list of created papers with import status.
     """
     if not data.entries:
         raise HTTPException(status_code=422, detail="No entries to import")
 
     from services.import_service import _fetch_arxiv
+    from services.dedup_service import find_duplicates
 
     results = []
     for entry_data in data.entries:
@@ -371,6 +377,24 @@ async def confirm_bibtex_import(data: BibtexConfirmRequest, background_tasks: Ba
             paper_create = PaperCreate.model_validate(entry_data)
             if data.library_id:
                 paper_create.library_id = data.library_id
+
+            # Intra-batch dedup: check if this entry duplicates something already in the library
+            # (user may have forced selection past the preview warning)
+            dupes = find_duplicates(
+                title=paper_create.title,
+                doi=paper_create.doi,
+                arxiv_id=paper_create.arxiv_id,
+                library_id=data.library_id,
+            )
+            if dupes:
+                best = dupes[0]
+                results.append({
+                    "title": paper_create.title,
+                    "status": "skipped",
+                    "reason": f"Duplicate of '{best.paper.title}' ({best.confidence} match on {best.match_field})",
+                    "duplicateId": best.paper.id,
+                })
+                continue
 
             # For arXiv papers, re-resolve via the arXiv API for richer metadata + PDF URL
             arxiv_id = paper_create.arxiv_id
