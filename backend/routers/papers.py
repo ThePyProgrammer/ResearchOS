@@ -206,15 +206,29 @@ async def import_paper(data: ImportRequest, background_tasks: BackgroundTasks):
 # BibTeX import: parse → preview → confirm
 # ---------------------------------------------------------------------------
 
+def _normalize_title(title: str) -> str:
+    """Normalize a title for fuzzy dedup: lowercase, strip punctuation, collapse whitespace."""
+    import re as _re
+    t = title.lower().strip()
+    t = _re.sub(r"[^a-z0-9\s]", "", t)
+    t = _re.sub(r"\s+", " ", t).strip()
+    return t
+
+
 @router.post("/import-bibtex/parse")
-async def parse_bibtex(file: UploadFile = File(...)):
+async def parse_bibtex(file: UploadFile = File(...), library_id: Optional[str] = None):
     """
     Parse a .bib file and return a preview of entries with duplicate detection.
+
+    Deduplication checks (in order):
+      1. DOI match (case-insensitive)
+      2. arXiv ID match
+      3. Normalized title match (lowercase, no punctuation)
 
     Returns a list of entries, each with:
       - key: BibTeX citation key
       - paper: parsed paper data (or null if unparseable)
-      - duplicate: true if a paper with the same DOI or arXiv ID already exists
+      - duplicate: true if a matching paper already exists
       - duplicateId: ID of the existing paper if duplicate
       - error: parse error message (or null)
     """
@@ -238,15 +252,19 @@ async def parse_bibtex(file: UploadFile = File(...)):
     if not entries:
         raise HTTPException(status_code=422, detail="No entries found in the BibTeX file")
 
-    # Load existing papers for deduplication
-    existing_papers = paper_service.list_papers()
-    existing_dois = {}
-    existing_arxiv_ids = {}
+    # Load existing papers for deduplication (scoped to library if provided)
+    existing_papers = paper_service.list_papers(library_id=library_id)
+    existing_dois: dict[str, str] = {}
+    existing_arxiv_ids: dict[str, str] = {}
+    existing_titles: dict[str, str] = {}
     for p in existing_papers:
         if p.doi:
             existing_dois[p.doi.lower()] = p.id
         if p.arxiv_id:
             existing_arxiv_ids[p.arxiv_id] = p.id
+        norm = _normalize_title(p.title)
+        if norm:
+            existing_titles[norm] = p.id
 
     result = []
     for entry in entries:
@@ -259,14 +277,20 @@ async def parse_bibtex(file: UploadFile = File(...)):
         }
 
         if entry.paper:
-            # Check DOI duplicate
+            # 1. Check DOI duplicate
             if entry.paper.doi and entry.paper.doi.lower() in existing_dois:
                 item["duplicate"] = True
                 item["duplicateId"] = existing_dois[entry.paper.doi.lower()]
-            # Check arXiv ID duplicate
+            # 2. Check arXiv ID duplicate
             elif entry.paper.arxiv_id and entry.paper.arxiv_id in existing_arxiv_ids:
                 item["duplicate"] = True
                 item["duplicateId"] = existing_arxiv_ids[entry.paper.arxiv_id]
+            # 3. Check normalized title duplicate
+            else:
+                norm = _normalize_title(entry.paper.title)
+                if norm and norm in existing_titles:
+                    item["duplicate"] = True
+                    item["duplicateId"] = existing_titles[norm]
 
         result.append(item)
 
@@ -289,12 +313,40 @@ async def confirm_bibtex_import(data: BibtexConfirmRequest, background_tasks: Ba
     if not data.entries:
         raise HTTPException(status_code=422, detail="No entries to import")
 
+    from services.import_service import _fetch_arxiv
+
     results = []
     for entry_data in data.entries:
         try:
             paper_create = PaperCreate.model_validate(entry_data)
             if data.library_id:
                 paper_create.library_id = data.library_id
+
+            # For arXiv papers, re-resolve via the arXiv API for richer metadata + PDF URL
+            arxiv_id = paper_create.arxiv_id
+            if arxiv_id:
+                try:
+                    arxiv_meta = await _fetch_arxiv(arxiv_id)
+                    # Preserve collections from the frontend selection
+                    collections = paper_create.collections
+                    paper_create = PaperCreate(
+                        title=arxiv_meta.get("title") or paper_create.title,
+                        authors=arxiv_meta.get("authors") or paper_create.authors,
+                        year=arxiv_meta.get("year") or paper_create.year,
+                        published_date=arxiv_meta.get("published_date") or paper_create.published_date,
+                        venue=arxiv_meta.get("venue") or "arXiv",
+                        doi=arxiv_meta.get("doi") or paper_create.doi,
+                        arxiv_id=arxiv_id,
+                        abstract=arxiv_meta.get("abstract") or paper_create.abstract,
+                        pdf_url=arxiv_meta.get("pdf_url") or paper_create.pdf_url,
+                        status="inbox",
+                        source="human",
+                        collections=collections,
+                        library_id=data.library_id or paper_create.library_id,
+                    )
+                except Exception:
+                    logger.warning("arXiv re-resolve failed for %s, using BibTeX metadata", arxiv_id)
+
             paper = paper_service.create_paper(paper_create)
 
             activity_service.log_activity(

@@ -143,7 +143,7 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
     setError('')
 
     try {
-      const entries = await papersApi.parseBibtex(file)
+      const entries = await papersApi.parseBibtex(file, libraryId)
       setBibtexEntries(entries)
       // Auto-select all non-duplicate, non-error entries
       const selected = new Set()
@@ -163,6 +163,10 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
       .filter((_, i) => bibtexSelected.has(i))
       .map(e => e.paper)
       .filter(Boolean)
+      .map(p => ({
+        ...p,
+        collections: collectionId && collectionId !== 'unfiled' ? [collectionId] : (p.collections || []),
+      }))
 
     if (selectedEntries.length === 0) return
 

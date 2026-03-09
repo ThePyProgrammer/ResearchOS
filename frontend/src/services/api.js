@@ -47,10 +47,11 @@ export const papersApi = {
   removePdf: (id) => apiFetch(`/papers/${id}/pdf`, { method: 'DELETE' }),
   fetchPdf: (id) => apiFetch(`/papers/${id}/pdf/fetch`, { method: 'POST' }),
   /** Parse a .bib file and return preview entries with duplicate detection. */
-  parseBibtex: async (file) => {
+  parseBibtex: async (file, libraryId) => {
     const formData = new FormData()
     formData.append('file', file)
-    const res = await fetch(`${BASE}/papers/import-bibtex/parse`, { method: 'POST', body: formData })
+    const qs = libraryId ? `?library_id=${encodeURIComponent(libraryId)}` : ''
+    const res = await fetch(`${BASE}/papers/import-bibtex/parse${qs}`, { method: 'POST', body: formData })
     if (!res.ok) {
       let detail = `HTTP ${res.status}`
       try { const err = await res.json(); detail = err.detail || detail } catch (_) {}

@@ -56,12 +56,13 @@ def _clean_latex(text: str) -> str:
 
 def _parse_authors(raw: str) -> list[str]:
     """
-    Parse a BibTeX author string into a list of "Last, First" names.
+    Parse a BibTeX author string into a list of "First [Middle] Last" names.
 
     BibTeX uses "and" to separate authors. Each author can be:
-      - "Last, First"          → keep as-is
-      - "First Last"           → reorder to "Last, First"
-      - "First Middle Last"    → reorder to "Last, First Middle"
+      - "Last, First"          → reorder to "First Last"
+      - "Last, First Middle"   → reorder to "First Middle Last"
+      - "First Last"           → keep as-is
+      - "First Middle Last"    → keep as-is
     """
     if not raw:
         return []
@@ -76,16 +77,15 @@ def _parse_authors(raw: str) -> list[str]:
             continue
 
         if "," in part:
-            # Already "Last, First" format
+            # "Last, First [Middle]" → "First [Middle] Last"
             segments = [s.strip() for s in part.split(",", 1)]
-            name = f"{segments[0]}, {segments[1]}" if len(segments) == 2 else part
-        else:
-            # "First [Middle] Last" → "Last, First [Middle]"
-            tokens = part.split()
-            if len(tokens) >= 2:
-                name = f"{tokens[-1]}, {' '.join(tokens[:-1])}"
+            if len(segments) == 2 and segments[1]:
+                name = f"{segments[1]} {segments[0]}"
             else:
-                name = part
+                name = segments[0]
+        else:
+            # Already "First [Middle] Last" — keep as-is
+            name = part
 
         authors.append(name)
 
@@ -125,17 +125,22 @@ def _extract_doi(entry: dict) -> Optional[str]:
 
 
 def _extract_arxiv_id(entry: dict) -> Optional[str]:
-    """Try to extract an arXiv ID from the eprint field or URL."""
+    """Try to extract an arXiv ID from eprint, URL, journal, or other fields."""
     eprint = entry.get("eprint", "")
     if eprint:
         m = re.search(r"(\d{4}\.\d{4,5})", str(eprint))
         if m:
             return m.group(1)
 
-    # Check url / note fields for arxiv links
-    for key in ("url", "note"):
-        val = entry.get(key, "")
-        m = re.search(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})", str(val))
+    # Check common fields for arxiv links or "arXiv:XXXX.XXXXX" patterns
+    for key in ("url", "note", "journal", "booktitle", "howpublished"):
+        val = str(entry.get(key, ""))
+        # Match "arxiv.org/abs/XXXX.XXXXX" style URLs
+        m = re.search(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})", val)
+        if m:
+            return m.group(1)
+        # Match "arXiv:XXXX.XXXXX" or "arXiv preprint arXiv:XXXX.XXXXX"
+        m = re.search(r"arXiv[:\s]+(\d{4}\.\d{4,5})", val, re.IGNORECASE)
         if m:
             return m.group(1)
 
