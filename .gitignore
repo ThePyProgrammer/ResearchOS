@@ -20,6 +20,6 @@ aero/
 node_modules/
 .env
 
-package-lock.json
-uv.lock
+# package-lock.json
+# uv.lock
 data/
