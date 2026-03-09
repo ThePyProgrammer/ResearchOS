@@ -83,6 +83,38 @@ On first startup the backend seeds Supabase with sample data if the tables are e
 
 Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to the backend automatically.
 
+## Testing
+
+Run backend tests:
+
+```bash
+cd backend
+uv run --group dev pytest
+```
+
+Run frontend unit/integration tests:
+
+```bash
+cd frontend
+npm run test:run
+```
+
+Run frontend E2E smoke tests (Playwright):
+
+```bash
+cd frontend
+npx playwright install --with-deps chromium
+npm run test:e2e
+```
+
+Current test coverage includes:
+- **Backend contract + route behavior (pytest):** camelCase payloads, canonical 404 shape, sanitized 500s, papers import/export branches, chat/text branches, notes error mapping, proposal validation
+- **Backend service behavior (pytest):** dedup precedence/confidence and semantic-search fallback
+- **Frontend API wrapper + page smoke (Vitest/RTL):** API error/response handling, library context, proposals page, library page interactions
+- **Frontend E2E smoke (Playwright):** library detail navigation and Quick Add import flow
+
+CI (`.github/workflows/tests.yml`) runs backend tests, frontend tests/build, and Playwright smoke tests on PRs and `main`.
+
 ## Routes
 
 | Path | Page |
