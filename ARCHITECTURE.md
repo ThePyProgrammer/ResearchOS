@@ -37,7 +37,9 @@ The backend is a standard FastAPI application. Three directories mirror the laye
 **`backend/services/`** — Business logic and all database access. Route handlers never contain business logic — they validate input, call a service function, and return the response. Key services:
 
 - `db.py` — Supabase client singleton (`lru_cache`). Every other service imports `get_client()` from here.
-- `import_service.py` — The paper/website import pipeline. Classifies identifiers (DOI, arXiv, OpenReview, Zenodo, URL), fetches metadata from the appropriate external API, deduplicates, and creates the item. Triggers background tasks (PDF auto-download, AI note generation).
+- `import_service.py` — The paper/website import pipeline. Classifies identifiers (DOI, arXiv, OpenReview, Zenodo, URL), fetches metadata from the appropriate external API, and creates the item. Triggers background tasks (PDF auto-download, AI note generation).
+- `dedup_service.py` — Centralized duplicate detection used by all import paths. Three-tier matching: DOI (exact), arXiv ID (exact), normalized title (likely). Returns `DuplicateCandidate` objects with confidence level and match field.
+- `bibtex_service.py` — BibTeX import/export. Parses `.bib` files via `bibtexparser` v2 with LaTeX cleanup and author normalization. Exports papers as `@article`/`@inproceedings` and websites as `@misc` with auto-generated citation keys.
 - `pdf_service.py` / `pdf_text_service.py` / `pdf_metadata_service.py` — PDF lifecycle: storage in Supabase, text extraction via pymupdf4llm, and LLM-powered metadata extraction from uploaded PDFs.
 - `note_service.py` — CRUD for the per-item note filesystem, plus AI note generation (OpenAI JSON mode producing a structured tree of files/folders).
 - `chat_service.py` — AI copilot: OpenAI chat with tool calling that can suggest diffs to notes.
@@ -89,6 +91,14 @@ PDFs flow through three stages: storage (`pdf_service.py` uploads to the Supabas
 ### AI Features
 
 All AI features use OpenAI and share a pattern: extract context (PDF text, metadata, existing notes), build a prompt, call OpenAI (either JSON mode for structured output or tool calling for copilot suggestions), and write results back through the service layer. The three AI features — auto-note generation, copilot chat, and PDF metadata extraction — are independent services that don't depend on each other.
+
+### Library Interchange (BibTeX)
+
+BibTeX import follows a two-phase pattern: parse/preview, then confirm. The parse endpoint (`POST /api/papers/import-bibtex/parse`) runs duplicate detection per entry using `dedup_service.find_duplicates()` and returns entries annotated with match info. The confirm endpoint re-checks for duplicates (intra-batch dedup) and re-resolves arXiv entries via the arXiv API for richer metadata. BibTeX export handles both papers and websites, with a frontend tree-view editor for reviewing entries before download.
+
+### Duplicate Detection
+
+All import paths funnel through `dedup_service.find_duplicates()` — a centralized function that checks DOI, arXiv ID, and normalized title (lowercase, strip punctuation, collapse whitespace). The three tiers run in order; earlier matches take priority. The function is library-scoped (only checks papers in the same library). The identifier import endpoint returns duplicates in the response; the manual create endpoint uses a `?check_duplicates=true` query param that returns `409` with candidates; the BibTeX flow annotates each entry in the preview.
 
 ### Agent Provenance
 

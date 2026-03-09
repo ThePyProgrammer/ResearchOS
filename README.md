@@ -7,6 +7,8 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Library management** — import papers and websites via DOI, arXiv ID, URL, OpenReview, or Zenodo; organize into nested collections with drag-and-drop
 - **Multiple libraries** — create and switch between independent libraries
 - **Websites as first-class items** — blog posts, articles, and any URL live alongside papers with their own metadata
+- **BibTeX import/export** — bulk-import `.bib` files with a two-phase preview/confirm flow; export papers and websites as `.bib` with a tree-view editor for reviewing and editing entries before download
+- **Duplicate detection** — centralized three-tier dedup (DOI, arXiv ID, normalized title) across all import paths: identifier import, PDF upload, and BibTeX import; surfaces warnings with "Import anyway" option
 - **PDF upload with metadata extraction** — drag-and-drop PDFs; LLM-powered extraction of title, authors, date, venue, abstract, and DOI
 - **PDF storage** — stored in Supabase Storage, rendered inline; auto-downloaded from source on import
 - **Notes IDE** — per-item note filesystem with folders and files, powered by a tiptap WYSIWYG editor with LaTeX support
@@ -110,6 +112,9 @@ All routes are prefixed `/api`. Responses are camelCase JSON. See the full API r
 | GET/PATCH/DELETE | `/api/papers/{id}` | Single paper |
 | POST | `/api/papers/import` | Resolve DOI/arXiv/URL/OpenReview/Zenodo and add to library |
 | POST | `/api/papers/extract-metadata` | Extract metadata from uploaded PDF via LLM |
+| POST | `/api/papers/import-bibtex/parse` | Parse `.bib` file and preview entries with duplicate detection |
+| POST | `/api/papers/import-bibtex/confirm` | Confirm BibTeX import with selected entries |
+| GET | `/api/papers/export-bibtex` | Export papers/websites as `.bib`; `?ids=&library_id=&collection_id=` |
 | POST | `/api/papers/{id}/pdf` | Upload PDF (multipart/form-data) |
 | POST | `/api/papers/{id}/pdf/fetch` | Download PDF from external URL to Supabase Storage |
 | DELETE | `/api/papers/{id}/pdf` | Remove PDF |
@@ -166,7 +171,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed walkthrough of the codebas
 
 Scoped for a single-user, local research OS (no auth, no collaboration, no multi-tenancy).
 
-1. **Library Interchange** — BibTeX/RIS/CSL-JSON import and export, duplicate detection
+1. **Library Interchange** — ~~BibTeX import and export~~, ~~duplicate detection~~, RIS/CSL-JSON import and export (planned)
 2. **Scholarly Discovery** — OpenAlex, Semantic Scholar, and Unpaywall integrations
 3. **Literature Review Automation** — prompt-to-collection pipeline, continuous refresh, provider-aware throttling
 4. **Search & Retrieval** — hybrid full-text + vector search, embedding pipeline
