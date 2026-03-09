@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { librariesApi, papersApi } from './api'
+import { chatApi, librariesApi, papersApi } from './api'
 
 
 describe('api service wrapper', () => {
@@ -96,5 +96,53 @@ describe('api service wrapper', () => {
     expect(url).toBe('/api/papers/p_1/pdf')
     expect(options.method).toBe('POST')
     expect(options.body).toBeInstanceOf(FormData)
+  })
+
+  it('checkDuplicates returns duplicate payload on 409 and created payload on 201', async () => {
+    global.fetch.mockResolvedValueOnce({
+      status: 409,
+      ok: false,
+      json: async () => ({ duplicates: [{ id: 'p_1' }], paper: { title: 'A' } }),
+    })
+
+    const duplicate = await papersApi.checkDuplicates({ title: 'A' })
+    expect(duplicate.duplicates).toHaveLength(1)
+
+    global.fetch.mockResolvedValueOnce({
+      status: 201,
+      ok: true,
+      json: async () => ({ id: 'p_2', title: 'B' }),
+    })
+
+    const created = await papersApi.checkDuplicates({ title: 'B' })
+    expect(created.created.id).toBe('p_2')
+  })
+
+  it('exportBibtex returns raw text', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '@article{p_1,title={Test}}',
+    })
+
+    const bib = await papersApi.exportBibtex({ ids: ['p_1', 'w_1'] })
+
+    expect(bib).toContain('@article{p_1')
+    expect(global.fetch).toHaveBeenCalledWith('/api/papers/export-bibtex?ids=p_1%2Cw_1')
+  })
+
+  it('chatApi endpoints use expected paths', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => [],
+    })
+
+    await chatApi.list('p_1')
+    await chatApi.extractText('p_1')
+
+    expect(global.fetch.mock.calls[0][0]).toBe('/api/papers/p_1/chat')
+    expect(global.fetch.mock.calls[1][0]).toBe('/api/papers/p_1/text')
+    expect(global.fetch.mock.calls[1][1].method).toBe('POST')
   })
 })

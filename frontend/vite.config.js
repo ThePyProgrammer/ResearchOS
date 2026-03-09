@@ -13,5 +13,6 @@ export default defineConfig({
     setupFiles: './src/test/setup.js',
     globals: true,
     clearMocks: true,
+    include: ['src/**/*.test.{js,jsx,ts,tsx}'],
   },
 })
