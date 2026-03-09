@@ -240,11 +240,65 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
   const [notesError, setNotesError] = useState(null)
   const [fetchingPdf, setFetchingPdf] = useState(false)
   const [fetchPdfError, setFetchPdfError] = useState(null)
+  const [relatedLoading, setRelatedLoading] = useState(false)
+  const [relatedError, setRelatedError] = useState(null)
+  const [relatedPapers, setRelatedPapers] = useState([])
+  const [importingRelatedId, setImportingRelatedId] = useState(null)
+  const [relatedLoaded, setRelatedLoaded] = useState(false)
   const { activeLibrary, activeLibraryId } = useLibrary()
   const navigate = useNavigate()
 
   const hasPdfInStorage = paper.pdfUrl?.includes('/storage/v1/object/public/pdfs/')
   const hasExternalPdf = paper.pdfUrl && !hasPdfInStorage
+
+  useEffect(() => {
+    setRelatedPapers([])
+    setRelatedError(null)
+    setRelatedLoading(false)
+    setImportingRelatedId(null)
+    setRelatedLoaded(false)
+  }, [paper.id])
+
+  const loadRelated = useCallback(async (force = false) => {
+    if (relatedLoading) return
+    if (!force && relatedLoaded) return
+    setRelatedLoading(true)
+    setRelatedError(null)
+    try {
+      const data = await papersApi.related(paper.id, { limit: 12 })
+      setRelatedPapers(data.candidates || [])
+      setRelatedLoaded(true)
+    } catch (err) {
+      setRelatedError(err.message || 'Failed to fetch related papers')
+      setRelatedLoaded(true)
+    } finally {
+      setRelatedLoading(false)
+    }
+  }, [paper.id, relatedLoading, relatedLoaded])
+
+  useEffect(() => {
+    if (tab === 'graph' && !relatedLoaded) {
+      loadRelated()
+    }
+  }, [tab, relatedLoaded, loadRelated])
+
+  const importRelatedPaper = async (candidate) => {
+    if (!candidate?.importIdentifier) return
+    setImportingRelatedId(candidate.openalexId)
+    try {
+      const imported = await papersApi.import(candidate.importIdentifier, activeLibraryId || paper.libraryId)
+      const importedId = imported?.id
+      setRelatedPapers(prev => prev.map(item => (
+        item.openalexId === candidate.openalexId
+          ? { ...item, alreadyExists: true, existingPaperId: importedId || item.existingPaperId }
+          : item
+      )))
+    } catch (err) {
+      setRelatedError(err.message || 'Failed to import related paper')
+    } finally {
+      setImportingRelatedId(null)
+    }
+  }
 
   const handleFetchPdf = async () => {
     setFetchingPdf(true)
@@ -490,9 +544,80 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
         )}
 
         {tab === 'graph' && (
-          <div className="p-4">
-            <div className="h-40 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
-              <p className="text-xs text-slate-400">Citation graph coming soon</p>
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] text-slate-500">
+                From OpenAlex citation graph + semantic neighbors
+              </p>
+              <button
+                onClick={() => loadRelated(true)}
+                disabled={relatedLoading}
+                className="px-2 py-1 text-[11px] rounded border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {relatedLoading ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+            {relatedError && (
+              <p className="text-[11px] text-red-500">{relatedError}</p>
+            )}
+            {relatedLoading && relatedPapers.length === 0 && (
+              <div className="h-24 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
+                <p className="text-xs text-slate-400">Finding related papers...</p>
+              </div>
+            )}
+            {!relatedLoading && relatedPapers.length === 0 && !relatedError && (
+              <div className="h-24 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
+                <p className="text-xs text-slate-400">No related papers found for this item.</p>
+              </div>
+            )}
+            <div className="space-y-2">
+              {relatedPapers.map(candidate => (
+                <div key={candidate.openalexId} className="p-2.5 rounded-lg border border-slate-200 bg-white space-y-2">
+                  <p className="text-xs font-semibold text-slate-800 leading-snug">{candidate.title}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {candidate.authors?.slice(0, 2).join(', ') || 'Unknown authors'}
+                    {candidate.authors?.length > 2 ? ` +${candidate.authors.length - 2}` : ''}
+                    {candidate.year ? ` · ${candidate.year}` : ''}
+                    {candidate.venue ? ` · ${candidate.venue}` : ''}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {(candidate.reasons || []).map(reason => (
+                      <span key={`${candidate.openalexId}-${reason.type}`} className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                        {reason.label}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {candidate.alreadyExists ? (
+                      <button
+                        onClick={() => candidate.existingPaperId && navigate(`/library/paper/${candidate.existingPaperId}`)}
+                        disabled={!candidate.existingPaperId}
+                        className="px-2 py-1 text-[11px] rounded border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        In library
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => importRelatedPaper(candidate)}
+                        disabled={!candidate.importIdentifier || importingRelatedId === candidate.openalexId}
+                        className="px-2 py-1 text-[11px] rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {importingRelatedId === candidate.openalexId ? 'Importing...' : 'Import'}
+                      </button>
+                    )}
+                    {candidate.openalexUrl && (
+                      <a
+                        href={candidate.openalexUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2 py-1 text-[11px] rounded border border-slate-200 text-slate-600 hover:bg-slate-50"
+                      >
+                        OpenAlex
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -1886,4 +2011,3 @@ export default function Library() {
     </div>
   )
 }
-

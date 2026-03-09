@@ -145,4 +145,16 @@ describe('api service wrapper', () => {
     expect(global.fetch.mock.calls[1][0]).toBe('/api/papers/p_1/text')
     expect(global.fetch.mock.calls[1][1].method).toBe('POST')
   })
+
+  it('related papers endpoint passes the limit query parameter', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ candidates: [] }),
+    })
+
+    await papersApi.related('p_42', { limit: 9 })
+
+    expect(global.fetch.mock.calls[0][0]).toBe('/api/papers/p_42/related?limit=9')
+  })
 })

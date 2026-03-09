@@ -26,6 +26,7 @@ export const papersApi = {
     return apiFetch(`/papers${qs ? `?${qs}` : ''}`)
   },
   get: (id) => apiFetch(`/papers/${id}`),
+  related: (id, { limit = 12 } = {}) => apiFetch(`/papers/${id}/related?limit=${encodeURIComponent(limit)}`),
   create: (data, { checkDuplicates = false } = {}) => {
     const qs = checkDuplicates ? '?check_duplicates=true' : ''
     return apiFetch(`/papers${qs}`, { method: 'POST', body: data })

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from conftest import make_models
+from models.discovery import RelatedPapersResponse
 
 
 def test_export_bibtex_returns_download(client, mocker):
@@ -94,3 +95,43 @@ def test_fetch_pdf_validation_errors(client, mocker):
     response = client.post("/api/papers/p_1/pdf/fetch")
     assert response.status_code == 422
     assert response.json() == {"detail": "PDF is already in storage"}
+
+
+def test_related_papers_returns_typed_response(client, mocker):
+    paper = mocker.Mock()
+    paper.id = "p_1"
+    paper.library_id = "lib_1"
+    mocker.patch("app.papers.paper_service.get_paper", return_value=paper)
+    mocker.patch(
+        "app.papers.related_paper_service.find_related_papers",
+        return_value=RelatedPapersResponse(
+            seed_paper_id="p_1",
+            seed_openalex_id="W123",
+            candidates=[],
+            total_candidates=0,
+        ),
+    )
+
+    response = client.get("/api/papers/p_1/related")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["seedPaperId"] == "p_1"
+    assert payload["seedOpenalexId"] == "W123"
+    assert payload["candidates"] == []
+
+
+def test_related_papers_maps_openalex_failures_to_502(client, mocker):
+    paper = mocker.Mock()
+    paper.id = "p_1"
+    paper.library_id = "lib_1"
+    mocker.patch("app.papers.paper_service.get_paper", return_value=paper)
+    mocker.patch(
+        "app.papers.related_paper_service.find_related_papers",
+        side_effect=RuntimeError("OpenAlex request failed"),
+    )
+
+    response = client.get("/api/papers/p_1/related")
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "OpenAlex request failed"}

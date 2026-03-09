@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from models.paper import PaperCreate, PaperUpdate
 from services import paper_service
 from services import activity_service
+from services import related_paper_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/papers", tags=["papers"])
@@ -487,6 +488,25 @@ async def get_paper(paper_id: str):
     if paper is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
     return JSONResponse(paper.model_dump(by_alias=True))
+
+
+@router.get("/{paper_id}/related")
+async def get_related_papers(
+    paper_id: str,
+    limit: int = Query(12, ge=1, le=30),
+):
+    paper = paper_service.get_paper(paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    try:
+        related = await related_paper_service.find_related_papers(
+            paper,
+            limit=limit,
+            library_id=paper.library_id,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return JSONResponse(related.model_dump(by_alias=True))
 
 
 @router.patch("/{paper_id}")
