@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { proposalsApi, papersApi, websitesApi } from '../../services/api'
-import { user } from '../../data/mockData'
 import { useLibrary } from '../../context/LibraryContext'
 import WindowModal from '../WindowModal'
+
+const user = { name: 'Dr. Researcher', org: 'Lab Alpha', initials: 'DR' }
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
