@@ -1,8 +1,8 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, UploadFile, File
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from models.paper import PaperCreate, PaperUpdate
@@ -85,6 +85,45 @@ async def list_papers(
         library_id=library_id,
     )
     return JSONResponse([p.model_dump(by_alias=True) for p in papers])
+
+
+@router.get("/export-bibtex")
+async def export_bibtex_file(
+    library_id: Optional[str] = None,
+    collection_id: Optional[str] = None,
+    ids: Optional[str] = Query(None, description="Comma-separated paper IDs to export"),
+):
+    """
+    Export papers as a downloadable .bib file.
+
+    Filter by library_id, collection_id, or a specific set of comma-separated IDs.
+    """
+    from services.bibtex_service import export_bibtex
+
+    if ids:
+        # Export specific papers by ID
+        id_list = [i.strip() for i in ids.split(",") if i.strip()]
+        papers = []
+        for pid in id_list:
+            p = paper_service.get_paper(pid)
+            if p:
+                papers.append(p)
+    else:
+        papers = paper_service.list_papers(
+            library_id=library_id,
+            collection_id=collection_id,
+        )
+
+    if not papers:
+        raise HTTPException(status_code=404, detail="No papers to export")
+
+    bib_content = export_bibtex(papers)
+
+    return Response(
+        content=bib_content,
+        media_type="application/x-bibtex",
+        headers={"Content-Disposition": 'attachment; filename="researchos-export.bib"'},
+    )
 
 
 @router.post("", status_code=201)

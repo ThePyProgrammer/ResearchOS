@@ -62,6 +62,20 @@ export const papersApi = {
   /** Confirm BibTeX import with selected entries. */
   confirmBibtex: (entries, libraryId) =>
     apiFetch('/papers/import-bibtex/confirm', { method: 'POST', body: { entries, library_id: libraryId || null } }),
+  /** Fetch BibTeX text for papers. Pass ids (array), or libraryId/collectionId for bulk. */
+  exportBibtex: async ({ ids, libraryId, collectionId } = {}) => {
+    const params = new URLSearchParams()
+    if (ids?.length) params.set('ids', ids.join(','))
+    if (libraryId) params.set('library_id', libraryId)
+    if (collectionId) params.set('collection_id', collectionId)
+    const res = await fetch(`${BASE}/papers/export-bibtex?${params}`)
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`
+      try { const err = await res.json(); detail = err.detail || detail } catch (_) {}
+      throw new Error(detail)
+    }
+    return res.text()
+  },
   /** Extract metadata from a PDF file (File object) using LLM. */
   extractMetadata: async (file) => {
     const formData = new FormData()

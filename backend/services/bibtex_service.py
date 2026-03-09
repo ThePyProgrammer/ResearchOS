@@ -1,11 +1,8 @@
 """
-BibTeX import service: parses .bib files and maps entries to PaperCreate models.
+BibTeX import/export service.
 
-Handles common BibTeX messiness:
-  - LaTeX escapes in titles and author names
-  - Multiple author formats ("Last, First" vs "First Last" vs "First Last and ...")
-  - Missing or malformed fields (year, venue, abstract)
-  - Entries with no title (skipped)
+Import: parses .bib files and maps entries to PaperCreate models.
+Export: converts Paper models to BibTeX strings.
 """
 
 import logging
@@ -273,3 +270,142 @@ def parse_bibtex(content: str) -> list[ParsedBibtexEntry]:
 
     logger.info("Parsed %d BibTeX entries (%d valid)", len(results), sum(1 for r in results if r.paper))
     return results
+
+
+# ---------------------------------------------------------------------------
+# Export: Paper → BibTeX
+# ---------------------------------------------------------------------------
+
+def _make_citation_key(paper) -> str:
+    """
+    Generate a BibTeX citation key like 'vaswani2017attention'.
+
+    Format: first author last name (lowercase) + year + first significant title word.
+    """
+    # First author's last name
+    last_name = "unknown"
+    if paper.authors:
+        first_author = paper.authors[0]
+        if "," in first_author:
+            # "Last, First" format
+            last_name = first_author.split(",")[0].strip()
+        else:
+            # "First Last" format
+            tokens = first_author.split()
+            last_name = tokens[-1] if tokens else "unknown"
+
+    last_name = re.sub(r"[^a-zA-Z]", "", last_name).lower()
+
+    # Year
+    year = str(paper.year) if paper.year else ""
+
+    # First significant word of title
+    stop_words = {"a", "an", "the", "on", "of", "for", "in", "to", "and", "with", "is", "are", "by"}
+    title_word = ""
+    for word in paper.title.split():
+        clean = re.sub(r"[^a-zA-Z]", "", word).lower()
+        if clean and clean not in stop_words:
+            title_word = clean
+            break
+
+    return f"{last_name}{year}{title_word}" or "entry"
+
+
+def _escape_bibtex(text: str) -> str:
+    """Escape special BibTeX characters in a string."""
+    if not text:
+        return ""
+    # Escape &, %, #, _ which are special in LaTeX/BibTeX
+    for char in ("&", "%", "#"):
+        text = text.replace(char, f"\\{char}")
+    return text
+
+
+def _format_authors_bibtex(authors: list[str]) -> str:
+    """
+    Format authors for BibTeX: "Last, First and Last, First and ...".
+
+    Input authors may be "First Last" or "Last, First" — normalize to "Last, First".
+    """
+    bibtex_names = []
+    for author in authors:
+        if "," in author:
+            # Already "Last, First" — keep as-is
+            bibtex_names.append(author.strip())
+        else:
+            # "First [Middle] Last" → "Last, First [Middle]"
+            tokens = author.strip().split()
+            if len(tokens) >= 2:
+                bibtex_names.append(f"{tokens[-1]}, {' '.join(tokens[:-1])}")
+            else:
+                bibtex_names.append(author.strip())
+
+    return " and ".join(bibtex_names)
+
+
+def paper_to_bibtex(paper) -> str:
+    """Convert a Paper model to a BibTeX entry string."""
+    key = _make_citation_key(paper)
+
+    # Choose entry type based on venue
+    venue_lower = (paper.venue or "").lower()
+    if paper.arxiv_id or "arxiv" in venue_lower:
+        entry_type = "article"
+    elif any(kw in venue_lower for kw in ("proceedings", "conference", "workshop", "symposium")):
+        entry_type = "inproceedings"
+    else:
+        entry_type = "article"
+
+    fields = []
+    fields.append(f"  title={{{_escape_bibtex(paper.title)}}}")
+
+    if paper.authors:
+        fields.append(f"  author={{{_escape_bibtex(_format_authors_bibtex(paper.authors))}}}")
+
+    if paper.year:
+        fields.append(f"  year={{{paper.year}}}")
+
+    if paper.venue and paper.venue != "Unknown":
+        if entry_type == "inproceedings":
+            fields.append(f"  booktitle={{{_escape_bibtex(paper.venue)}}}")
+        else:
+            fields.append(f"  journal={{{_escape_bibtex(paper.venue)}}}")
+
+    if paper.doi:
+        fields.append(f"  doi={{{paper.doi}}}")
+
+    if paper.arxiv_id:
+        fields.append(f"  eprint={{{paper.arxiv_id}}}")
+        fields.append("  archiveprefix={arXiv}")
+
+    if paper.abstract:
+        fields.append(f"  abstract={{{_escape_bibtex(paper.abstract)}}}")
+
+    if paper.pdf_url:
+        fields.append(f"  url={{{paper.pdf_url}}}")
+
+    fields_str = ",\n".join(fields)
+    return f"@{entry_type}{{{key},\n{fields_str}\n}}"
+
+
+def export_bibtex(papers: list) -> str:
+    """Convert a list of Paper models to a complete BibTeX file string."""
+    # Ensure unique citation keys
+    seen_keys: dict[str, int] = {}
+    entries = []
+
+    for paper in papers:
+        entry = paper_to_bibtex(paper)
+        # Extract the key and deduplicate
+        key = _make_citation_key(paper)
+        if key in seen_keys:
+            seen_keys[key] += 1
+            # Replace first occurrence of the key with a suffixed version
+            new_key = f"{key}{chr(96 + seen_keys[key])}"  # key, keyb, keyc, ...
+            entry = entry.replace(f"{{{key},", f"{{{new_key},", 1)
+        else:
+            seen_keys[key] = 1
+
+        entries.append(entry)
+
+    return "\n\n".join(entries) + "\n"
