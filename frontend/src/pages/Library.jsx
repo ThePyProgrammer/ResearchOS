@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+﻿import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, websitesApi, searchApi, notesApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
@@ -23,7 +23,7 @@ function parseBibtexEntries(text) {
     const key = m[2].trim()
     const body = m[3]
     const fields = []
-    // Match field = {value} or field = {{value}} — handles multiline values
+    // Match field = {value} or field = {{value}} - handles multiline values
     const fieldRe = /\s*(\w+)\s*=\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g
     let fm
     while ((fm = fieldRe.exec(body)) !== null) {
@@ -65,8 +65,8 @@ function formatAuthors(authors) {
 
 function itemYear(item) {
   if (item.publishedDate) return item.publishedDate.slice(0, 4)
-  if (item.itemType === 'website') return '—'
-  return item.year || '—'
+  if (item.itemType === 'website') return '-'
+  return item.year || '-'
 }
 
 function itemVenue(item) {
@@ -276,12 +276,6 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
     }
   }, [paper.id, relatedLoading, relatedLoaded])
 
-  useEffect(() => {
-    if (tab === 'graph' && !relatedLoaded) {
-      loadRelated()
-    }
-  }, [tab, relatedLoaded, loadRelated])
-
   const importRelatedPaper = async (candidate) => {
     if (!candidate?.importIdentifier) return
     setImportingRelatedId(candidate.openalexId)
@@ -366,7 +360,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
               disabled={deleting}
               className="flex-1 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
             >
-              {deleting ? 'Deleting…' : 'Delete'}
+              {deleting ? 'Deleting...' : 'Delete'}
             </button>
             <button
               onClick={() => setConfirmDelete(false)}
@@ -384,7 +378,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
           <h3 className="text-sm font-semibold text-slate-900 leading-snug">{paper.title}</h3>
           <p className="text-xs text-slate-500 leading-relaxed">
             {paper.authors.slice(0, 3).join(', ')}{paper.authors.length > 3 ? ` +${paper.authors.length - 3} more` : ''}
-            {paper.year ? <span className="text-slate-400"> · {paper.year}</span> : null}
+            {paper.year ? <span className="text-slate-400"> - {paper.year}</span> : null}
           </p>
 
           {/* Action buttons */}
@@ -488,7 +482,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
                       onClick={() => navigate(`/library/paper/${paper.id}`)}
                       className="w-full py-1.5 text-[11px] font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
                     >
-                      Open in editor →
+                      Open in editor
                     </button>
                   </div>
                 ) : (
@@ -515,7 +509,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
                       {generatingNotes ? (
                         <>
                           <span className="animate-spin inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full" />
-                          Generating…
+                          Generating...
                         </>
                       ) : (
                         <>
@@ -538,61 +532,74 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
               onClick={() => navigate(`/library/paper/${paper.id}`)}
               className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-blue-300 hover:text-blue-600 transition-colors"
             >
-              Open note editor →
+              Open note editor
             </button>
           </div>
         )}
 
         {tab === 'graph' && (
           <div className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] text-slate-500">
-                From OpenAlex citation graph + semantic neighbors
-              </p>
+            <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-[11px] font-semibold tracking-wide text-blue-700 uppercase">Related Graph</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    OpenAlex citation links + semantic neighbors
+                  </p>
+                </div>
+              </div>
               <button
-                onClick={() => loadRelated(true)}
+                onClick={() => loadRelated(relatedLoaded)}
                 disabled={relatedLoading}
-                className="px-2 py-1 text-[11px] rounded border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                {relatedLoading ? 'Refreshing...' : 'Refresh'}
+                <Icon name={relatedLoaded ? 'refresh' : 'hub'} className="text-[12px]" />
+                {relatedLoading ? (relatedLoaded ? 'Refreshing...' : 'Loading...') : (relatedLoaded ? 'Refresh' : 'Load related')}
               </button>
+              {relatedLoaded && (
+                <p className="text-[10px] text-blue-700/80 font-medium text-center">
+                  {relatedPapers.length} results
+                </p>
+              )}
             </div>
             {relatedError && (
-              <p className="text-[11px] text-red-500">{relatedError}</p>
+              <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] text-red-600">
+                {relatedError}
+              </div>
             )}
             {relatedLoading && relatedPapers.length === 0 && (
-              <div className="h-24 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
-                <p className="text-xs text-slate-400">Finding related papers...</p>
+              <div className="h-24 bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl flex items-center justify-center border border-slate-200">
+                <p className="text-xs text-slate-500">Finding related papers...</p>
               </div>
             )}
-            {!relatedLoading && relatedPapers.length === 0 && !relatedError && (
-              <div className="h-24 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
-                <p className="text-xs text-slate-400">No related papers found for this item.</p>
+            {!relatedLoading && relatedLoaded && relatedPapers.length === 0 && !relatedError && (
+              <div className="h-24 bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl flex items-center justify-center border border-slate-200">
+                <p className="text-xs text-slate-500">No related papers found for this item.</p>
               </div>
             )}
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {relatedPapers.map(candidate => (
-                <div key={candidate.openalexId} className="p-2.5 rounded-lg border border-slate-200 bg-white space-y-2">
-                  <p className="text-xs font-semibold text-slate-800 leading-snug">{candidate.title}</p>
-                  <p className="text-[11px] text-slate-500">
+                <div key={candidate.openalexId} className="p-3 rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_4px_14px_rgba(37,99,235,0.08)] transition-shadow space-y-2.5">
+                  <p className="text-xs font-semibold text-slate-800 leading-snug line-clamp-2">{candidate.title}</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
                     {candidate.authors?.slice(0, 2).join(', ') || 'Unknown authors'}
                     {candidate.authors?.length > 2 ? ` +${candidate.authors.length - 2}` : ''}
-                    {candidate.year ? ` · ${candidate.year}` : ''}
-                    {candidate.venue ? ` · ${candidate.venue}` : ''}
+                    {candidate.year ? ` - ${candidate.year}` : ''}
+                    {candidate.venue ? ` - ${candidate.venue}` : ''}
                   </p>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {(candidate.reasons || []).map(reason => (
-                      <span key={`${candidate.openalexId}-${reason.type}`} className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                      <span key={`${candidate.openalexId}-${reason.type}`} className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-medium">
                         {reason.label}
                       </span>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 pt-0.5">
                     {candidate.alreadyExists ? (
                       <button
                         onClick={() => candidate.existingPaperId && navigate(`/library/paper/${candidate.existingPaperId}`)}
                         disabled={!candidate.existingPaperId}
-                        className="px-2 py-1 text-[11px] rounded border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50"
+                        className="px-2.5 py-1 text-[11px] rounded-lg border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 font-medium"
                       >
                         In library
                       </button>
@@ -600,7 +607,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
                       <button
                         onClick={() => importRelatedPaper(candidate)}
                         disabled={!candidate.importIdentifier || importingRelatedId === candidate.openalexId}
-                        className="px-2 py-1 text-[11px] rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                        className="px-2.5 py-1 text-[11px] rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium"
                       >
                         {importingRelatedId === candidate.openalexId ? 'Importing...' : 'Import'}
                       </button>
@@ -610,7 +617,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
                         href={candidate.openalexUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="px-2 py-1 text-[11px] rounded border border-slate-200 text-slate-600 hover:bg-slate-50"
+                        className="px-2.5 py-1 text-[11px] rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium"
                       >
                         OpenAlex
                       </a>
@@ -694,7 +701,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
           <div className="flex gap-2">
             <button onClick={handleDelete} disabled={deleting}
               className="flex-1 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50">
-              {deleting ? 'Deleting…' : 'Delete'}
+              {deleting ? 'Deleting...' : 'Delete'}
             </button>
             <button onClick={() => setConfirmDelete(false)}
               className="flex-1 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50">
@@ -713,7 +720,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
               ? <>{item.authors.slice(0, 3).join(', ')}{item.authors.length > 3 ? ` +${item.authors.length - 3} more` : ''}</>
               : <span className="italic">No author</span>
             }
-            {item.publishedDate ? <span className="text-slate-400"> · {item.publishedDate.slice(0, 4)}</span> : null}
+            {item.publishedDate ? <span className="text-slate-400"> - {item.publishedDate.slice(0, 4)}</span> : null}
           </p>
           <div className="flex gap-2">
             <button
@@ -758,7 +765,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
                 <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Domain</span>
                 <a href={item.url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline truncate">{domain}</a>
               </div>
-              <EditableField label="URL" value={item.url} placeholder="https://…" mono
+              <EditableField label="URL" value={item.url} placeholder="https://..." mono
                 onSave={v => handleFieldSave('url', v)} />
             </div>
 
@@ -791,7 +798,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
             <EditableTextArea
               label="Description"
               value={item.description}
-              placeholder="Add description…"
+              placeholder="Add description..."
               onSave={v => handleFieldSave('description', v)}
             />
 
@@ -819,7 +826,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
                     <button onClick={() => { handleFieldSave('github_url', githubDraft.trim() || null); setEditingGithub(false) }}
                       className="px-2 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 flex-shrink-0">Save</button>
                     <button onClick={() => setEditingGithub(false)}
-                      className="px-2 py-1 text-slate-400 text-xs rounded-lg hover:bg-slate-100 flex-shrink-0">✕</button>
+                      className="px-2 py-1 text-slate-400 text-xs rounded-lg hover:bg-slate-100 flex-shrink-0">x</button>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 group">
@@ -842,7 +849,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
                     ) : (
                       <button onClick={() => { setGithubDraft(''); setEditingGithub(true) }}
                         className="text-xs text-slate-400 hover:text-blue-600 transition-colors">
-                        Add GitHub URL…
+                        Add GitHub URL...
                       </button>
                     )}
                   </div>
@@ -882,7 +889,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
                       onClick={() => navigate(`/library/website/${item.id}`)}
                       className="w-full py-1.5 text-[11px] font-medium text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
                     >
-                      Open in editor →
+                      Open in editor
                     </button>
                   </div>
                 ) : (
@@ -909,7 +916,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
                       {generatingNotes ? (
                         <>
                           <span className="animate-spin inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full" />
-                          Generating…
+                          Generating...
                         </>
                       ) : (
                         <>
@@ -932,7 +939,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
               onClick={() => navigate(`/library/website/${item.id}`)}
               className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-teal-300 hover:text-teal-600 transition-colors"
             >
-              Open note editor →
+              Open note editor
             </button>
           </div>
         )}
@@ -979,7 +986,7 @@ export default function Library() {
   const [sortDir, setSortDir] = useState('asc')  // 'asc' | 'desc'
   const location = useLocation()
 
-  // Derive active filters from URL — URL is the single source of truth
+  // Derive active filters from URL - URL is the single source of truth
   const activeCollection = searchParams.get('col') || 'all'
   const filterTab = searchParams.get('status') || 'all'
   const urlQuery = searchParams.get('q') || ''
@@ -1356,7 +1363,7 @@ export default function Library() {
                     type="text"
                     value={titleFilter}
                     onChange={e => setTitleFilter(e.target.value)}
-                    placeholder="Filter by title…"
+                    placeholder="Filter by title..."
                     className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                   />
                   {titleFilter && (
@@ -1376,7 +1383,7 @@ export default function Library() {
                     type="text"
                     value={venueFilter}
                     onChange={e => setVenueFilter(e.target.value)}
-                    placeholder="e.g. NeurIPS, arXiv…"
+                    placeholder="e.g. NeurIPS, arXiv..."
                     className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                   />
                   {venueFilter && (
@@ -1399,7 +1406,7 @@ export default function Library() {
                     min="1900" max="2100"
                     className="w-20 px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                   />
-                  <span className="text-slate-300 text-sm">—</span>
+                  <span className="text-slate-300 text-sm">-</span>
                   <input
                     type="number"
                     value={yearTo}
@@ -1874,7 +1881,7 @@ export default function Library() {
                 <div className="flex-1 overflow-y-auto px-5 pb-3 space-y-2">
                   {exportEntries.map((entry, ei) => (
                     <div key={ei} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                      {/* Entry header — collapsible */}
+                      {/* Entry header - collapsible */}
                       <button
                         onClick={() => setExportEntries(prev => prev.map((e, i) => i === ei ? { ...e, collapsed: !e.collapsed } : e))}
                         className="w-full flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
