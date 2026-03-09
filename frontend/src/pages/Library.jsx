@@ -985,7 +985,7 @@ export default function Library() {
   const [titleFilter, setTitleFilter] = useState('')
   const [venueFilter, setVenueFilter] = useState('')
   const [tagFilters, setTagFilters] = useState(new Set())
-  const [sortKey, setSortKey] = useState(null)   // 'title' | 'date' | 'authors' | null
+  const [sortKey, setSortKey] = useState('date')   // 'title' | 'date' | 'authors' | null
   const [sortDir, setSortDir] = useState('asc')  // 'asc' | 'desc'
   const location = useLocation()
 
