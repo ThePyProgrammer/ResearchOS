@@ -106,6 +106,7 @@ async def import_github_repo(data: GitHubRepoImportRequest):
         version=meta.get("version"),
         doi=meta.get("doi"),
         license=meta.get("license"),
+        website_url=meta.get("website_url"),
         tags=meta.get("topics") or [],
         status="inbox",
         source="human",

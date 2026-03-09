@@ -792,4 +792,5 @@ async def resolve_github_repo(url: str) -> dict:
         "version": citation.get("version"),
         "doi": citation.get("doi"),
         "license": license_id,
+        "website_url": repo_data.get("homepage") or None,
     }

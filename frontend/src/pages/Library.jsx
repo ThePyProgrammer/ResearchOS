@@ -1021,6 +1021,8 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete })
   const [deleting, setDeleting] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
+  const [editingWebsite, setEditingWebsite] = useState(false)
+  const [websiteDraft, setWebsiteDraft] = useState('')
   const { activeLibraryId } = useLibrary()
   const navigate = useNavigate()
 
@@ -1135,6 +1137,13 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete })
                 DOI
               </a>
             )}
+            {item.websiteUrl && (
+              <a href={item.websiteUrl} target="_blank" rel="noreferrer"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                title={item.websiteUrl}>
+                <Icon name="language" className="text-[14px]" />
+              </a>
+            )}
           </div>
         </div>
 
@@ -1184,11 +1193,6 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete })
                     className="text-blue-600 hover:underline font-mono truncate">{item.doi}</a>
                 </div>
               )}
-              <div className="flex gap-3 text-xs">
-                <span className="text-slate-400 w-12 flex-shrink-0 pt-px">URL</span>
-                <a href={item.url} target="_blank" rel="noreferrer"
-                  className="text-violet-600 hover:underline truncate font-mono">{item.url}</a>
-              </div>
             </div>
 
             {/* Status */}
@@ -1239,6 +1243,75 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete })
                 </div>
               </div>
             )}
+
+            {/* Links */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Links</p>
+              <div className="space-y-2">
+                {/* Named links */}
+                <NamedLinks
+                  links={item.links || []}
+                  onSave={links => handleFieldSave('links', links)}
+                />
+
+                {/* GitHub repo URL — formatted, read-only (canonical identifier) */}
+                <div className="flex items-center gap-2">
+                  <Icon name="code" className="text-[15px] text-slate-400 flex-shrink-0" />
+                  <a href={item.url} target="_blank" rel="noreferrer"
+                    className="flex-1 text-xs text-violet-600 hover:underline truncate font-mono" title={item.url}>
+                    {item.url.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '')}
+                  </a>
+                </div>
+
+                {/* Website URL — editable */}
+                {editingWebsite ? (
+                  <div className="flex gap-1.5 items-center">
+                    <Icon name="language" className="text-[15px] text-slate-400 flex-shrink-0" />
+                    <input
+                      autoFocus
+                      type="url"
+                      value={websiteDraft}
+                      onChange={e => setWebsiteDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { handleFieldSave('website_url', websiteDraft.trim() || null); setEditingWebsite(false) }
+                        if (e.key === 'Escape') setEditingWebsite(false)
+                      }}
+                      placeholder="https://project-website.com"
+                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 font-mono"
+                    />
+                    <button onClick={() => { handleFieldSave('website_url', websiteDraft.trim() || null); setEditingWebsite(false) }}
+                      className="px-2 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 flex-shrink-0">Save</button>
+                    <button onClick={() => setEditingWebsite(false)}
+                      className="px-2 py-1 text-slate-400 text-xs rounded-lg hover:bg-slate-100 flex-shrink-0">✕</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 group">
+                    <Icon name="language" className="text-[15px] text-slate-400 flex-shrink-0" />
+                    {item.websiteUrl ? (
+                      <>
+                        <a href={item.websiteUrl} target="_blank" rel="noreferrer"
+                          className="flex-1 text-xs text-blue-600 hover:underline truncate" title={item.websiteUrl}>
+                          {item.websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                        </a>
+                        <button onClick={() => { setWebsiteDraft(item.websiteUrl || ''); setEditingWebsite(true) }}
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-slate-500 flex-shrink-0 transition-opacity">
+                          <Icon name="edit" className="text-[13px]" />
+                        </button>
+                        <button onClick={() => handleFieldSave('website_url', null)}
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 flex-shrink-0 transition-opacity">
+                          <Icon name="close" className="text-[13px]" />
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => { setWebsiteDraft(''); setEditingWebsite(true) }}
+                        className="text-xs text-slate-400 hover:text-blue-600 transition-colors">
+                        Add website URL…
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

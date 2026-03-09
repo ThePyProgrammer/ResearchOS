@@ -1,5 +1,6 @@
 from typing import Optional
 from .base import CamelModel
+from .paper import NamedLink
 
 
 class GitHubRepo(CamelModel):
@@ -18,6 +19,8 @@ class GitHubRepo(CamelModel):
     version: Optional[str] = None
     doi: Optional[str] = None
     license: Optional[str] = None
+    website_url: Optional[str] = None
+    links: list[NamedLink] = []
     tags: list[str] = []
     status: str = "inbox"
     source: str = "human"
@@ -42,6 +45,8 @@ class GitHubRepoCreate(CamelModel):
     version: Optional[str] = None
     doi: Optional[str] = None
     license: Optional[str] = None
+    website_url: Optional[str] = None
+    links: list[NamedLink] = []
     tags: list[str] = []
     status: str = "inbox"
     source: str = "human"
@@ -61,6 +66,8 @@ class GitHubRepoUpdate(CamelModel):
     version: Optional[str] = None
     doi: Optional[str] = None
     license: Optional[str] = None
+    website_url: Optional[str] = None
+    links: Optional[list[NamedLink]] = None
     tags: Optional[list[str]] = None
     status: Optional[str] = None
     collections: Optional[list[str]] = None

@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS github_repos (
     version        TEXT,
     doi            TEXT,
     license        TEXT,
+    website_url    TEXT,
+    links          JSONB NOT NULL DEFAULT '[]',
     tags           JSONB NOT NULL DEFAULT '[]',
     status         TEXT NOT NULL DEFAULT 'inbox',
     source         TEXT NOT NULL DEFAULT 'human',
