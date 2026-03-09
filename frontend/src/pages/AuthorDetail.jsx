@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { authorsApi } from '../services/api'
+import { useLibrary } from '../context/LibraryContext'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -222,6 +223,7 @@ function ProfileLinksCard({ author, onSave }) {
 export default function AuthorDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { libraries, switchLibrary } = useLibrary()
   const [author, setAuthor] = useState(null)
   const [papers, setPapers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -521,6 +523,19 @@ export default function AuthorDetail() {
                         <span>{paper.year}</span>
                         {paper.venue && <span>{paper.venue}</span>}
                         <span>{(paper.authors || []).slice(0, 3).join(', ')}{paper.authors?.length > 3 ? ' et al.' : ''}</span>
+                        {paper.libraryId && (() => {
+                          const lib = libraries.find(l => l.id === paper.libraryId)
+                          return lib ? (
+                            <button
+                              onClick={e => { e.stopPropagation(); switchLibrary(lib.id); navigate('/library') }}
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full hover:bg-emerald-100 transition-colors"
+                              title={`Go to ${lib.name}`}
+                            >
+                              <Icon name="local_library" className="text-[11px]" />
+                              {lib.name}
+                            </button>
+                          ) : null
+                        })()}
                       </div>
                     </div>
                   ))}

@@ -10,6 +10,11 @@ class Affiliation(CamelModel):
     end_date: Optional[str] = None
 
 
+class AuthorLibrary(CamelModel):
+    id: str
+    name: str
+
+
 class Author(CamelModel):
     id: str
     name: str
@@ -23,6 +28,7 @@ class Author(CamelModel):
     affiliations: list[Affiliation] = []
     created_at: str
     paper_count: int = 0
+    libraries: list[AuthorLibrary] = []
 
 
 class AuthorCreate(CamelModel):

@@ -7,6 +7,7 @@ from typing import Optional
 from models.author import (
     Author,
     AuthorCreate,
+    AuthorLibrary,
     AuthorSearchResult,
     AuthorUpdate,
     PaperAuthor,
@@ -35,6 +36,40 @@ def normalize_author_name(name: str) -> str:
     return " ".join(tokens)
 
 
+def _get_author_libraries(author_id: str) -> list[AuthorLibrary]:
+    """Get distinct libraries that contain papers linked to this author."""
+    pa_result = (
+        get_client()
+        .table(_PAPER_AUTHORS_TABLE)
+        .select("paper_id")
+        .eq("author_id", author_id)
+        .execute()
+    )
+    paper_ids = [r["paper_id"] for r in pa_result.data]
+    if not paper_ids:
+        return []
+
+    # Fetch library_id for each linked paper
+    lib_ids: set[str] = set()
+    papers_result = get_client().table("papers").select("id,library_id").execute()
+    paper_lib_map = {r["id"]: r.get("library_id") for r in papers_result.data}
+    for pid in paper_ids:
+        lid = paper_lib_map.get(pid)
+        if lid:
+            lib_ids.add(lid)
+
+    if not lib_ids:
+        return []
+
+    libs_result = get_client().table("libraries").select("id,name").execute()
+    lib_name_map = {r["id"]: r["name"] for r in libs_result.data}
+    return [
+        AuthorLibrary(id=lid, name=lib_name_map.get(lid, lid))
+        for lid in sorted(lib_ids)
+        if lid in lib_name_map
+    ]
+
+
 def _get_paper_count(author_id: str) -> int:
     result = (
         get_client()
@@ -46,9 +81,12 @@ def _get_paper_count(author_id: str) -> int:
     return result.count or 0
 
 
-def _author_with_count(row: dict) -> Author:
+def _author_with_enrichment(row: dict) -> Author:
     author = Author.model_validate(row)
-    author = author.model_copy(update={"paper_count": _get_paper_count(author.id)})
+    author = author.model_copy(update={
+        "paper_count": _get_paper_count(author.id),
+        "libraries": _get_author_libraries(author.id),
+    })
     return author
 
 
@@ -67,19 +105,44 @@ def list_authors(
     query = query.limit(limit)
     result = query.execute()
 
-    # Batch count paper_authors
+    # Batch count paper_authors and compute libraries
     author_ids = [r["id"] for r in result.data]
     counts: dict[str, int] = {}
+    author_paper_ids: dict[str, list[str]] = {}
     if author_ids:
-        pa_result = get_client().table(_PAPER_AUTHORS_TABLE).select("author_id").execute()
+        pa_result = get_client().table(_PAPER_AUTHORS_TABLE).select("author_id,paper_id").execute()
         for row in pa_result.data:
             aid = row["author_id"]
             counts[aid] = counts.get(aid, 0) + 1
+            author_paper_ids.setdefault(aid, []).append(row["paper_id"])
+
+    # Build paper→library and library→name maps
+    paper_lib: dict[str, str | None] = {}
+    lib_map: dict[str, str] = {}
+    if author_paper_ids:
+        papers_result = get_client().table("papers").select("id,library_id").execute()
+        paper_lib = {r["id"]: r.get("library_id") for r in papers_result.data}
+
+        all_lib_ids = {lid for lid in paper_lib.values() if lid}
+        if all_lib_ids:
+            libs_result = get_client().table("libraries").select("id,name").execute()
+            lib_map = {r["id"]: r["name"] for r in libs_result.data}
 
     authors = []
     for r in result.data:
         a = Author.model_validate(r)
-        a = a.model_copy(update={"paper_count": counts.get(a.id, 0)})
+        # Compute libraries for this author
+        libs: list[AuthorLibrary] = []
+        seen_libs: set[str] = set()
+        for pid in author_paper_ids.get(a.id, []):
+            lid = paper_lib.get(pid)
+            if lid and lid not in seen_libs and lid in lib_map:
+                seen_libs.add(lid)
+                libs.append(AuthorLibrary(id=lid, name=lib_map[lid]))
+        a = a.model_copy(update={
+            "paper_count": counts.get(a.id, 0),
+            "libraries": sorted(libs, key=lambda x: x.id),
+        })
         authors.append(a)
     return authors
 
@@ -94,7 +157,7 @@ def get_author(author_id: str) -> Optional[Author]:
     )
     if not result.data:
         return None
-    return _author_with_count(result.data[0])
+    return _author_with_enrichment(result.data[0])
 
 
 def create_author(data: AuthorCreate) -> Author:
