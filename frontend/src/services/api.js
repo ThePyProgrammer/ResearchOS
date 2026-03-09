@@ -26,7 +26,26 @@ export const papersApi = {
     return apiFetch(`/papers${qs ? `?${qs}` : ''}`)
   },
   get: (id) => apiFetch(`/papers/${id}`),
-  create: (data) => apiFetch('/papers', { method: 'POST', body: data }),
+  create: (data, { checkDuplicates = false } = {}) => {
+    const qs = checkDuplicates ? '?check_duplicates=true' : ''
+    return apiFetch(`/papers${qs}`, { method: 'POST', body: data })
+  },
+  /** Check for duplicates without creating. Returns { duplicates, paper } or null if no dupes. */
+  checkDuplicates: async (data) => {
+    const res = await fetch(`${BASE}/papers?check_duplicates=true`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (res.status === 409) return res.json()
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`
+      try { const err = await res.json(); detail = err.detail || detail } catch (_) {}
+      throw new Error(detail)
+    }
+    // 201 = no duplicates, paper was created
+    return { created: await res.json() }
+  },
   update: (id, data) => apiFetch(`/papers/${id}`, { method: 'PATCH', body: data }),
   remove: (id) => apiFetch(`/papers/${id}`, { method: 'DELETE' }),
   /** Resolve a DOI, arXiv ID, or URL and add to the library. */

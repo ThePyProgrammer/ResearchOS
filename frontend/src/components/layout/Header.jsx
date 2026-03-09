@@ -84,6 +84,7 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
   const fileInputRef = useRef(null)
   const [draggingOver, setDraggingOver] = useState(false)
   const [extracting, setExtracting] = useState(false)
+  const [uploadDupes, setUploadDupes] = useState(null) // { duplicates, paper } when dedup warning shown
 
   // BibTeX mode state
   const [bibtexFile, setBibtexFile] = useState(null)
@@ -107,6 +108,7 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
       setMode('paper')
       setPdfFile(null)
       setUploadMeta({ title: '', authors: [], date: '', venue: '' })
+      setUploadDupes(null)
       setExtracting(false)
       setBibtexFile(null)
       setBibtexEntries([])
@@ -222,33 +224,64 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
     }
   }
 
-  async function handleUploadSubmit() {
+  function _buildUploadPaperData() {
+    return {
+      title: uploadMeta.title.trim(),
+      authors: uploadMeta.authors,
+      year: uploadMeta.date ? new Date(uploadMeta.date).getFullYear() : 0,
+      published_date: uploadMeta.date || null,
+      venue: uploadMeta.venue.trim() || 'Unknown',
+      status: 'inbox',
+      source: 'human',
+      collections: collectionId && collectionId !== 'unfiled' ? [collectionId] : [],
+      library_id: libraryId || null,
+    }
+  }
+
+  async function _createPaperAndUpload(paperData) {
+    const paper = await papersApi.create(paperData)
+    if (pdfFile) {
+      await papersApi.uploadPdf(paper.id, pdfFile)
+    }
+    setResult(paper)
+    setState('success')
+    onAdded?.(paper)
+  }
+
+  async function handleUploadSubmit(forceCreate = false) {
     if (!uploadMeta.title.trim() || state === 'loading') return
     setState('loading')
     setError('')
     setResult(null)
+    setUploadDupes(null)
 
     try {
-      const paperData = {
-        title: uploadMeta.title.trim(),
-        authors: uploadMeta.authors,
-        year: uploadMeta.date ? new Date(uploadMeta.date).getFullYear() : 0,
-        published_date: uploadMeta.date || null,
-        venue: uploadMeta.venue.trim() || 'Unknown',
-        status: 'inbox',
-        source: 'human',
-        collections: collectionId && collectionId !== 'unfiled' ? [collectionId] : [],
-        library_id: libraryId || null,
-      }
-      const paper = await papersApi.create(paperData)
+      const paperData = _buildUploadPaperData()
 
-      if (pdfFile) {
-        await papersApi.uploadPdf(paper.id, pdfFile)
+      if (!forceCreate) {
+        // Check for duplicates first
+        const checkResult = await papersApi.checkDuplicates(paperData)
+        if (checkResult.duplicates) {
+          // Duplicates found — show warning, don't create yet
+          setUploadDupes(checkResult)
+          setState('idle')
+          return
+        }
+        // checkResult.created means paper was already created (no dupes)
+        if (checkResult.created) {
+          const paper = checkResult.created
+          if (pdfFile) {
+            await papersApi.uploadPdf(paper.id, pdfFile)
+          }
+          setResult(paper)
+          setState('success')
+          onAdded?.(paper)
+          return
+        }
       }
 
-      setResult(paper)
-      setState('success')
-      onAdded?.(paper)
+      // Force create (user dismissed duplicate warning)
+      await _createPaperAndUpload(paperData)
     } catch (err) {
       setState('error')
       setError(err.message || 'Failed to create paper.')
@@ -302,7 +335,7 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
           <div className="flex bg-slate-100 rounded-lg p-0.5 text-[11px] font-semibold">
             <button
               type="button"
-              onClick={() => { setMode('paper'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
+              onClick={() => { setMode('paper'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }); setUploadDupes(null) }}
               className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'paper' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Import
@@ -316,14 +349,14 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
             </button>
             <button
               type="button"
-              onClick={() => { setMode('bibtex'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
+              onClick={() => { setMode('bibtex'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }); setUploadDupes(null) }}
               className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'bibtex' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               BibTeX
             </button>
             <button
               type="button"
-              onClick={() => { setMode('website'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
+              onClick={() => { setMode('website'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }); setUploadDupes(null) }}
               className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'website' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Website
@@ -646,6 +679,51 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
               </div>
             )}
 
+            {/* Upload mode: duplicate warning */}
+            {mode === 'upload' && uploadDupes && (
+              <div className="mt-3 rounded-xl px-4 py-3 bg-amber-50 border border-amber-200">
+                <div className="flex items-start gap-3">
+                  <Icon name="warning" className="text-[20px] text-amber-500 mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-amber-700">Possible duplicate detected</p>
+                    <p className="text-[11px] text-amber-600 mt-0.5">
+                      A similar paper already exists in your library:
+                    </p>
+                    {uploadDupes.duplicates.map((d, i) => (
+                      <div key={i} className="mt-1.5 p-2 bg-white/60 rounded-lg border border-amber-100">
+                        <p className="text-xs font-medium text-slate-700 truncate">{d.title}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {d.authors?.slice(0, 2).join(', ')}
+                          {d.authors?.length > 2 ? ' et al.' : ''}
+                          {d.year ? ` · ${d.year}` : ''}
+                          {' · '}
+                          <span className="text-amber-600">
+                            {d.confidence === 'exact' ? 'Exact' : 'Likely'} match on {d.matchField === 'doi' ? 'DOI' : d.matchField === 'arxiv_id' ? 'arXiv ID' : 'title'}
+                          </span>
+                        </p>
+                      </div>
+                    ))}
+                    <div className="flex gap-2 mt-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setUploadDupes(null)}
+                        className="px-3 py-1.5 text-[11px] font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setUploadDupes(null); handleUploadSubmit(true) }}
+                        className="px-3 py-1.5 text-[11px] font-semibold text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200 transition-colors"
+                      >
+                        Import anyway
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Import/Website mode: identifier input */}
             {mode !== 'upload' && (
               <>
@@ -763,7 +841,7 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
                 {(state === 'success' || state === 'duplicate') && mode !== 'bibtex' && (
                   <button
                     type="button"
-                    onClick={() => { setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }) }}
+                    onClick={() => { setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }); setUploadDupes(null) }}
                     className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                   >
                     Add another
