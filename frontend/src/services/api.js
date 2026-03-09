@@ -133,6 +133,21 @@ export const websitesApi = {
     apiFetch('/websites/import', { method: 'POST', body: { url, library_id: libraryId || null } }),
 }
 
+export const githubReposApi = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    ).toString()
+    return apiFetch(`/github-repos${qs ? `?${qs}` : ''}`)
+  },
+  get: (id) => apiFetch(`/github-repos/${id}`),
+  create: (data) => apiFetch('/github-repos', { method: 'POST', body: data }),
+  update: (id, data) => apiFetch(`/github-repos/${id}`, { method: 'PATCH', body: data }),
+  remove: (id) => apiFetch(`/github-repos/${id}`, { method: 'DELETE' }),
+  import: (url, libraryId) =>
+    apiFetch('/github-repos/import', { method: 'POST', body: { url, library_id: libraryId || null } }),
+}
+
 export const collectionsApi = {
   list: (params = {}) => {
     const qs = new URLSearchParams(

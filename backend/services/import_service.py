@@ -672,3 +672,124 @@ async def resolve_identifier(identifier: str) -> dict:
     if id_type == "arxiv":
         return await _fetch_arxiv(canonical)
     return await _fetch_url(canonical)
+
+
+# ---------------------------------------------------------------------------
+# GitHub repo import
+# ---------------------------------------------------------------------------
+
+_GITHUB_REPO_RE = re.compile(
+    r"github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#].*)?$"
+)
+
+_GITHUB_HEADERS = {
+    "Accept": "application/vnd.github+json",
+    "User-Agent": "ResearchOS/0.1",
+    "X-GitHub-Api-Version": "2022-11-28",
+}
+
+
+def _parse_citation_cff(text: str) -> dict:
+    """Parse a CITATION.cff YAML file and return citation fields."""
+    try:
+        import yaml  # pyyaml
+        data = yaml.safe_load(text)
+        if not isinstance(data, dict):
+            return {}
+
+        # Build author name list
+        authors: list[str] = []
+        for a in data.get("authors", []):
+            if not isinstance(a, dict):
+                continue
+            given = a.get("given-names", "").strip()
+            family = a.get("family-names", "").strip()
+            name = a.get("name", "").strip()
+            if given or family:
+                authors.append(f"{given} {family}".strip())
+            elif name:
+                authors.append(name)
+
+        # DOI from identifiers list
+        doi: Optional[str] = None
+        for ident in data.get("identifiers", []):
+            if isinstance(ident, dict) and ident.get("type") == "doi":
+                doi = str(ident["value"]).strip() or None
+                break
+
+        version = data.get("version")
+        date_released = data.get("date-released")
+
+        return {
+            "title": data.get("title"),
+            "abstract": data.get("abstract"),
+            "version": str(version).strip() if version is not None else None,
+            "date_released": str(date_released).strip() if date_released is not None else None,
+            "doi": doi,
+            "authors": authors,
+        }
+    except Exception:
+        logger.debug("Failed to parse CITATION.cff", exc_info=True)
+        return {}
+
+
+async def resolve_github_repo(url: str) -> dict:
+    """
+    Fetch a GitHub repository's metadata and optional CITATION.cff data.
+
+    Returns a dict suitable for GitHubRepoCreate with keys:
+    title, url, owner, repo_name, description, abstract, stars,
+    language, topics, authors, published_date, version, doi, license.
+    Raises ValueError with a user-facing message on failure.
+    """
+    m = _GITHUB_REPO_RE.search(url)
+    if not m:
+        raise ValueError("Not a valid GitHub repository URL")
+    owner, repo_name = m.group(1), m.group(2)
+
+    api_url = f"https://api.github.com/repos/{owner}/{repo_name}"
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(api_url, headers=_GITHUB_HEADERS)
+        if resp.status_code == 404:
+            raise ValueError(f"GitHub repository not found: {owner}/{repo_name}")
+        if resp.status_code == 403:
+            raise ValueError("GitHub API rate limit reached. Try again later.")
+        resp.raise_for_status()
+        repo_data = resp.json()
+
+    default_branch = repo_data.get("default_branch", "main")
+
+    # Try to fetch CITATION.cff from the default branch
+    citation: dict = {}
+    cff_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{default_branch}/CITATION.cff"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            cff_resp = await client.get(cff_url, headers={"User-Agent": "ResearchOS/0.1"})
+            if cff_resp.status_code == 200:
+                citation = _parse_citation_cff(cff_resp.text)
+                logger.info("Found CITATION.cff for %s/%s", owner, repo_name)
+    except Exception:
+        logger.debug("Could not fetch CITATION.cff for %s/%s", owner, repo_name, exc_info=True)
+
+    title = citation.get("title") or repo_data.get("name") or f"{owner}/{repo_name}"
+    authors = citation.get("authors") or []
+    published_date = citation.get("date_released") or (repo_data.get("created_at", "")[:10] or None)
+    license_info = repo_data.get("license")
+    license_id = license_info.get("spdx_id") if isinstance(license_info, dict) else None
+
+    return {
+        "title": title,
+        "url": f"https://github.com/{owner}/{repo_name}",
+        "owner": owner,
+        "repo_name": repo_name,
+        "description": repo_data.get("description"),
+        "abstract": citation.get("abstract"),
+        "stars": repo_data.get("stargazers_count"),
+        "language": repo_data.get("language"),
+        "topics": repo_data.get("topics") or [],
+        "authors": authors,
+        "published_date": published_date,
+        "version": citation.get("version"),
+        "doi": citation.get("doi"),
+        "license": license_id,
+    }

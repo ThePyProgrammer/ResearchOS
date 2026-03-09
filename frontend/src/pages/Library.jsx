@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { papersApi, websitesApi, searchApi, notesApi, collectionsApi } from '../services/api'
+import { papersApi, websitesApi, githubReposApi, searchApi, notesApi, collectionsApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips } from '../components/PaperInfoPanel'
 import WindowModal from '../components/WindowModal'
@@ -66,6 +66,7 @@ function formatAuthors(authors) {
 function itemYear(item) {
   if (item.publishedDate) return item.publishedDate.slice(0, 4)
   if (item.itemType === 'website') return '-'
+  if (item.itemType === 'github_repo') return '-'
   return item.year || '-'
 }
 
@@ -73,18 +74,22 @@ function itemVenue(item) {
   if (item.itemType === 'website') {
     try { return new URL(item.url).hostname.replace(/^www\./, '') } catch { return item.url }
   }
+  if (item.itemType === 'github_repo') {
+    return `${item.owner}/${item.repoName}`
+  }
   return item.venue || ''
 }
 
 function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, onOpen }) {
   const status = statusConfig[item.status] || statusConfig['inbox']
   const isWebsite = item.itemType === 'website'
+  const isGitHubRepo = item.itemType === 'github_repo'
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [editingYear, setEditingYear] = useState(false)
   const [yearDraft, setYearDraft] = useState('')
 
-  const api = isWebsite ? websitesApi : papersApi
+  const api = isWebsite ? websitesApi : isGitHubRepo ? githubReposApi : papersApi
 
   const saveTitle = () => {
     const trimmed = titleDraft.trim()
@@ -169,12 +174,17 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
               Website
             </span>
           )}
-          {!isWebsite && item.source === 'agent' && (
+          {isGitHubRepo && (
+            <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
+              GitHub
+            </span>
+          )}
+          {!isWebsite && !isGitHubRepo && item.source === 'agent' && (
             <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
               Run #{item.agentRun?.runNumber}
             </span>
           )}
-          {!isWebsite && (!item.pdfUrl || !item.pdfUrl.includes('/storage/v1/object/public/pdfs/')) && (
+          {!isWebsite && !isGitHubRepo && (!item.pdfUrl || !item.pdfUrl.includes('/storage/v1/object/public/pdfs/')) && (
             <span className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-medium flex-shrink-0 flex items-center gap-0.5" title="No PDF in storage">
               <Icon name="picture_as_pdf" className="text-[10px]" />
               No PDF
@@ -218,7 +228,9 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
         <span className="truncate block">{itemVenue(item)}</span>
       </td>
       <td className="px-3 py-3 text-sm text-slate-400">
-        {isWebsite ? (
+        {isGitHubRepo ? (
+          <Icon name="code" className="text-[16px] text-violet-400" />
+        ) : isWebsite ? (
           <Icon name="link" className="text-[16px] text-teal-400" />
         ) : item.source === 'agent' ? (
           <Icon name="smart_toy" className="text-[16px] text-purple-400" />
@@ -948,6 +960,228 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
   )
 }
 
+
+// ---------------------------------------------------------------------------
+// GitHubRepoDetail — right-panel detail for GitHub repos
+// ---------------------------------------------------------------------------
+function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
+  const [tab, setTab] = useState('info')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const { activeLibraryId } = useLibrary()
+  const navigate = useNavigate()
+
+  const statusCfg = statusConfig[item.status] || statusConfig['inbox']
+
+  const handleStatusChange = async (newStatus) => {
+    try {
+      await githubReposApi.update(item.id, { status: newStatus })
+      onStatusChange(item.id, newStatus)
+    } catch (err) { console.error(err) }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await githubReposApi.remove(item.id)
+      onDelete(item.id)
+    } catch (err) { console.error(err); setDeleting(false); setConfirmDelete(false) }
+  }
+
+  const handleFieldSave = async (field, value) => {
+    try {
+      const updated = await githubReposApi.update(item.id, { [field]: value })
+      onUpdate(updated)
+    } catch (err) { console.error(err) }
+  }
+
+  return (
+    <aside className="w-80 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusCfg.class}`}>
+            {statusCfg.label}
+          </span>
+          <span className="text-[11px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+            <Icon name="code" className="text-[11px]" />
+            GitHub
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5">
+          <button onClick={() => setConfirmDelete(true)}
+            className="p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
+            <Icon name="delete" className="text-[16px]" />
+          </button>
+          <button onClick={onClose} className="p-1.5 rounded text-slate-400 hover:text-slate-600 transition-colors">
+            <Icon name="close" className="text-[18px]" />
+          </button>
+        </div>
+      </div>
+
+      {confirmDelete && (
+        <div className="mx-4 mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-700 text-xs font-semibold mb-1">Delete this repository?</p>
+          <p className="text-red-600 text-xs mb-3">This cannot be undone.</p>
+          <div className="flex gap-2">
+            <button onClick={handleDelete} disabled={deleting}
+              className="flex-1 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 disabled:opacity-50">
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+            <button onClick={() => setConfirmDelete(false)}
+              className="flex-1 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto">
+        {/* Title + actions */}
+        <div className="px-4 pt-4 pb-3 border-b border-slate-100 space-y-3">
+          <h3 className="text-sm font-semibold text-slate-900 leading-snug">{item.title}</h3>
+          <p className="text-xs text-slate-500">
+            <span className="font-mono">{item.owner}/{item.repoName}</span>
+            {item.stars != null && (
+              <span className="ml-2 text-slate-400">★ {item.stars.toLocaleString()}</span>
+            )}
+          </p>
+          {item.authors.length > 0 && (
+            <p className="text-xs text-slate-500">
+              {item.authors.slice(0, 3).join(', ')}{item.authors.length > 3 ? ` +${item.authors.length - 3} more` : ''}
+              {item.publishedDate ? <span className="text-slate-400"> · {item.publishedDate.slice(0, 4)}</span> : null}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <a href={item.url} target="_blank" rel="noreferrer"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium rounded-lg transition-colors">
+              <Icon name="code" className="text-[14px]" />
+              Open on GitHub
+            </a>
+            {item.doi && (
+              <a href={`https://doi.org/${item.doi}`} target="_blank" rel="noreferrer"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors">
+                DOI
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-slate-100">
+          {['info', 'notes'].map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`flex-1 py-2.5 text-xs font-semibold transition-colors capitalize tracking-wide ${
+                tab === t ? 'text-violet-600 border-b-2 border-violet-600' : 'text-slate-400 hover:text-slate-600'
+              }`}>
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'info' && (
+          <div className="p-4 space-y-5">
+            {/* Authors */}
+            <AuthorChips authors={item.authors || []} onSave={v => handleFieldSave('authors', v)} />
+
+            {/* Metadata */}
+            <div className="space-y-2">
+              <EditableField label="Date" value={item.publishedDate} type="date" placeholder=""
+                onSave={v => handleFieldSave('publishedDate', v)} />
+              {item.version && (
+                <div className="flex gap-3 text-xs">
+                  <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Version</span>
+                  <span className="text-slate-700 font-mono">{item.version}</span>
+                </div>
+              )}
+              {item.language && (
+                <div className="flex gap-3 text-xs">
+                  <span className="text-slate-400 w-12 flex-shrink-0 pt-px">Lang</span>
+                  <span className="text-slate-700">{item.language}</span>
+                </div>
+              )}
+              {item.license && (
+                <div className="flex gap-3 text-xs">
+                  <span className="text-slate-400 w-12 flex-shrink-0 pt-px">License</span>
+                  <span className="text-slate-700">{item.license}</span>
+                </div>
+              )}
+              {item.doi && (
+                <div className="flex gap-3 text-xs">
+                  <span className="text-slate-400 w-12 flex-shrink-0 pt-px">DOI</span>
+                  <a href={`https://doi.org/${item.doi}`} target="_blank" rel="noreferrer"
+                    className="text-blue-600 hover:underline font-mono truncate">{item.doi}</a>
+                </div>
+              )}
+              <div className="flex gap-3 text-xs">
+                <span className="text-slate-400 w-12 flex-shrink-0 pt-px">URL</span>
+                <a href={item.url} target="_blank" rel="noreferrer"
+                  className="text-violet-600 hover:underline truncate font-mono">{item.url}</a>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Status</p>
+              <div className="flex gap-1.5">
+                {['inbox', 'to-read', 'read'].map(s => {
+                  const cfg = statusConfig[s]
+                  return (
+                    <button key={s} onClick={() => handleStatusChange(s)}
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-all ${cfg.class} ${
+                        item.status === s ? 'ring-2 ring-offset-1 ring-current' : 'opacity-50 hover:opacity-80'
+                      }`}>
+                      {cfg.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Collections */}
+            <CollectionsPicker
+              item={item}
+              onUpdate={onUpdate}
+              updateFn={(id, data) => githubReposApi.update(id, data)}
+            />
+
+            {/* Description / Abstract */}
+            {(item.abstract || item.description) && (
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">
+                  {item.abstract ? 'Abstract' : 'Description'}
+                </p>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {item.abstract || item.description}
+                </p>
+              </div>
+            )}
+
+            {/* Topics */}
+            {item.topics && item.topics.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Topics</p>
+                <div className="flex flex-wrap gap-1">
+                  {item.topics.map(t => (
+                    <span key={t} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] rounded-full">{t}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'notes' && (
+          <div className="p-4">
+            <p className="text-xs text-slate-400 italic">Notes are not yet supported for GitHub repositories.</p>
+          </div>
+        )}
+      </div>
+    </aside>
+  )
+}
+
+
 export default function Library() {
   const { activeLibraryId, collections, refreshCollections } = useLibrary()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1019,14 +1253,14 @@ export default function Library() {
         .then(data => setItems(data))
         .catch(() => {
           setSearchParams({})
-          Promise.all([papersApi.list(listParams), websitesApi.list(listParams)])
-            .then(([papers, websites]) => setItems([...papers, ...websites]))
+          Promise.all([papersApi.list(listParams), websitesApi.list(listParams), githubReposApi.list(listParams)])
+            .then(([papers, websites, repos]) => setItems([...papers, ...websites, ...repos]))
             .catch(err => setError(err.message))
         })
         .finally(() => setLoading(false))
     } else {
-      Promise.all([papersApi.list(listParams), websitesApi.list(listParams)])
-        .then(([papers, websites]) => setItems([...papers, ...websites]))
+      Promise.all([papersApi.list(listParams), websitesApi.list(listParams), githubReposApi.list(listParams)])
+        .then(([papers, websites, repos]) => setItems([...papers, ...websites, ...repos]))
         .catch(err => setError(err.message))
         .finally(() => setLoading(false))
     }
@@ -1081,7 +1315,7 @@ export default function Library() {
     try {
       const toDelete = items.filter(i => selectedIds.has(i.id))
       await Promise.all(toDelete.map(i => {
-        const api = i.itemType === 'website' ? websitesApi : papersApi
+        const api = i.itemType === 'website' ? websitesApi : i.itemType === 'github_repo' ? githubReposApi : papersApi
         return api.remove(i.id)
       }))
       setItems(prev => prev.filter(i => !selectedIds.has(i.id)))
@@ -1101,7 +1335,7 @@ export default function Library() {
     try {
       const toMove = items.filter(i => selectedIds.has(i.id))
       const updated = await Promise.all(toMove.map(i => {
-        const api = i.itemType === 'website' ? websitesApi : papersApi
+        const api = i.itemType === 'website' ? websitesApi : i.itemType === 'github_repo' ? githubReposApi : papersApi
         const newCollections = i.collections.includes(collectionId)
           ? i.collections
           : [...i.collections, collectionId]
@@ -1127,7 +1361,7 @@ export default function Library() {
   }
 
   const handleBulkFetchPdfs = async () => {
-    const selected = items.filter(i => selectedIds.has(i.id) && i.itemType !== 'website')
+    const selected = items.filter(i => selectedIds.has(i.id) && i.itemType !== 'website' && i.itemType !== 'github_repo')
     // Build initial statuses
     const initial = {}
     for (const item of selected) {
@@ -1625,7 +1859,7 @@ export default function Library() {
                     checked={selectedIds.has(item.id)}
                     onSelect={i => setSelectedItem(selectedItem?.id === i.id ? null : i)}
                     onCheck={toggleCheck}
-                    onOpen={i => navigate(i.itemType === 'website' ? `/library/website/${i.id}` : `/library/paper/${i.id}`)}
+                    onOpen={i => navigate(i.itemType === 'website' ? `/library/website/${i.id}` : i.itemType === 'github_repo' ? `/library/github-repo/${i.id}` : `/library/paper/${i.id}`)}
                     onItemUpdate={updated => {
                       setItems(prev => prev.map(it => it.id === updated.id ? { ...it, ...updated } : it))
                       if (selectedItem?.id === updated.id) setSelectedItem(s => ({ ...s, ...updated }))
@@ -1671,7 +1905,16 @@ export default function Library() {
           onDelete={handleDelete}
         />
       )}
-      {selectedItem && selectedItem.itemType !== 'website' && (
+      {selectedItem && selectedItem.itemType === 'github_repo' && (
+        <GitHubRepoDetail
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onStatusChange={handleStatusChange}
+          onUpdate={handleItemUpdate}
+          onDelete={handleDelete}
+        />
+      )}
+      {selectedItem && selectedItem.itemType !== 'website' && selectedItem.itemType !== 'github_repo' && (
         <PaperDetail
           paper={selectedItem}
           onClose={() => setSelectedItem(null)}
@@ -1698,7 +1941,7 @@ export default function Library() {
             <div className="max-h-32 overflow-y-auto mb-4 border border-slate-100 rounded-lg">
               {items.filter(i => selectedIds.has(i.id)).map(i => (
                 <div key={i.id} className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-600 border-b border-slate-50 last:border-0">
-                  <Icon name={i.itemType === 'website' ? 'link' : 'description'} className="text-[14px] text-slate-400 flex-shrink-0" />
+                  <Icon name={i.itemType === 'website' ? 'link' : i.itemType === 'github_repo' ? 'code' : 'description'} className="text-[14px] text-slate-400 flex-shrink-0" />
                   <span className="truncate">{i.title}</span>
                 </div>
               ))}

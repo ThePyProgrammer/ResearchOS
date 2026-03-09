@@ -16,8 +16,14 @@ vi.mock('../services/api', () => ({
     update: vi.fn(),
     remove: vi.fn(),
   },
+  githubReposApi: {
+    list: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+  },
   searchApi: { query: vi.fn() },
   notesApi: { generate: vi.fn() },
+  collectionsApi: { topAuthors: vi.fn() },
 }))
 
 vi.mock('../context/LibraryContext', () => ({
@@ -29,7 +35,7 @@ vi.mock('../context/LibraryContext', () => ({
   }),
 }))
 
-import { papersApi, websitesApi } from '../services/api'
+import { papersApi, websitesApi, githubReposApi } from '../services/api'
 
 
 function renderLibrary() {
@@ -49,11 +55,15 @@ describe('Library page smoke', () => {
   beforeEach(() => {
     papersApi.list.mockReset()
     websitesApi.list.mockReset()
+    githubReposApi.list.mockReset()
     papersApi.update.mockReset()
     websitesApi.update.mockReset()
+    githubReposApi.update.mockReset()
     papersApi.remove.mockReset()
     websitesApi.remove.mockReset()
+    githubReposApi.remove.mockReset()
     papersApi.fetchPdf.mockReset()
+    githubReposApi.list.mockResolvedValue([])
   })
 
   it('loads mixed items and supports row double-click navigation', async () => {

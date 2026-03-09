@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { papersApi, websitesApi, searchApi } from '../../services/api'
+import { papersApi, websitesApi, githubReposApi, searchApi } from '../../services/api'
 import { useLibrary } from '../../context/LibraryContext'
 import { AuthorChips } from '../PaperInfoPanel'
 import WindowModal from '../WindowModal'
@@ -15,6 +15,7 @@ function Icon({ name, className = '' }) {
 const DOI_RE = /\b(10\.\d{4,9}\/\S+)/
 const ARXIV_BARE_RE = /^\d{4}\.\d{4,5}(v\d+)?$/
 const ARXIV_URL_RE = /arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5})/
+const GITHUB_URL_RE = /github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/
 
 function detectType(raw) {
   const s = raw.trim()
@@ -24,6 +25,7 @@ function detectType(raw) {
   if (s.startsWith('10.') && s.includes('/')) return 'doi'
   if (s.toLowerCase().startsWith('doi:')) return 'doi'
   if (ARXIV_BARE_RE.test(s)) return 'arxiv'
+  if (GITHUB_URL_RE.test(s)) return 'github'
   if (s.startsWith('http://') || s.startsWith('https://')) return 'url'
   return null
 }
@@ -32,6 +34,7 @@ const TYPE_META = {
   doi: { label: 'DOI', bg: 'bg-orange-100', text: 'text-orange-700' },
   arxiv: { label: 'arXiv', bg: 'bg-purple-100', text: 'text-purple-700' },
   url: { label: 'URL', bg: 'bg-blue-100', text: 'text-blue-700' },
+  github: { label: 'GitHub', bg: 'bg-violet-100', text: 'text-violet-700' },
 }
 
 const QUICK_ADD_WINDOWS_STORAGE_KEY = 'researchos.quickAdd.windows.v1'
@@ -49,7 +52,7 @@ function createDefaultQuickAddSnapshot() {
 function normalizeQuickAddSnapshot(snapshot) {
   const base = createDefaultQuickAddSnapshot()
   if (!snapshot || typeof snapshot !== 'object') return base
-  const mode = ['paper', 'website', 'upload', 'bibtex'].includes(snapshot.mode) ? snapshot.mode : base.mode
+  const mode = ['paper', 'website', 'github', 'upload', 'bibtex'].includes(snapshot.mode) ? snapshot.mode : base.mode
   const state = ['idle', 'success', 'duplicate', 'error'].includes(snapshot.state) ? snapshot.state : base.state
   const uploadMetaRaw = snapshot.uploadMeta && typeof snapshot.uploadMeta === 'object' ? snapshot.uploadMeta : {}
   return {
@@ -94,7 +97,7 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
   const [bibtexResults, setBibtexResults] = useState(null) // import results
   const bibtexFileInputRef = useRef(null)
 
-  const detectedType = mode === 'paper' ? detectType(input) : null
+  const detectedType = (mode === 'paper' || mode === 'github') ? detectType(input) : null
 
   // Focus input when opened; reset on close
   useEffect(() => {
@@ -199,7 +202,16 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
     setResult(null)
 
     try {
-      if (mode === 'website') {
+      if (mode === 'github') {
+        const repo = await githubReposApi.import(trimmed, libraryId)
+        if (!repo.already_exists && collectionId && collectionId !== 'unfiled') {
+          await githubReposApi.update(repo.id, { collections: [collectionId] })
+          repo.collections = [collectionId]
+        }
+        setResult(repo)
+        setState(repo.already_exists ? 'duplicate' : 'success')
+        if (!repo.already_exists) onAdded?.(repo)
+      } else if (mode === 'website') {
         const site = await websitesApi.import(trimmed, libraryId)
         if (!site.already_exists && collectionId && collectionId !== "unfiled") {
           await websitesApi.update(site.id, { collections: [collectionId] })
@@ -360,6 +372,13 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
               className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'website' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Website
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('github'); setInput(''); setState('idle'); setResult(null); setPdfFile(null); setUploadMeta({ title: '', authors: [], date: '', venue: '' }); setUploadDupes(null) }}
+              className={`px-2.5 py-1 rounded-md transition-colors ${mode === 'github' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              GitHub
             </button>
           </div>
         </div>
@@ -724,8 +743,8 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
               </div>
             )}
 
-            {/* Import/Website mode: identifier input */}
-            {mode !== 'upload' && (
+            {/* Import/Website/GitHub mode: identifier input */}
+            {mode !== 'upload' && mode !== 'bibtex' && (
               <>
                 {/* Input row */}
                 <div className="relative">
@@ -741,7 +760,7 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
                         setError('')
                       }
                     }}
-                    placeholder={mode === 'website' ? 'Paste a website URL…' : 'Paste DOI, arXiv ID, or URL…'}
+                    placeholder={mode === 'website' ? 'Paste a website URL…' : mode === 'github' ? 'Paste a GitHub repo URL…' : 'Paste DOI, arXiv ID, or URL…'}
                     disabled={state === 'loading'}
                     className="w-full px-4 py-3 pr-[4.5rem] bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:opacity-60 transition"
                   />
@@ -756,6 +775,23 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
                 </div>
 
                 {/* Examples */}
+                {state === 'idle' && !input && mode === 'github' && (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {[
+                      'github.com/huggingface/transformers',
+                      'github.com/openai/openai-python',
+                    ].map(label => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => setInput(`https://${label}`)}
+                        className="text-[11px] px-2 py-0.5 rounded-full border font-mono transition-colors bg-violet-100 text-violet-700 border-transparent hover:opacity-80"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {state === 'idle' && !input && mode === 'paper' && (
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
                     {[
@@ -793,7 +829,7 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
                   <p className={`text-xs font-semibold ${
                     state === 'duplicate' ? 'text-amber-700' : 'text-emerald-700'
                   }`}>
-                    {state === 'duplicate' ? 'Already in library' : mode === 'website' ? 'Website added to library' : 'Paper added to library'}
+                    {state === 'duplicate' ? 'Already in library' : mode === 'github' ? 'Repository added to library' : mode === 'website' ? 'Website added to library' : 'Paper added to library'}
                   </p>
                   <p className="text-xs text-slate-600 mt-0.5 truncate font-medium">
                     {result.title}
@@ -833,9 +869,11 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
                   ? 'Import papers from a .bib file (Zotero, Mendeley, etc.)'
                   : mode === 'upload'
                     ? 'Upload a PDF and fill in the metadata manually'
-                    : mode === 'website'
-                      ? 'Fetches title, description and author from the page'
-                      : 'Supports DOI, arXiv ID, arXiv URL, and paper page URLs'}
+                    : mode === 'github'
+                      ? 'Fetches repo info and CITATION.cff if available'
+                      : mode === 'website'
+                        ? 'Fetches title, description and author from the page'
+                        : 'Supports DOI, arXiv ID, arXiv URL, and paper page URLs'}
               </p>
               <div className="flex items-center gap-2">
                 {(state === 'success' || state === 'duplicate') && mode !== 'bibtex' && (
@@ -889,7 +927,7 @@ function QuickAddModal({ open, startMinimized = false, snapshot, onSnapshotChang
                     ) : (
                       <>
                         <Icon name={mode === 'upload' ? 'upload' : 'add'} className="text-[14px]" />
-                        {mode === 'upload' ? 'Upload Paper' : mode === 'website' ? 'Add Website' : 'Add Paper'}
+                        {mode === 'upload' ? 'Upload Paper' : mode === 'github' ? 'Add Repo' : mode === 'website' ? 'Add Website' : 'Add Paper'}
                       </>
                     )}
                   </button>

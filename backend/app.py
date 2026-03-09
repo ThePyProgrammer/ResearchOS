@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 # Ensure backend/ is on the path so relative imports work
 sys.path.insert(0, str(Path(__file__).parent))
 
-from routers import papers, collections, workflows, runs, proposals, activity, search, libraries, websites, notes, chat, authors
+from routers import papers, collections, workflows, runs, proposals, activity, search, libraries, websites, notes, chat, authors, github_repos
 from services.db import get_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -35,6 +35,7 @@ app.add_middleware(
 app.include_router(libraries.router)
 app.include_router(papers.router)
 app.include_router(websites.router)
+app.include_router(github_repos.router)
 app.include_router(collections.router)
 app.include_router(workflows.router)
 app.include_router(runs.router)
@@ -427,6 +428,7 @@ def seed_data() -> None:
         ("libraries",   SEED["libraries.json"]),
         ("papers",      SEED["papers.json"]),
         ("websites",    []),
+        ("github_repos", []),
         ("collections", SEED["collections.json"]),
         ("workflows",   SEED["workflows.json"]),
         ("runs",        SEED["runs.json"]),
