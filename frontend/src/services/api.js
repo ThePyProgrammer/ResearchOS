@@ -209,6 +209,34 @@ export const chatApi = {
   clearForWebsite: (websiteId) => apiFetch(`/websites/${websiteId}/chat`, { method: 'DELETE' }),
 }
 
+export const authorsApi = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    ).toString()
+    return apiFetch(`/authors${qs ? `?${qs}` : ''}`)
+  },
+  get: (id) => apiFetch(`/authors/${id}`),
+  create: (data) => apiFetch('/authors', { method: 'POST', body: data }),
+  update: (id, data) => apiFetch(`/authors/${id}`, { method: 'PATCH', body: data }),
+  remove: (id) => apiFetch(`/authors/${id}`, { method: 'DELETE' }),
+  search: (q, limit = 10) => apiFetch(`/authors/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  match: (name, context) => apiFetch('/authors/match', { method: 'POST', body: { name, context } }),
+  papers: (id) => apiFetch(`/authors/${id}/papers`),
+  enrich: (id) => apiFetch(`/authors/${id}/enrich`, { method: 'POST' }),
+}
+
+// Paper-author linking
+papersApi.authorLinks = (id) => apiFetch(`/papers/${id}/authors`)
+papersApi.linkAuthor = (paperId, authorId, position = 0, rawName = '') =>
+  apiFetch(`/papers/${paperId}/authors/link`, { method: 'POST', body: { author_id: authorId, position, raw_name: rawName } })
+papersApi.unlinkAuthor = (paperId, authorId) =>
+  apiFetch(`/papers/${paperId}/authors/link/${authorId}`, { method: 'DELETE' })
+
+// Collection top authors
+collectionsApi.topAuthors = (id, limit = 10) =>
+  apiFetch(`/collections/${id}/top-authors?limit=${limit}`)
+
 export const searchApi = {
   /** Quick search — returns papers with a `score` field appended. */
   query: (q, { mode = 'lexical', limit = 10 } = {}) =>

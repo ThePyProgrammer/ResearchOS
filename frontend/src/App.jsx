@@ -7,6 +7,8 @@ import Agents from './pages/Agents'
 import Proposals from './pages/Proposals'
 import LibrarySettings from './pages/LibrarySettings'
 import Website from './pages/Website'
+import Authors from './pages/Authors'
+import AuthorDetail from './pages/AuthorDetail'
 import { LibraryProvider } from './context/LibraryContext'
 
 export default function App() {
@@ -19,6 +21,8 @@ export default function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="library" element={<Library />} />
             <Route path="library/settings" element={<LibrarySettings />} />
+            <Route path="authors" element={<Authors />} />
+            <Route path="authors/:id" element={<AuthorDetail />} />
             <Route path="agents" element={<Agents />} />
           </Route>
           <Route path="/" element={<LayoutBare />}>

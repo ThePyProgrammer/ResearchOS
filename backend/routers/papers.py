@@ -560,6 +560,61 @@ async def delete_pdf(paper_id: str):
     delete_cached_text(paper_id)
 
 
+# ---------------------------------------------------------------------------
+# Paper-Author linking
+# ---------------------------------------------------------------------------
+
+class LinkAuthorRequest(BaseModel):
+    author_id: str
+    position: int = 0
+    raw_name: str = ""
+
+
+@router.get("/{paper_id}/authors")
+async def get_paper_authors(paper_id: str):
+    paper = paper_service.get_paper(paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    from services import author_service
+    links = author_service.get_paper_author_links(paper_id)
+    return JSONResponse([
+        {
+            "link": l["link"].model_dump(by_alias=True),
+            "author": l["author"].model_dump(by_alias=True) if l["author"] else None,
+        }
+        for l in links
+    ])
+
+
+@router.post("/{paper_id}/authors/link", status_code=201)
+async def link_paper_author(paper_id: str, data: LinkAuthorRequest):
+    paper = paper_service.get_paper(paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    from services import author_service
+    if author_service.get_author(data.author_id) is None:
+        raise HTTPException(status_code=404, detail="Author not found")
+    try:
+        link = author_service.link_paper_author(
+            paper_id, data.author_id, data.position, data.raw_name,
+        )
+    except Exception as exc:
+        if "duplicate" in str(exc).lower() or "unique" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="Author already linked to this paper") from exc
+        raise
+    return JSONResponse(link.model_dump(by_alias=True), status_code=201)
+
+
+@router.delete("/{paper_id}/authors/link/{author_id}", status_code=204)
+async def unlink_paper_author(paper_id: str, author_id: str):
+    paper = paper_service.get_paper(paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    from services import author_service
+    if not author_service.unlink_paper_author(paper_id, author_id):
+        raise HTTPException(status_code=404, detail="Link not found")
+
+
 @router.post("/{paper_id}/pdf/fetch", status_code=200)
 async def fetch_pdf(paper_id: str):
     """Download a paper's PDF from its external pdf_url and upload to Supabase Storage."""

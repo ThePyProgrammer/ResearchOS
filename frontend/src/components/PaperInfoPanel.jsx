@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { papersApi } from '../services/api'
+import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
+import { papersApi, authorsApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 
 export const statusConfig = {
@@ -116,12 +118,209 @@ export function NamedLinks({ links = [], onSave }) {
   )
 }
 
-export function AuthorChips({ authors = [], onSave }) {
+function AuthorPopover({ authorName, paperId, linkedAuthor, onLink, onClose, anchorRef }) {
+  const navigate = useNavigate()
+  const [candidates, setCandidates] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const popoverRef = useRef(null)
+  const [pos, setPos] = useState(null)
+
+  // Position below the anchor chip
+  useEffect(() => {
+    if (!anchorRef?.current) return
+    function update() {
+      const rect = anchorRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 4, left: Math.max(8, rect.left) })
+    }
+    update()
+    // Reposition on scroll/resize so it follows the chip
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+    }
+  }, [anchorRef])
+
+  useEffect(() => {
+    authorsApi.match(authorName)
+      .then(data => setCandidates(data))
+      .catch(() => setCandidates([]))
+      .finally(() => setLoading(false))
+  }, [authorName])
+
+  // Close on click outside the popover (but not inside it)
+  useEffect(() => {
+    const onClick = (e) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target)) onClose()
+    }
+    // Use a timeout so the opening click doesn't immediately close it
+    const timer = setTimeout(() => document.addEventListener('mousedown', onClick), 0)
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', onClick) }
+  }, [onClose])
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  async function handleLink(authorId) {
+    if (!paperId) return
+    try {
+      await papersApi.linkAuthor(paperId, authorId, 0, authorName)
+      onLink?.()
+      onClose()
+    } catch (err) {
+      console.error('Failed to link:', err)
+    }
+  }
+
+  async function handleCreate() {
+    setCreating(true)
+    try {
+      const author = await authorsApi.create({ name: authorName })
+      if (paperId) {
+        await papersApi.linkAuthor(paperId, author.id, 0, authorName)
+      }
+      onLink?.()
+      onClose()
+    } catch (err) {
+      console.error('Failed to create author:', err)
+      setCreating(false)
+    }
+  }
+
+  if (!pos) return null
+
+  const content = linkedAuthor ? (
+    <div ref={popoverRef} className="bg-white border border-slate-200 rounded-xl shadow-xl p-3 w-64" style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
+          <Icon name="person" className="text-[14px] text-blue-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-slate-800 truncate">{linkedAuthor.name}</p>
+          {linkedAuthor.orcid && <p className="text-[10px] text-slate-400 font-mono">{linkedAuthor.orcid}</p>}
+        </div>
+      </div>
+      <button
+        onClick={() => { onClose(); navigate(`/authors/${linkedAuthor.id}`) }}
+        className="w-full text-xs text-blue-600 hover:text-blue-700 font-medium py-1.5 hover:bg-blue-50 rounded-lg transition-colors"
+      >
+        View Profile
+      </button>
+    </div>
+  ) : (
+    <div ref={popoverRef} className="bg-white border border-slate-200 rounded-xl shadow-xl w-72 overflow-hidden" style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}>
+      <div className="px-3 py-2 bg-slate-50 border-b border-slate-100">
+        <p className="text-xs text-slate-500">Match &ldquo;{authorName}&rdquo;</p>
+      </div>
+      {loading ? (
+        <div className="p-3 text-xs text-slate-400">Searching...</div>
+      ) : candidates?.length > 0 ? (
+        <div className="max-h-48 overflow-y-auto">
+          {candidates.map(({ author, confidence }) => (
+            <div key={author.id} className="flex items-center gap-2 px-3 py-2 hover:bg-blue-50 transition-colors">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-slate-800 truncate">{author.name}</p>
+                <p className="text-[10px] text-slate-400">{author.paperCount} papers · {confidence}</p>
+              </div>
+              <button
+                onClick={() => handleLink(author.id)}
+                className="px-2 py-1 text-[10px] bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex-shrink-0"
+              >
+                Link
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="px-3 py-2 text-xs text-slate-400">No matches found</div>
+      )}
+      <div className="border-t border-slate-100 px-3 py-2">
+        <button
+          onClick={handleCreate}
+          disabled={creating}
+          className="w-full text-xs text-blue-600 hover:text-blue-700 font-medium py-1 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {creating ? 'Creating...' : 'Create new author'}
+        </button>
+      </div>
+    </div>
+  )
+
+  return createPortal(content, document.body)
+}
+
+function AuthorChip({ author, index, linked, isPopoverOpen, dragIdx, paperId,
+  onDragStart, onDragOver, onDrop, onDragEnd, onClickChip, onDoubleClick, onRemove, onLink, onClosePopover }) {
+  const chipRef = useRef(null)
+
+  return (
+    <div>
+      <span
+        ref={chipRef}
+        draggable
+        onDragStart={e => onDragStart(e, index)}
+        onDragOver={e => onDragOver(e, index)}
+        onDrop={e => onDrop(e, index)}
+        onDragEnd={onDragEnd}
+        onClick={onClickChip}
+        onDoubleClick={onDoubleClick}
+        className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full group cursor-grab active:cursor-grabbing transition-opacity ${
+          linked ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
+        } ${dragIdx === index ? 'opacity-40' : ''}`}
+        title={linked ? `Linked: ${linked.name} — Click to view, double-click to edit` : 'Click to link, double-click to edit'}
+      >
+        <Icon name="person" className={`text-[12px] ${linked ? 'text-blue-500' : 'text-slate-400'}`} />
+        {author}
+        {linked && (
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 ml-0.5" title="Linked to author record" />
+        )}
+        <button
+          onClick={e => { e.stopPropagation(); onRemove() }}
+          className="text-slate-400 hover:text-red-500 transition-colors ml-0.5"
+          title="Remove author"
+        >
+          <Icon name="close" className="text-[11px]" />
+        </button>
+      </span>
+      {isPopoverOpen && (
+        <AuthorPopover
+          authorName={author}
+          paperId={paperId}
+          linkedAuthor={linked}
+          anchorRef={chipRef}
+          onLink={onLink}
+          onClose={onClosePopover}
+        />
+      )}
+    </div>
+  )
+}
+
+export function AuthorChips({ authors = [], onSave, paperId, paperAuthorLinks }) {
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
   const [dragIdx, setDragIdx] = useState(null)
   const [editIdx, setEditIdx] = useState(null)
   const [editDraft, setEditDraft] = useState('')
+  const [popoverIdx, setPopoverIdx] = useState(null)
+  const [autocomplete, setAutocomplete] = useState([])
+  const [acQuery, setAcQuery] = useState('')
+
+  // Build a map of raw_name → author for linked authors
+  const linkMap = {}
+  if (paperAuthorLinks) {
+    for (const item of paperAuthorLinks) {
+      if (item.author && item.link?.rawName) {
+        linkMap[item.link.rawName] = item.author
+      }
+    }
+  }
 
   async function addAuthor(value = draft) {
     const name = value.trim()
@@ -129,6 +328,8 @@ export function AuthorChips({ authors = [], onSave }) {
     await onSave([...authors, name])
     setDraft('')
     setAdding(false)
+    setAutocomplete([])
+    setAcQuery('')
   }
 
   async function addMultipleAuthors(text) {
@@ -137,6 +338,8 @@ export function AuthorChips({ authors = [], onSave }) {
     await onSave([...authors, ...names])
     setDraft('')
     setAdding(false)
+    setAutocomplete([])
+    setAcQuery('')
   }
 
   async function removeAuthor(idx) {
@@ -146,6 +349,7 @@ export function AuthorChips({ authors = [], onSave }) {
   function startEdit(idx) {
     setEditIdx(idx)
     setEditDraft(authors[idx])
+    setPopoverIdx(null)
   }
 
   async function commitEdit() {
@@ -186,12 +390,34 @@ export function AuthorChips({ authors = [], onSave }) {
     await onSave(next)
   }
 
+  // Autocomplete for the add input
+  useEffect(() => {
+    if (!acQuery || acQuery.length < 2) { setAutocomplete([]); return }
+    const timer = setTimeout(() => {
+      authorsApi.search(acQuery, 5).then(setAutocomplete).catch(() => setAutocomplete([]))
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [acQuery])
+
+  async function selectAutocomplete(result) {
+    await addAuthor(result.name)
+    // Auto-link if we have paperId
+    if (paperId) {
+      try {
+        await papersApi.linkAuthor(paperId, result.id, authors.length, result.name)
+      } catch (_) { /* link may already exist */ }
+    }
+  }
+
   return (
     <div>
       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Authors</p>
       <div className="flex flex-wrap gap-1.5 mb-2">
-        {authors.map((author, i) => (
-          editIdx === i ? (
+        {authors.map((author, i) => {
+          const linked = linkMap[author]
+          const isPopoverOpen = popoverIdx === i
+
+          return editIdx === i ? (
             <input
               key={`edit-${i}`}
               autoFocus
@@ -206,64 +432,89 @@ export function AuthorChips({ authors = [], onSave }) {
               className="px-2 py-0.5 text-[11px] border border-blue-400 rounded-full bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 w-32"
             />
           ) : (
-            <span
+            <AuthorChip
               key={`${author}-${i}`}
-              draggable
-              onDragStart={e => onDragStart(e, i)}
-              onDragOver={e => onDragOver(e, i)}
-              onDrop={e => onDrop(e, i)}
+              author={author}
+              index={i}
+              linked={linked}
+              isPopoverOpen={isPopoverOpen}
+              dragIdx={dragIdx}
+              paperId={paperId}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDrop={onDrop}
               onDragEnd={() => setDragIdx(null)}
+              onClickChip={() => setPopoverIdx(isPopoverOpen ? null : i)}
               onDoubleClick={() => startEdit(i)}
-              className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 group cursor-grab active:cursor-grabbing transition-opacity ${
-                dragIdx === i ? 'opacity-40' : ''
-              }`}
-              title="Double-click to edit"
-            >
-              <Icon name="person" className="text-[12px] text-slate-400" />
-              {author}
-              <button
-                onClick={() => removeAuthor(i)}
-                className="text-slate-400 hover:text-red-500 transition-colors ml-0.5"
-                title="Remove author"
-              >
-                <Icon name="close" className="text-[11px]" />
-              </button>
-            </span>
+              onRemove={() => removeAuthor(i)}
+              onLink={() => {
+                setPopoverIdx(null)
+                window.dispatchEvent(new CustomEvent('researchos:author-links-changed'))
+              }}
+              onClosePopover={() => setPopoverIdx(null)}
+            />
           )
-        ))}
+        })}
         {authors.length === 0 && !adding && (
           <span className="text-[11px] text-slate-400 italic">No authors</span>
         )}
       </div>
       {adding ? (
-        <div className="flex gap-1.5 items-center">
-          <input
-            autoFocus
-            type="text"
-            value={draft}
-            onChange={e => {
-              const val = e.target.value
-              if (val.includes(',')) {
-                addMultipleAuthors(val)
-              } else {
-                setDraft(val)
-              }
-            }}
-            onPaste={e => {
-              const pasted = e.clipboardData.getData('text')
-              if (pasted.includes(',')) {
-                e.preventDefault()
-                addMultipleAuthors(draft + pasted)
-              }
-            }}
-            onKeyDown={e => {
-              if (e.key === 'Enter') addAuthor()
-              if (e.key === 'Escape') { setAdding(false); setDraft('') }
-            }}
-            onBlur={() => { if (draft.trim()) addAuthor(); else setAdding(false) }}
-            placeholder="Author name or paste comma-separated…"
-            className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-          />
+        <div className="relative">
+          <div className="flex gap-1.5 items-center">
+            <input
+              autoFocus
+              type="text"
+              value={draft}
+              onChange={e => {
+                const val = e.target.value
+                if (val.includes(',')) {
+                  addMultipleAuthors(val)
+                } else {
+                  setDraft(val)
+                  setAcQuery(val)
+                }
+              }}
+              onPaste={e => {
+                const pasted = e.clipboardData.getData('text')
+                if (pasted.includes(',')) {
+                  e.preventDefault()
+                  addMultipleAuthors(draft + pasted)
+                }
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') addAuthor()
+                if (e.key === 'Escape') { setAdding(false); setDraft(''); setAutocomplete([]); setAcQuery('') }
+              }}
+              onBlur={() => {
+                // Delay to allow autocomplete click
+                setTimeout(() => {
+                  if (draft.trim()) addAuthor()
+                  else { setAdding(false); setAutocomplete([]); setAcQuery('') }
+                }, 200)
+              }}
+              placeholder="Author name or paste comma-separated…"
+              className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+            />
+          </div>
+          {autocomplete.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+              {autocomplete.map(result => (
+                <button
+                  key={result.id}
+                  onMouseDown={e => { e.preventDefault(); selectAutocomplete(result) }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors text-left"
+                >
+                  <Icon name="person" className="text-[14px] text-slate-400" />
+                  <span className="flex-1 truncate">{result.name}</span>
+                  {result.currentAffiliation && (
+                    <span className="text-[10px] text-slate-400 truncate max-w-[100px]">{result.currentAffiliation}</span>
+                  )}
+                  <span className="text-[10px] text-slate-400">{result.paperCount}p</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <button onClick={() => setAdding(true)} className="text-xs text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1">
@@ -565,6 +816,22 @@ export function CollectionsPicker({ item, onUpdate, updateFn }) {
 }
 
 export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate }) {
+  const [paperAuthorLinks, setPaperAuthorLinks] = useState([])
+
+  useEffect(() => {
+    if (paper?.id) loadAuthorLinks()
+    function onLinksChanged() { loadAuthorLinks() }
+    window.addEventListener('researchos:author-links-changed', onLinksChanged)
+    return () => window.removeEventListener('researchos:author-links-changed', onLinksChanged)
+  }, [paper?.id])
+
+  async function loadAuthorLinks() {
+    try {
+      const links = await papersApi.authorLinks(paper.id)
+      setPaperAuthorLinks(links)
+    } catch (_) { /* silently fail — links are optional enrichment */ }
+  }
+
   async function handleStatusChange(newStatus) {
     try {
       await papersApi.update(paper.id, { status: newStatus })
@@ -588,7 +855,7 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
   return (
     <div className="p-4 space-y-5">
       {/* Authors */}
-      <AuthorChips authors={paper.authors || []} onSave={v => handleFieldSave('authors', v)} />
+      <AuthorChips authors={paper.authors || []} onSave={v => handleFieldSave('authors', v)} paperId={paper.id} paperAuthorLinks={paperAuthorLinks} />
 
       {/* Metadata */}
       <div className="space-y-2">

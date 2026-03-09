@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { papersApi, websitesApi, searchApi, notesApi } from '../services/api'
+import { papersApi, websitesApi, searchApi, notesApi, collectionsApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips } from '../components/PaperInfoPanel'
 import WindowModal from '../components/WindowModal'
@@ -970,6 +970,9 @@ export default function Library() {
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportEntries, setExportEntries] = useState([]) // [{ type, key, fields: [{key, value}], collapsed }]
   const [exportLoading, setExportLoading] = useState(false)
+  const [topAuthors, setTopAuthors] = useState([])
+  const [topAuthorsOpen, setTopAuthorsOpen] = useState(true)
+  const [authorFilter, setAuthorFilter] = useState(null) // filter items by author name
 
   // Listen for item changes from sidebar drag-drop
   useEffect(() => {
@@ -1028,6 +1031,18 @@ export default function Library() {
         .finally(() => setLoading(false))
     }
   }, [urlQuery, urlMode, location.key, activeLibraryId, refreshKey])
+
+  // Load top authors when a collection is active
+  useEffect(() => {
+    if (activeCollection && activeCollection !== 'all' && activeCollection !== 'inbox' && activeCollection !== 'unfiled' && activeCollection !== 'duplicates') {
+      collectionsApi.topAuthors(activeCollection, 10)
+        .then(setTopAuthors)
+        .catch(() => setTopAuthors([]))
+    } else {
+      setTopAuthors([])
+    }
+    setAuthorFilter(null)
+  }, [activeCollection])
 
   const handleStatusChange = (itemId, newStatus) => {
     setItems(prev => prev.map(p => p.id === itemId ? { ...p, status: newStatus } : p))
@@ -1185,6 +1200,7 @@ export default function Library() {
     if (yearFrom) result = result.filter(p => Number(itemYear(p)) >= Number(yearFrom))
     if (yearTo) result = result.filter(p => Number(itemYear(p)) <= Number(yearTo))
     if (tagFilters.size > 0) result = result.filter(p => [...tagFilters].every(t => p.tags.includes(t)))
+    if (authorFilter) result = result.filter(p => (p.authors || []).some(a => a === authorFilter))
     if (sortKey) {
       const dir = sortDir === 'asc' ? 1 : -1
       result = [...result].sort((a, b) => {
@@ -1206,7 +1222,7 @@ export default function Library() {
       })
     }
     return result
-  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters, sortKey, sortDir])
+  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters, authorFilter, sortKey, sortDir])
 
   function toggleSort(key) {
     if (sortKey === key) {
@@ -1513,6 +1529,46 @@ export default function Library() {
                 <Icon name="close" className="text-[16px]" />
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Top Authors bar */}
+        {topAuthors.length > 0 && (
+          <div className="border-b border-slate-200 bg-slate-50/50 px-4 py-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTopAuthorsOpen(o => !o)}
+                className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest hover:text-slate-700 transition-colors"
+              >
+                <Icon name={topAuthorsOpen ? 'expand_more' : 'chevron_right'} className="text-[14px]" />
+                Top Authors
+              </button>
+              {authorFilter && (
+                <button
+                  onClick={() => setAuthorFilter(null)}
+                  className="text-[10px] text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+            {topAuthorsOpen && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {topAuthors.map((ta, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setAuthorFilter(authorFilter === ta.name ? null : ta.name)}
+                    className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
+                      authorFilter === ta.name
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700'
+                    }`}
+                  >
+                    {ta.name} ({ta.count})
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -663,6 +663,11 @@ export default function Sidebar({ collapsed, onToggle }) {
           </div>
         )}
 
+        {/* Authors */}
+        <div className="pt-3 space-y-0.5">
+          <SidebarLink to="/authors" icon="groups" label="Authors" collapsed={collapsed} />
+        </div>
+
         {/* Agent Workflows */}
         <div className="pt-3">
           {!collapsed && (
