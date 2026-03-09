@@ -126,22 +126,26 @@ function AuthorPopover({ authorName, paperId, linkedAuthor, onLink, onClose, anc
   const popoverRef = useRef(null)
   const [pos, setPos] = useState(null)
 
-  // Position below the anchor chip
+  // Position below the anchor chip, clamped to viewport horizontally
+  const popoverWidth = linkedAuthor ? 256 : 288 // w-64 = 256, w-72 = 288
   useEffect(() => {
     if (!anchorRef?.current) return
     function update() {
       const rect = anchorRef.current.getBoundingClientRect()
-      setPos({ top: rect.bottom + 4, left: Math.max(8, rect.left) })
+      const vw = window.innerWidth
+      let left = rect.left
+      if (left + popoverWidth > vw - 8) left = vw - popoverWidth - 8
+      if (left < 8) left = 8
+      setPos({ top: rect.bottom + 4, left })
     }
     update()
-    // Reposition on scroll/resize so it follows the chip
     window.addEventListener('scroll', update, true)
     window.addEventListener('resize', update)
     return () => {
       window.removeEventListener('scroll', update, true)
       window.removeEventListener('resize', update)
     }
-  }, [anchorRef])
+  }, [anchorRef, popoverWidth])
 
   useEffect(() => {
     authorsApi.match(authorName)
@@ -196,7 +200,7 @@ function AuthorPopover({ authorName, paperId, linkedAuthor, onLink, onClose, anc
   if (!pos) return null
 
   const content = linkedAuthor ? (
-    <div ref={popoverRef} className="bg-white border border-slate-200 rounded-xl shadow-xl p-3 w-64" style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}>
+    <div ref={popoverRef} className="bg-white border border-slate-200 rounded-xl shadow-xl p-3" style={{ position: 'fixed', top: pos.top, left: pos.left, width: popoverWidth, zIndex: 9999 }}>
       <div className="flex items-center gap-2 mb-2">
         <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
           <Icon name="person" className="text-[14px] text-blue-600" />
@@ -214,7 +218,7 @@ function AuthorPopover({ authorName, paperId, linkedAuthor, onLink, onClose, anc
       </button>
     </div>
   ) : (
-    <div ref={popoverRef} className="bg-white border border-slate-200 rounded-xl shadow-xl w-72 overflow-hidden" style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}>
+    <div ref={popoverRef} className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden" style={{ position: 'fixed', top: pos.top, left: pos.left, width: popoverWidth, zIndex: 9999 }}>
       <div className="px-3 py-2 bg-slate-50 border-b border-slate-100">
         <p className="text-xs text-slate-500">Match &ldquo;{authorName}&rdquo;</p>
       </div>
