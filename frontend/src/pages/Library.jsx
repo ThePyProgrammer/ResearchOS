@@ -247,6 +247,8 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
   const [tab, setTab] = useState('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
   const [generatingNotes, setGeneratingNotes] = useState(false)
   const [notesGenerated, setNotesGenerated] = useState(false)
   const [notesError, setNotesError] = useState(null)
@@ -333,6 +335,17 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
 
   const statusCfg = statusConfig[paper.status] || statusConfig['inbox']
 
+  const handleTitleSave = async () => {
+    const trimmed = titleDraft.trim()
+    if (trimmed && trimmed !== paper.title) {
+      try {
+        const updated = await papersApi.update(paper.id, { title: trimmed })
+        onPaperUpdate(updated)
+      } catch (err) { console.error(err) }
+    }
+    setEditingTitle(false)
+  }
+
   return (
     <aside className="w-80 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col">
       {/* Header */}
@@ -387,7 +400,25 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
       <div className="flex-1 overflow-y-auto">
         {/* Title + quick actions */}
         <div className="px-4 pt-4 pb-3 border-b border-slate-100 space-y-3">
-          <h3 className="text-sm font-semibold text-slate-900 leading-snug">{paper.title}</h3>
+          {editingTitle ? (
+            <textarea
+              autoFocus
+              rows={2}
+              value={titleDraft}
+              onChange={e => setTitleDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleTitleSave() } if (e.key === 'Escape') setEditingTitle(false) }}
+              onBlur={handleTitleSave}
+              className="w-full text-sm font-semibold text-slate-900 leading-snug bg-white border border-blue-400 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
+            />
+          ) : (
+            <h3
+              className="text-sm font-semibold text-slate-900 leading-snug cursor-text hover:text-blue-700 transition-colors"
+              onClick={() => { setTitleDraft(paper.title); setEditingTitle(true) }}
+              title="Click to edit title"
+            >
+              {paper.title}
+            </h3>
+          )}
           <p className="text-xs text-slate-500 leading-relaxed">
             {paper.authors.slice(0, 3).join(', ')}{paper.authors.length > 3 ? ` +${paper.authors.length - 3} more` : ''}
             {paper.year ? <span className="text-slate-400"> - {paper.year}</span> : null}
@@ -648,6 +679,8 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
 function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
   const [tab, setTab] = useState('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [editingGithub, setEditingGithub] = useState(false)
   const [githubDraft, setGithubDraft] = useState('')
@@ -726,7 +759,25 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
       <div className="flex-1 overflow-y-auto">
         {/* Title + authors + actions */}
         <div className="px-4 pt-4 pb-3 border-b border-slate-100 space-y-3">
-          <h3 className="text-sm font-semibold text-slate-900 leading-snug">{item.title}</h3>
+          {editingTitle ? (
+            <textarea
+              autoFocus
+              rows={2}
+              value={titleDraft}
+              onChange={e => setTitleDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const t = titleDraft.trim(); if (t && t !== item.title) handleFieldSave('title', t); setEditingTitle(false) } if (e.key === 'Escape') setEditingTitle(false) }}
+              onBlur={() => { const t = titleDraft.trim(); if (t && t !== item.title) handleFieldSave('title', t); setEditingTitle(false) }}
+              className="w-full text-sm font-semibold text-slate-900 leading-snug bg-white border border-blue-400 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
+            />
+          ) : (
+            <h3
+              className="text-sm font-semibold text-slate-900 leading-snug cursor-text hover:text-teal-700 transition-colors"
+              onClick={() => { setTitleDraft(item.title); setEditingTitle(true) }}
+              title="Click to edit title"
+            >
+              {item.title}
+            </h3>
+          )}
           <p className="text-xs text-slate-500 leading-relaxed">
             {item.authors.length > 0
               ? <>{item.authors.slice(0, 3).join(', ')}{item.authors.length > 3 ? ` +${item.authors.length - 3} more` : ''}</>
@@ -968,6 +1019,8 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete })
   const [tab, setTab] = useState('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
   const { activeLibraryId } = useLibrary()
   const navigate = useNavigate()
 
@@ -1039,7 +1092,25 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete })
       <div className="flex-1 overflow-y-auto">
         {/* Title + actions */}
         <div className="px-4 pt-4 pb-3 border-b border-slate-100 space-y-3">
-          <h3 className="text-sm font-semibold text-slate-900 leading-snug">{item.title}</h3>
+          {editingTitle ? (
+            <textarea
+              autoFocus
+              rows={2}
+              value={titleDraft}
+              onChange={e => setTitleDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const t = titleDraft.trim(); if (t && t !== item.title) handleFieldSave('title', t); setEditingTitle(false) } if (e.key === 'Escape') setEditingTitle(false) }}
+              onBlur={() => { const t = titleDraft.trim(); if (t && t !== item.title) handleFieldSave('title', t); setEditingTitle(false) }}
+              className="w-full text-sm font-semibold text-slate-900 leading-snug bg-white border border-blue-400 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
+            />
+          ) : (
+            <h3
+              className="text-sm font-semibold text-slate-900 leading-snug cursor-text hover:text-violet-700 transition-colors"
+              onClick={() => { setTitleDraft(item.title); setEditingTitle(true) }}
+              title="Click to edit title"
+            >
+              {item.title}
+            </h3>
+          )}
           <p className="text-xs text-slate-500">
             <span className="font-mono">{item.owner}/{item.repoName}</span>
             {item.stars != null && (
