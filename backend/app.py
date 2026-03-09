@@ -9,7 +9,7 @@ try:
 except ImportError:
     pass  # python-dotenv not installed; rely on shell environment
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -48,6 +48,26 @@ app.include_router(chat.router)
 @app.get("/api/user")
 async def get_user():
     return JSONResponse({"name": "Dr. Researcher", "org": "Lab Alpha", "initials": "DR"})
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    detail = exc.detail
+    if exc.status_code == 404:
+        if isinstance(detail, dict):
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": str(detail.get("error", "not_found")),
+                    "detail": str(detail.get("detail", "Not found")),
+                },
+            )
+        return JSONResponse(
+            status_code=404,
+            content={"error": "not_found", "detail": str(detail or "Not found")},
+        )
+
+    return JSONResponse(status_code=exc.status_code, content={"detail": detail})
 
 
 @app.exception_handler(Exception)
