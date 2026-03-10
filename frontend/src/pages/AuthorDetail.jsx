@@ -552,10 +552,12 @@ export default function AuthorDetail() {
               ) : (
                 <div className="divide-y divide-slate-100">
                   {papers.map(paper => (
-                    <div
+                    <a
                       key={paper.id}
-                      onClick={() => navigate(`/library/paper/${paper.id}`)}
-                      className="py-3 px-2 hover:bg-blue-50/50 rounded-lg cursor-pointer transition-colors -mx-2"
+                      href={`/library/paper/${paper.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block py-3 px-2 hover:bg-blue-50/50 rounded-lg cursor-pointer transition-colors -mx-2"
                     >
                       <p className="text-sm font-medium text-slate-800 mb-1">{paper.title}</p>
                       <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -576,7 +578,7 @@ export default function AuthorDetail() {
                           ) : null
                         })()}
                       </div>
-                    </div>
+                    </a>
                   ))}
                 </div>
               )}
@@ -612,9 +614,11 @@ export default function AuthorDetail() {
                     <div className="divide-y divide-slate-100">
                       {potentialPapers.map(({ paper, rawName, confidence }) => (
                         <div key={paper.id} className="py-3 flex items-start gap-3">
-                          <div
+                          <a
                             className="flex-1 min-w-0 cursor-pointer hover:bg-blue-50/50 rounded-lg px-2 py-1 -mx-2 -my-1 transition-colors"
-                            onClick={() => navigate(`/library/paper/${paper.id}`)}
+                            href={`/library/paper/${paper.id}`}
+                            target="_blank"
+                            rel="noreferrer"
                           >
                             <p className="text-sm font-medium text-slate-800 mb-1">{paper.title}</p>
                             <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -642,7 +646,7 @@ export default function AuthorDetail() {
                                 ) : null
                               })()}
                             </div>
-                          </div>
+                          </a>
                           <button
                             onClick={() => handleLinkPaper(paper.id, rawName)}
                             disabled={linking[paper.id]}

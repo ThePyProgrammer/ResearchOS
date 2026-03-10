@@ -427,7 +427,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
           {/* Action buttons */}
           <div className="flex gap-2">
             <button
-              onClick={() => navigate(`/library/paper/${paper.id}`)}
+              onClick={() => window.open(`/library/paper/${paper.id}`, '_blank')}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
             >
               <Icon name="article" className="text-[14px]" />
@@ -522,7 +522,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
                       Notes generated successfully
                     </p>
                     <button
-                      onClick={() => navigate(`/library/paper/${paper.id}`)}
+                      onClick={() => window.open(`/library/paper/${paper.id}`, '_blank')}
                       className="w-full py-1.5 text-[11px] font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
                     >
                       Open in editor
@@ -572,7 +572,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
               <p className="text-xs text-slate-400 text-center py-6">No notes yet.</p>
             )}
             <button
-              onClick={() => navigate(`/library/paper/${paper.id}`)}
+              onClick={() => window.open(`/library/paper/${paper.id}`, '_blank')}
               className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-blue-300 hover:text-blue-600 transition-colors"
             >
               Open note editor
@@ -640,7 +640,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
                   <div className="flex items-center gap-2 pt-0.5">
                     {candidate.alreadyExists ? (
                       <button
-                        onClick={() => candidate.existingPaperId && navigate(`/library/paper/${candidate.existingPaperId}`)}
+                        onClick={() => candidate.existingPaperId && window.open(`/library/paper/${candidate.existingPaperId}`, '_blank')}
                         disabled={!candidate.existingPaperId}
                         className="px-2.5 py-1 text-[11px] rounded-lg border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 font-medium"
                       >
@@ -787,7 +787,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
           </p>
           <div className="flex gap-2">
             <button
-              onClick={() => navigate(`/library/website/${item.id}`)}
+              onClick={() => window.open(`/library/website/${item.id}`, '_blank')}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-lg transition-colors"
             >
               <Icon name="link" className="text-[14px]" />
@@ -949,7 +949,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
                       Notes generated successfully
                     </p>
                     <button
-                      onClick={() => navigate(`/library/website/${item.id}`)}
+                      onClick={() => window.open(`/library/website/${item.id}`, '_blank')}
                       className="w-full py-1.5 text-[11px] font-medium text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"
                     >
                       Open in editor
@@ -999,7 +999,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
               <p className="text-xs text-slate-400 text-center py-6">No notes yet.</p>
             )}
             <button
-              onClick={() => navigate(`/library/website/${item.id}`)}
+              onClick={() => window.open(`/library/website/${item.id}`, '_blank')}
               className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-teal-300 hover:text-teal-600 transition-colors"
             >
               Open note editor
@@ -2003,7 +2003,7 @@ export default function Library() {
                     checked={selectedIds.has(item.id)}
                     onSelect={i => setSelectedItem(selectedItem?.id === i.id ? null : i)}
                     onCheck={toggleCheck}
-                    onOpen={i => navigate(i.itemType === 'website' ? `/library/website/${i.id}` : i.itemType === 'github_repo' ? `/library/github-repo/${i.id}` : `/library/paper/${i.id}`)}
+                    onOpen={i => window.open(i.itemType === 'website' ? `/library/website/${i.id}` : i.itemType === 'github_repo' ? `/library/github-repo/${i.id}` : `/library/paper/${i.id}`, '_blank')}
                     onItemUpdate={updated => {
                       setItems(prev => prev.map(it => it.id === updated.id ? { ...it, ...updated } : it))
                       if (selectedItem?.id === updated.id) setSelectedItem(s => ({ ...s, ...updated }))
