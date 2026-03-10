@@ -91,6 +91,8 @@ describe('Library page smoke', () => {
       },
     ])
 
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+
     renderLibrary()
 
     await waitFor(() => expect(screen.getByText('Paper Alpha')).toBeInTheDocument())
@@ -98,7 +100,9 @@ describe('Library page smoke', () => {
 
     const rows = document.querySelectorAll('tbody tr')
     fireEvent.doubleClick(rows[0])
-    await waitFor(() => expect(screen.getByTestId('paper-route')).toBeInTheDocument())
+    expect(openSpy).toHaveBeenCalledWith('/library/paper/p_1', '_blank')
+
+    openSpy.mockRestore()
   })
 
   it('shows bulk action bar when selecting rows', async () => {
