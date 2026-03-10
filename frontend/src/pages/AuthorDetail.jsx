@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { authorsApi } from '../services/api'
+import { authorsApi, papersApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 
 function Icon({ name, className = '' }) {
@@ -230,6 +230,10 @@ export default function AuthorDetail() {
   const [error, setError] = useState(null)
   const [enriching, setEnriching] = useState(false)
   const [enrichResult, setEnrichResult] = useState(null)
+  const [potentialPapers, setPotentialPapers] = useState([])
+  const [potentialOpen, setPotentialOpen] = useState(false)
+  const [potentialLoading, setPotentialLoading] = useState(false)
+  const [linking, setLinking] = useState({})
 
   useEffect(() => {
     loadAuthor()
@@ -249,6 +253,41 @@ export default function AuthorDetail() {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadPotentialPapers() {
+    setPotentialLoading(true)
+    try {
+      const data = await authorsApi.potentialPapers(id)
+      setPotentialPapers(data)
+    } catch (err) {
+      console.error('Failed to load potential papers:', err)
+    } finally {
+      setPotentialLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (potentialOpen && potentialPapers.length === 0 && !potentialLoading) {
+      loadPotentialPapers()
+    }
+  }, [potentialOpen])
+
+  async function handleLinkPaper(paperId, rawName) {
+    setLinking(prev => ({ ...prev, [paperId]: true }))
+    try {
+      const authorNames = potentialPapers.find(p => p.paper.id === paperId)?.paper?.authors || []
+      const position = authorNames.indexOf(rawName)
+      await papersApi.linkAuthor(paperId, id, position >= 0 ? position : 0, rawName)
+      // Move from potential to linked
+      setPotentialPapers(prev => prev.filter(p => p.paper.id !== paperId))
+      const papersData = await authorsApi.papers(id)
+      setPapers(papersData)
+    } catch (err) {
+      alert(`Failed to link: ${err.message}`)
+    } finally {
+      setLinking(prev => ({ ...prev, [paperId]: false }))
     }
   }
 
@@ -539,6 +578,83 @@ export default function AuthorDetail() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Potential Papers */}
+            <div className="bg-white rounded-xl border border-slate-200 mt-6">
+              <button
+                onClick={() => setPotentialOpen(o => !o)}
+                className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50/50 transition-colors rounded-xl"
+              >
+                <div className="flex items-center gap-2">
+                  <Icon name="person_search" className="text-[18px] text-amber-500" />
+                  <h2 className="text-sm font-semibold text-slate-800">
+                    Potential Papers
+                    {potentialPapers.length > 0 && (
+                      <span className="ml-1.5 text-xs font-normal text-slate-400">({potentialPapers.length})</span>
+                    )}
+                  </h2>
+                </div>
+                <Icon name={potentialOpen ? 'expand_less' : 'expand_more'} className="text-[20px] text-slate-400" />
+              </button>
+
+              {potentialOpen && (
+                <div className="px-5 pb-5 border-t border-slate-100">
+                  {potentialLoading ? (
+                    <div className="py-6 text-center text-sm text-slate-400">Searching papers...</div>
+                  ) : potentialPapers.length === 0 ? (
+                    <div className="py-6 text-center text-sm text-slate-400 italic">
+                      No potential matches found.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {potentialPapers.map(({ paper, rawName, confidence }) => (
+                        <div key={paper.id} className="py-3 flex items-start gap-3">
+                          <div
+                            className="flex-1 min-w-0 cursor-pointer hover:bg-blue-50/50 rounded-lg px-2 py-1 -mx-2 -my-1 transition-colors"
+                            onClick={() => navigate(`/library/paper/${paper.id}`)}
+                          >
+                            <p className="text-sm font-medium text-slate-800 mb-1">{paper.title}</p>
+                            <div className="flex items-center gap-3 text-xs text-slate-500">
+                              <span>{paper.year}</span>
+                              {paper.venue && <span>{paper.venue}</span>}
+                              <span className="italic">as "{rawName}"</span>
+                              <span className={`px-1.5 py-0 rounded-full text-[10px] font-medium ${
+                                confidence === 'exact' ? 'bg-green-100 text-green-700' :
+                                confidence === 'likely' ? 'bg-blue-100 text-blue-700' :
+                                'bg-amber-100 text-amber-700'
+                              }`}>
+                                {confidence}
+                              </span>
+                              {paper.libraryId && (() => {
+                                const lib = libraries.find(l => l.id === paper.libraryId)
+                                return lib ? (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); switchLibrary(lib.id); navigate('/library') }}
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full hover:bg-emerald-100 transition-colors"
+                                    title={`Go to ${lib.name}`}
+                                  >
+                                    <Icon name="local_library" className="text-[11px]" />
+                                    {lib.name}
+                                  </button>
+                                ) : null
+                              })()}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleLinkPaper(paper.id, rawName)}
+                            disabled={linking[paper.id]}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex-shrink-0 mt-0.5"
+                          >
+                            <Icon name="link" className="text-[14px]" />
+                            {linking[paper.id] ? 'Linking...' : 'Link'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -91,6 +91,22 @@ async def get_author_papers(author_id: str):
     return JSONResponse([p.model_dump(by_alias=True) for p in papers])
 
 
+@router.get("/{author_id}/potential-papers")
+async def get_potential_papers(author_id: str):
+    author = author_service.get_author(author_id)
+    if author is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    matches = author_service.find_potential_papers(author_id)
+    return JSONResponse([
+        {
+            "paper": m["paper"].model_dump(by_alias=True),
+            "rawName": m["raw_name"],
+            "confidence": m["confidence"],
+        }
+        for m in matches
+    ])
+
+
 @router.post("/{author_id}/enrich")
 async def enrich_author(author_id: str):
     """AI enrichment — collect linked papers and suggest profile updates."""

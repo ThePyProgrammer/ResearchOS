@@ -426,3 +426,70 @@ def get_top_authors_for_papers(
         })
 
     return result
+
+
+def find_potential_papers(author_id: str) -> list[dict]:
+    """Find papers not yet linked whose authors string array contains a name
+    that fuzzy-matches this author. Returns list of {paper, raw_name, confidence}."""
+    author = get_author(author_id)
+    if not author:
+        return []
+
+    norm = normalize_author_name(author.name)
+    tokens = set(norm.split())
+    if not tokens:
+        return []
+
+    # Get already-linked paper IDs
+    linked = (
+        get_client()
+        .table(_PAPER_AUTHORS_TABLE)
+        .select("paper_id")
+        .eq("author_id", author_id)
+        .execute()
+    )
+    linked_ids = {r["paper_id"] for r in linked.data}
+
+    # Scan all papers
+    all_papers = get_client().table("papers").select("*").execute()
+    results = []
+
+    for row in all_papers.data:
+        if row["id"] in linked_ids:
+            continue
+        author_names = row.get("authors") or []
+        for raw_name in author_names:
+            raw_norm = normalize_author_name(raw_name)
+            raw_tokens = set(raw_norm.split())
+            if not raw_tokens:
+                continue
+
+            confidence = None
+            if raw_norm == norm:
+                confidence = "exact"
+            else:
+                shorter, longer = (tokens, raw_tokens) if len(tokens) <= len(raw_tokens) else (raw_tokens, tokens)
+                if shorter and shorter.issubset(longer):
+                    confidence = "likely"
+                else:
+                    n_parts = norm.split()
+                    r_parts = raw_norm.split()
+                    if (
+                        n_parts and r_parts
+                        and n_parts[-1] == r_parts[-1]
+                        and n_parts[0][:1] == r_parts[0][:1]
+                    ):
+                        confidence = "possible"
+
+            if confidence:
+                p = Paper.model_validate(row)
+                results.append({
+                    "paper": p,
+                    "raw_name": raw_name,
+                    "confidence": confidence,
+                })
+                break  # one match per paper is enough
+
+    order = {"exact": 0, "likely": 1, "possible": 2}
+    results.sort(key=lambda x: order.get(x["confidence"], 9))
+    return results

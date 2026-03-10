@@ -238,6 +238,7 @@ export const authorsApi = {
   search: (q, limit = 10) => apiFetch(`/authors/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   match: (name, context) => apiFetch('/authors/match', { method: 'POST', body: { name, context } }),
   papers: (id) => apiFetch(`/authors/${id}/papers`),
+  potentialPapers: (id) => apiFetch(`/authors/${id}/potential-papers`),
   enrich: (id) => apiFetch(`/authors/${id}/enrich`, { method: 'POST' }),
 }
 
