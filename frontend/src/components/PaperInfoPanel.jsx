@@ -318,7 +318,7 @@ export function AuthorChips({ authors = [], onSave, paperId, paperAuthorLinks })
 
   // Build a map of raw_name → author for linked authors
   const linkMap = {}
-  if (paperAuthorLinks) {
+  if (Array.isArray(paperAuthorLinks)) {
     for (const item of paperAuthorLinks) {
       if (item.author && item.link?.rawName) {
         linkMap[item.link.rawName] = item.author

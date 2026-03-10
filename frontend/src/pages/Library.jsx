@@ -1,9 +1,10 @@
-﻿import { useState, useEffect, useMemo, useCallback } from 'react'
+﻿import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, websitesApi, githubReposApi, searchApi, notesApi, collectionsApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips } from '../components/PaperInfoPanel'
 import WindowModal from '../components/WindowModal'
+import { useDragResize } from '../hooks/useDragResize'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -243,7 +244,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
 }
 
 
-function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }) {
+function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete, width }) {
   const [tab, setTab] = useState('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -347,7 +348,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
   }
 
   return (
-    <aside className="w-80 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col">
+    <aside className="flex-shrink-0 bg-white flex flex-col" style={{ width: width ?? 320 }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
         <div className="flex items-center gap-1.5">
@@ -676,7 +677,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete }
   )
 }
 
-function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
+function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete, width }) {
   const [tab, setTab] = useState('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -716,7 +717,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
   }
 
   return (
-    <aside className="w-80 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col">
+    <aside className="flex-shrink-0 bg-white flex flex-col" style={{ width: width ?? 320 }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
         <div className="flex items-center gap-1.5">
@@ -1015,7 +1016,7 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
 // ---------------------------------------------------------------------------
 // GitHubRepoDetail — right-panel detail for GitHub repos
 // ---------------------------------------------------------------------------
-function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete }) {
+function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete, width }) {
   const [tab, setTab] = useState('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -1051,7 +1052,7 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete })
   }
 
   return (
-    <aside className="w-80 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col">
+    <aside className="flex-shrink-0 bg-white flex flex-col" style={{ width: width ?? 320 }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
         <div className="flex items-center gap-1.5">
@@ -1341,6 +1342,11 @@ export default function Library() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showMoveModal, setShowMoveModal] = useState(false)
   const [moveSearch, setMoveSearch] = useState('')
+
+  // Detail panel resize
+  const [detailWidth, setDetailWidth] = useState(320)
+  const containerRef = useRef(null)
+  const onDetailDrag = useDragResize({ containerRef, setSize: setDetailWidth, reverse: true, minPx: 260, maxOffset: 400 })
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkMoving, setBulkMoving] = useState(false)
   const [showFetchModal, setShowFetchModal] = useState(false)
@@ -1631,7 +1637,7 @@ export default function Library() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full" ref={containerRef}>
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white">
@@ -2040,6 +2046,14 @@ export default function Library() {
         </div>
       </div>
 
+      {selectedItem && (
+        <div
+          onMouseDown={onDetailDrag}
+          className="w-1 flex-shrink-0 bg-slate-200 hover:bg-blue-400 active:bg-blue-500 cursor-col-resize transition-colors"
+          title="Drag to resize"
+        />
+      )}
+
       {selectedItem && selectedItem.itemType === 'website' && (
         <WebsiteDetail
           item={selectedItem}
@@ -2047,6 +2061,7 @@ export default function Library() {
           onStatusChange={handleStatusChange}
           onUpdate={handleItemUpdate}
           onDelete={handleDelete}
+          width={detailWidth}
         />
       )}
       {selectedItem && selectedItem.itemType === 'github_repo' && (
@@ -2056,6 +2071,7 @@ export default function Library() {
           onStatusChange={handleStatusChange}
           onUpdate={handleItemUpdate}
           onDelete={handleDelete}
+          width={detailWidth}
         />
       )}
       {selectedItem && selectedItem.itemType !== 'website' && selectedItem.itemType !== 'github_repo' && (
@@ -2065,6 +2081,7 @@ export default function Library() {
           onStatusChange={handleStatusChange}
           onPaperUpdate={handleItemUpdate}
           onDelete={handleDelete}
+          width={detailWidth}
         />
       )}
 
