@@ -4,6 +4,7 @@ import { papersApi, notesApi } from '../services/api'
 import PaperInfoPanel from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
+import { useDragResize } from '../hooks/useDragResize'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -64,6 +65,14 @@ export default function Paper() {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const fileInputRef = useRef(null)
+
+  // Resize state
+  const [leftWidth, setLeftWidth] = useState(null)
+  const [copilotWidth, setCopilotWidth] = useState(320)
+  const bodyRef = useRef(null)
+  const notesAreaRef = useRef(null)
+  const onMainDrag = useDragResize({ containerRef: bodyRef, setSize: setLeftWidth, minPx: 240, maxOffset: 240 })
+  const onCopilotDrag = useDragResize({ containerRef: notesAreaRef, setSize: setCopilotWidth, reverse: true, minPx: 240, maxOffset: 200 })
 
   // Load notes for the paper
   const loadNotes = useCallback(() => {
@@ -253,9 +262,14 @@ export default function Paper() {
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden" ref={bodyRef}>
         {/* PDF Panel */}
-        <div className={`${isNotes ? 'w-[40%] min-w-[300px]' : 'flex-1'} flex flex-col overflow-hidden border-r border-slate-200 transition-all duration-200`}>
+        <div
+          className="flex flex-col overflow-hidden"
+          style={isNotes
+            ? { width: leftWidth ?? '40%', minWidth: 240, flexShrink: 0 }
+            : { flex: 1, borderRight: '1px solid #e2e8f0' }}
+        >
           {/* PDF Toolbar */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 bg-white text-sm">
             {paper.pdfUrl ? (
@@ -342,8 +356,17 @@ export default function Paper() {
           )}
         </div>
 
+        {/* Main resize handle — notes tab only */}
+        {isNotes && (
+          <div
+            onMouseDown={onMainDrag}
+            className="w-1 flex-shrink-0 bg-slate-200 hover:bg-blue-400 active:bg-blue-500 cursor-col-resize transition-colors"
+            title="Drag to resize"
+          />
+        )}
+
         {/* Right area — tabs + content */}
-        <div className={`${isNotes ? 'flex-1' : 'w-80 flex-shrink-0'} flex flex-col bg-white transition-all duration-200`}>
+        <div className={`${isNotes ? 'flex-1 min-w-0' : 'w-80 flex-shrink-0 border-l border-slate-200'} flex flex-col bg-white`}>
           {/* Tab bar */}
           <div className="flex border-b border-slate-100 flex-shrink-0">
             {[
@@ -375,16 +398,24 @@ export default function Paper() {
               </div>
             )}
             {sideTab === 'notes' && (
-              <div className="flex-1 flex overflow-hidden">
-                <div className="flex-1 flex overflow-hidden">
+              <div ref={notesAreaRef} className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex overflow-hidden min-w-0">
                   <NotesPanel paperId={id} notes={notes} setNotes={setNotes} />
                 </div>
+                {copilotOpen && (
+                  <div
+                    onMouseDown={onCopilotDrag}
+                    className="w-1 flex-shrink-0 bg-slate-200 hover:bg-purple-400 active:bg-purple-500 cursor-col-resize transition-colors"
+                    title="Drag to resize"
+                  />
+                )}
                 <CopilotPanel
                   paperId={id}
                   open={copilotOpen}
                   onToggle={() => setCopilotOpen(o => !o)}
                   notes={notes}
                   onNotesChanged={loadNotes}
+                  width={copilotWidth}
                 />
               </div>
             )}

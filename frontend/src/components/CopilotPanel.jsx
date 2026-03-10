@@ -339,7 +339,7 @@ function ChatBubble({ message, currentNotes, onSuggestionAccept, onSuggestionRej
 }
 
 /* ─── Main CopilotPanel ─── */
-export default function CopilotPanel({ paperId, websiteId, open, onToggle, notes, onNotesChanged }) {
+export default function CopilotPanel({ paperId, websiteId, open, onToggle, notes, onNotesChanged, width }) {
   const isWebsite = Boolean(websiteId)
   const itemId = paperId || websiteId
 
@@ -525,7 +525,10 @@ export default function CopilotPanel({ paperId, websiteId, open, onToggle, notes
   }
 
   return (
-    <div className="w-80 flex-shrink-0 flex flex-col border-l border-slate-200 bg-white">
+    <div
+      className="flex-shrink-0 flex flex-col border-l border-slate-200 bg-white"
+      style={{ width: width ?? 320 }}
+    >
       {/* Header */}
       <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between bg-white">
         <div className="flex items-center gap-2">
