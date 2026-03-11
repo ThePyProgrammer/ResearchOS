@@ -253,6 +253,11 @@ papersApi.unlinkAuthor = (paperId, authorId) =>
 collectionsApi.topAuthors = (id, limit = 10) =>
   apiFetch(`/collections/${id}/top-authors?limit=${limit}`)
 
+export const settingsApi = {
+  getModels: ({ refresh = false } = {}) => apiFetch(`/settings/models${refresh ? '?refresh=true' : ''}`),
+  updateModels: (updates) => apiFetch('/settings/models', { method: 'PATCH', body: updates }),
+}
+
 export const searchApi = {
   /** Quick search — returns papers with a `score` field appended. */
   query: (q, { mode = 'lexical', limit = 10 } = {}) =>

@@ -14,6 +14,9 @@ from typing import Optional
 
 import httpx
 
+from agents.llm import get_model, get_openai_client, get_async_openai_client
+from agents.prompts import AUTHOR_ENRICHMENT
+
 from models.author import Author
 from services import author_service
 
@@ -85,8 +88,6 @@ async def _web_search_author(
     {"url": ..., "title": ...} dicts extracted from the response annotations.
     Both values are None / [] on failure so the caller degrades gracefully.
     """
-    from openai import AsyncOpenAI
-
     # Include a couple of paper titles as disambiguation context so the
     # search engine can distinguish between researchers with the same name.
     context = ""
@@ -101,9 +102,9 @@ async def _web_search_author(
     )
 
     try:
-        client = AsyncOpenAI(api_key=api_key)
+        client = get_async_openai_client()
         response = await client.chat.completions.create(
-            model="gpt-4o-mini-search-preview",
+            model=get_model("web_search"),
             web_search_options={},
             messages=[{"role": "user", "content": query}],
         )
@@ -213,46 +214,20 @@ async def enrich_author(author: Author) -> dict:
         no_web_note = ""
 
     try:
-        from openai import OpenAI
+        client = get_openai_client()
 
-        client = OpenAI(api_key=api_key)
-
-        prompt = f"""You are helping enrich an academic author's profile record.
-
-Author name: {author.name}
-Current ORCID: {author.orcid or 'not set'}
-Current affiliations: {json.dumps([a.model_dump() for a in author.affiliations]) if author.affiliations else 'none'}
-
-Library papers (up to 20):
-{json.dumps(paper_context, indent=2)}
-
-{ss_block}
-{ws_block}
-{no_web_note}
-
-Return a JSON object with suggested profile updates. Strict sourcing rules:
-- "orcid": only if explicitly found in the sources above; never guess a format.
-- "google_scholar_url": only if a Scholar URL appears in the sources.
-- "website_url": only if a personal/academic homepage appears in the sources.
-- "github_username": only if a GitHub profile appears in the sources.
-- "emails": only if an email appears in the sources; never construct one.
-- "affiliations": prefer sources; may infer from paper venues only when highly confident.
-- Omit any field not clearly supported by the sources above.
-- "confidence_notes": one sentence explaining which fields came from web search
-  vs. Semantic Scholar vs. paper inference, and what (if anything) was not found.
-
-{{
-  "affiliations": [{{"institution": "...", "role": "..."}}],
-  "orcid": "...",
-  "google_scholar_url": "...",
-  "github_username": "...",
-  "website_url": "...",
-  "emails": ["..."],
-  "confidence_notes": "..."
-}}"""
+        prompt = AUTHOR_ENRICHMENT.format(
+            name=author.name,
+            orcid=author.orcid or 'not set',
+            affiliations=json.dumps([a.model_dump() for a in author.affiliations]) if author.affiliations else 'none',
+            paper_context=json.dumps(paper_context, indent=2),
+            ss_block=ss_block,
+            ws_block=ws_block,
+            no_web_note=no_web_note,
+        )
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=get_model("enrichment"),
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.1,

@@ -17,6 +17,14 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
 from agents.base import RunLogger, emit_activity, search_arxiv
+from agents.llm import get_pydantic_ai_model
+from agents.prompts import (
+    EXPERIMENT_GOAL_EXTRACTION,
+    EXPERIMENT_IDEA_GEN,
+    EXPERIMENT_CRITIQUE,
+    EXPERIMENT_DESIGN,
+    EXPERIMENT_CODE_GEN,
+)
 from models.paper import AgentRunRef, PaperCreate
 from services import paper_service, proposal_service, run_service
 
@@ -96,67 +104,45 @@ class CodeOutput(BaseModel):
 # Agents
 # ---------------------------------------------------------------------------
 
-_goal_extraction_agent: Agent = Agent(
-    "openai:gpt-4o",
-    output_type=GoalExtractionOutput,
-    system_prompt=(
-        "You are a research planning expert. Extract the primary goals, testable hypotheses, "
-        "and constraints from a research plan or problem description. "
-        "Also generate 2–3 targeted arXiv search queries (slash-separated, max 4 terms) "
-        "to find relevant methodology papers."
-    ),
-    defer_model_check=True,
-)
+def _make_goal_extraction_agent() -> Agent:
+    return Agent(
+        get_pydantic_ai_model("agent"),
+        output_type=GoalExtractionOutput,
+        system_prompt=EXPERIMENT_GOAL_EXTRACTION,
+        defer_model_check=True,
+    )
 
-_idea_gen_agent: Agent = Agent(
-    "openai:gpt-4o",
-    output_type=ExperimentIdeasOutput,
-    system_prompt=(
-        "You are a creative research experimentalist. Given research goals and supporting "
-        "literature, generate 3–5 concrete experiment ideas. For each, describe the "
-        "methodology, required datasets, and expected outcomes. "
-        "Score novelty and feasibility 1–10. "
-        "Select the best idea (highest combined score) as the primary experiment."
-    ),
-    defer_model_check=True,
-)
+def _make_idea_gen_agent() -> Agent:
+    return Agent(
+        get_pydantic_ai_model("agent"),
+        output_type=ExperimentIdeasOutput,
+        system_prompt=EXPERIMENT_IDEA_GEN,
+        defer_model_check=True,
+    )
 
-_critique_agent: Agent = Agent(
-    "openai:gpt-4o",
-    output_type=CritiqueOutput,
-    system_prompt=(
-        "You are a rigorous academic reviewer. Critique the given experiment design. "
-        "Score it 1–10 on scientific rigor, feasibility, novelty, and clarity. "
-        "List strengths, major issues, and specific improvement suggestions. "
-        "Mark pass_threshold=True only if score ≥ 7 with no blocking issues."
-    ),
-    defer_model_check=True,
-)
+def _make_critique_agent() -> Agent:
+    return Agent(
+        get_pydantic_ai_model("agent"),
+        output_type=CritiqueOutput,
+        system_prompt=EXPERIMENT_CRITIQUE,
+        defer_model_check=True,
+    )
 
-_design_agent: Agent = Agent(
-    "openai:gpt-4o",
-    output_type=ExperimentDesignOutput,
-    system_prompt=(
-        "You are a senior ML researcher writing an experiment design document. "
-        "Produce a detailed, rigorous experiment design that a graduate student could follow. "
-        "Include methodology, datasets, baselines, metrics, and implementation plan. "
-        "Ground the design in the provided literature (cite arXiv IDs where applicable)."
-    ),
-    defer_model_check=True,
-)
+def _make_design_agent() -> Agent:
+    return Agent(
+        get_pydantic_ai_model("agent"),
+        output_type=ExperimentDesignOutput,
+        system_prompt=EXPERIMENT_DESIGN,
+        defer_model_check=True,
+    )
 
-_code_agent: Agent = Agent(
-    "openai:gpt-4o",
-    output_type=CodeOutput,
-    system_prompt=(
-        "You are an expert Python ML engineer. Generate a minimal but complete Python code "
-        "stub for the described experiment. Include all imports, data loading, model "
-        "definition, training loop, and evaluation. Use PyTorch or scikit-learn as "
-        "appropriate. Add TODO comments for dataset-specific parts. "
-        "Ensure the code is syntactically valid and follows best practices."
-    ),
-    defer_model_check=True,
-)
+def _make_code_agent() -> Agent:
+    return Agent(
+        get_pydantic_ai_model("agent"),
+        output_type=CodeOutput,
+        system_prompt=EXPERIMENT_CODE_GEN,
+        defer_model_check=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Workflow runner
@@ -185,7 +171,7 @@ async def run_experiment_designer(
         log.set_progress(8, "Extracting goals (Step 1/6)")
         log.agent("Extracting research goals, hypotheses, and constraints…")
 
-        goals_result = await _goal_extraction_agent.run(
+        goals_result = await _make_goal_extraction_agent().run(
             f"Research plan / problem description:\n{prompt}"
         )
         goals = goals_result.output
@@ -238,7 +224,7 @@ async def run_experiment_designer(
         log.set_progress(30, "Generating experiment ideas (Step 3/6)")
         log.agent("Generating experiment ideas grounded in literature…")
 
-        ideas_result = await _idea_gen_agent.run(
+        ideas_result = await _make_idea_gen_agent().run(
             f"Research goals:\n{chr(10).join(f'- {g}' for g in goals.goals)}\n\n"
             f"Hypotheses:\n{chr(10).join(f'- {h}' for h in goals.hypotheses)}\n\n"
             f"Constraints:\n{chr(10).join(f'- {c}' for c in goals.constraints)}\n\n"
@@ -285,13 +271,13 @@ async def run_experiment_designer(
             f"Supporting literature:\n{literature_context}"
         )
 
-        design_result = await _design_agent.run(design_prompt)
+        design_result = await _make_design_agent().run(design_prompt)
         design = design_result.output
 
         for round_num in range(1, _MAX_CRITIQUE_ROUNDS + 1):
             log.agent(f"Running critique round {round_num}/{_MAX_CRITIQUE_ROUNDS}…")
 
-            critique_result = await _critique_agent.run(
+            critique_result = await _make_critique_agent().run(
                 f"Experiment design to critique:\n\n"
                 f"Title: {design.title}\n"
                 f"Objective: {design.objective}\n"
@@ -331,7 +317,7 @@ async def run_experiment_designer(
                 + "\n".join(f"- {s}" for s in critique.suggestions)
                 + "\n\nPlease improve the design to address these issues."
             )
-            design_result = await _design_agent.run(refine_prompt)
+            design_result = await _make_design_agent().run(refine_prompt)
             design = design_result.output
 
         trace.append(
@@ -346,7 +332,7 @@ async def run_experiment_designer(
         log.set_progress(75, "Generating code (Step 5/6)")
         log.agent("Generating Python experiment code stub…")
 
-        code_result = await _code_agent.run(
+        code_result = await _make_code_agent().run(
             f"Generate Python code for this experiment:\n\n"
             f"Title: {design.title}\n"
             f"Objective: {design.objective}\n"

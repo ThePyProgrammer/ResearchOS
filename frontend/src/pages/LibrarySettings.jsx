@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLibrary } from '../context/LibraryContext'
-import { librariesApi } from '../services/api'
+import { librariesApi, settingsApi } from '../services/api'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -15,6 +15,33 @@ function SettingsSection({ title, description, children }) {
         {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
       </div>
       <div className="px-6 py-5">{children}</div>
+    </div>
+  )
+}
+
+function ModelSelector({ role, description, current, chatModels, embeddingModels, onChange }) {
+  const isEmbedding = role === 'embedding'
+  const models = isEmbedding ? embeddingModels : chatModels
+
+  return (
+    <div className="flex items-center justify-between py-2.5 border-b border-slate-50 last:border-0">
+      <div className="min-w-0 flex-1 mr-4">
+        <p className="text-sm font-medium text-slate-700">{description}</p>
+        <p className="text-[11px] text-slate-400 mt-0.5">{role}</p>
+      </div>
+      <select
+        value={current}
+        onChange={e => onChange(role, e.target.value)}
+        className="w-56 px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+      >
+        {models.map(m => (
+          <option key={m.id} value={m.id}>{m.name}</option>
+        ))}
+        {/* show current if not in list (e.g. search-preview model) */}
+        {!models.some(m => m.id === current) && (
+          <option value={current}>{current}</option>
+        )}
+      </select>
     </div>
   )
 }
@@ -33,9 +60,30 @@ export default function LibrarySettings() {
   const [savingNoteSettings, setSavingNoteSettings] = useState(false)
   const [noteSettingsSaved, setNoteSettingsSaved] = useState(false)
 
+  // Model settings
+  const [modelConfig, setModelConfig] = useState(null)
+  const [modelCurrent, setModelCurrent] = useState({})
+  const [savingModels, setSavingModels] = useState(false)
+  const [modelsSaved, setModelsSaved] = useState(false)
+  const [modelsError, setModelsError] = useState(null)
+
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
+
+  function loadModels(refresh = false) {
+    setModelsError(null)
+    settingsApi.getModels({ refresh }).then(data => {
+      setModelConfig(data)
+      setModelCurrent(prev => {
+        // Preserve any user edits, only reset if loading for the first time
+        if (!prev || Object.keys(prev).length === 0) return data.current
+        return prev
+      })
+    }).catch(err => setModelsError(err.message))
+  }
+
+  useEffect(() => { loadModels() }, [])
 
   if (!activeLibrary) {
     return (
@@ -73,6 +121,35 @@ export default function LibrarySettings() {
       setTimeout(() => setNoteSettingsSaved(false), 2500)
     } finally {
       setSavingNoteSettings(false)
+    }
+  }
+
+  function handleModelChange(role, modelId) {
+    setModelCurrent(prev => ({ ...prev, [role]: modelId }))
+    setModelsSaved(false)
+  }
+
+  async function handleSaveModels(e) {
+    e.preventDefault()
+    setSavingModels(true)
+    setModelsSaved(false)
+    setModelsError(null)
+    try {
+      const result = await settingsApi.updateModels(modelCurrent)
+      setModelCurrent(result.current)
+      setModelsSaved(true)
+      setTimeout(() => setModelsSaved(false), 2500)
+    } catch (err) {
+      setModelsError(err.message)
+    } finally {
+      setSavingModels(false)
+    }
+  }
+
+  function handleResetModels() {
+    if (modelConfig?.defaults) {
+      setModelCurrent(modelConfig.defaults)
+      setModelsSaved(false)
     }
   }
 
@@ -134,7 +211,7 @@ export default function LibrarySettings() {
                 disabled={!name.trim() || name.trim() === activeLibrary.name || saving}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
               >
-                {saving ? 'Saving…' : 'Save changes'}
+                {saving ? 'Saving...' : 'Save changes'}
               </button>
               {saveSuccess && (
                 <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
@@ -195,7 +272,7 @@ export default function LibrarySettings() {
                 disabled={savingNoteSettings}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
               >
-                {savingNoteSettings ? 'Saving…' : 'Save settings'}
+                {savingNoteSettings ? 'Saving...' : 'Save settings'}
               </button>
               {noteSettingsSaved && (
                 <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
@@ -206,6 +283,81 @@ export default function LibrarySettings() {
             </div>
           </form>
         </SettingsSection>
+
+        {/* AI Model Configuration */}
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">AI Model Configuration</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Choose which OpenAI model powers each AI feature. Changes apply globally across all libraries.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadModels(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              title="Refresh model list from OpenAI API"
+            >
+              <Icon name="refresh" className="text-[14px]" />
+              Refresh
+            </button>
+          </div>
+          <div className="px-6 py-5">
+            {modelsError && !modelConfig && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                Failed to load model settings: {modelsError}
+              </div>
+            )}
+            {!modelConfig && !modelsError && (
+              <div className="text-sm text-slate-400 animate-pulse">Loading model settings...</div>
+            )}
+            {modelConfig && (
+              <form onSubmit={handleSaveModels} className="space-y-2">
+                <p className="text-[11px] text-slate-400 mb-3">
+                  {modelConfig.available_chat_models.length} chat models and {modelConfig.available_embedding_models.length} embedding models available from your OpenAI account.
+                </p>
+
+                {Object.entries(modelConfig.descriptions).map(([role, desc]) => (
+                  <ModelSelector
+                    key={role}
+                    role={role}
+                    description={desc}
+                    current={modelCurrent[role] || modelConfig.defaults[role]}
+                    chatModels={modelConfig.available_chat_models}
+                    embeddingModels={modelConfig.available_embedding_models}
+                    onChange={handleModelChange}
+                  />
+                ))}
+
+                {modelsError && (
+                  <p className="text-xs text-red-500 mt-2">{modelsError}</p>
+                )}
+
+                <div className="flex items-center gap-3 pt-3">
+                  <button
+                    type="submit"
+                    disabled={savingModels}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                  >
+                    {savingModels ? 'Saving...' : 'Save model settings'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetModels}
+                    className="px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    Reset to defaults
+                  </button>
+                  {modelsSaved && (
+                    <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                      <Icon name="check_circle" className="text-[15px]" />
+                      Saved
+                    </span>
+                  )}
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
 
         {/* Danger zone */}
         <div className="bg-white border border-red-200 rounded-xl overflow-hidden">
@@ -248,7 +400,7 @@ export default function LibrarySettings() {
                     disabled={deleteConfirmText !== activeLibrary.name || deleting}
                     className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-40 transition-colors"
                   >
-                    {deleting ? 'Deleting…' : 'Delete permanently'}
+                    {deleting ? 'Deleting...' : 'Delete permanently'}
                   </button>
                   <button
                     onClick={() => { setConfirmDelete(false); setDeleteConfirmText('') }}

@@ -6,31 +6,14 @@ import os
 import tempfile
 
 import pymupdf4llm
-from openai import OpenAI
+
+from agents.llm import get_model, get_openai_client
+from agents.prompts import PDF_METADATA_EXTRACTION
 
 logger = logging.getLogger(__name__)
 
 # Only extract the first N chars from the PDF to keep the prompt small
 _MAX_EXTRACT_CHARS = 8_000
-
-_SYSTEM_PROMPT = """You are a scholarly metadata extraction system. Given the first few pages of a research paper in markdown format, extract the following metadata as a JSON object:
-
-{
-  "title": "Full paper title in proper title case (preserve acronyms like BERT, GPT, LLM in uppercase)",
-  "authors": ["Author One", "Author Two"],
-  "date": "YYYY-MM-DD if available, otherwise YYYY-MM or YYYY, or null",
-  "venue": "Journal or conference name, or null",
-  "abstract": "Full abstract text, or null",
-  "doi": "DOI string if found, or null"
-}
-
-Rules:
-- For authors, return an array of full names (e.g. "John Smith"), not abbreviated.
-- For date, prefer the most specific format available. If only a year is visible, return "YYYY". If month and year, "YYYY-MM".
-- For venue, look for journal names, conference names (e.g. "NeurIPS 2023", "Nature", "ICML"), or arXiv identifiers.
-- For DOI, look for patterns like "10.xxxx/..." in the text.
-- For title, use proper title case. Preserve acronyms and initialisms in uppercase (e.g. BERT, GPT, LLM, NLP, CNN, RL, AI). If the PDF title is ALL CAPS, convert it to title case while keeping acronyms uppercase.
-- Return ONLY valid JSON, no explanation or markdown fences."""
 
 
 def extract_metadata_from_bytes(pdf_bytes: bytes) -> dict:
@@ -58,11 +41,11 @@ def extract_metadata_from_bytes(pdf_bytes: bytes) -> dict:
     if len(md_text) > _MAX_EXTRACT_CHARS:
         md_text = md_text[:_MAX_EXTRACT_CHARS]
 
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    client = get_openai_client()
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=get_model("metadata"),
         messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": PDF_METADATA_EXTRACTION},
             {"role": "user", "content": md_text},
         ],
         temperature=0,

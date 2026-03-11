@@ -12,6 +12,7 @@ wheels/
 
 .claude/
 CLAUDE.md
+test-results/
 
 AGENTS.md
 

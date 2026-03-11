@@ -5,7 +5,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from openai import OpenAI
+from agents.llm import get_model, get_openai_client
+from agents.prompts import NOTE_GENERATION
 
 from models.note import Note, NoteCreate, NoteUpdate
 from services.db import get_client
@@ -14,47 +15,6 @@ logger = logging.getLogger(__name__)
 
 _TABLE = "notes"
 _AUTO_FOLDER_NAME = "AI Notes"
-
-_BASE_SYSTEM_PROMPT = """\
-You are a research note-taker embedded in a paper and article management system.
-Your job is to produce a well-organized set of notes as separate files, optionally grouped into folders.
-
-IMPORTANT: Create MULTIPLE separate note files — do NOT put everything into one file.
-Each file should cover a single focused topic or aspect of the item.
-Use folders to group related notes when there are enough files to warrant organization.
-
-Good structures look like:
-- "Summary" (file) — high-level 2-3 paragraph overview
-- "Key Contributions" (file) — main contributions and novelty
-- "Methodology" (folder)
-  - "Approach" (file) — detailed methodology description
-  - "Experimental Setup" (file) — datasets, baselines, metrics
-- "Results & Analysis" (file) — key findings and takeaways
-- "Limitations & Future Work" (file)
-- "Key Equations" (file) — important formulas explained
-- "Related Work" (file) — context in the broader field
-
-Adapt the structure to the content — a math-heavy paper needs a "Key Equations" file,
-a systems paper needs an "Architecture" file, a survey needs a "Taxonomy" file, etc.
-Aim for 3-8 files total. Use folders only when grouping 2+ related files.
-
-Respond with a JSON object (no markdown fencing) with this schema:
-{
-  "notes": [
-    {
-      "name": "file or folder name",
-      "type": "file" or "folder",
-      "content": "HTML content (only for files, omit for folders)",
-      "children": [ ...nested notes... ]  // only for folders, omit for files
-    }
-  ]
-}
-
-For file content, output valid HTML suitable for a tiptap rich-text editor.
-Use these tags: <h2>, <h3>, <p>, <strong>, <em>, <ul>, <li>, <ol>, <code>, <blockquote>.
-For math use LaTeX: $...$ inline, $$...$$ display.
-Do NOT include <html>, <body>, or <head> tags.
-Each file's content should be focused and self-contained — NOT a giant dump of everything."""
 
 
 # ---------------------------------------------------------------------------
@@ -141,12 +101,9 @@ def _get_custom_prompt(library_id: Optional[str]) -> Optional[str]:
 
 def _call_openai_json(system: str, user_msg: str) -> dict:
     """Call OpenAI and parse a JSON response with the multi-note structure."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-    client = OpenAI(api_key=api_key)
+    client = get_openai_client()
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=get_model("notes"),
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user_msg},
@@ -221,7 +178,7 @@ def _generate_multi_notes(
 ) -> list[Note]:
     """Core generation: call LLM, parse JSON tree, create folder structure."""
     custom_prompt = _get_custom_prompt(library_id)
-    system = _BASE_SYSTEM_PROMPT
+    system = NOTE_GENERATION
     if custom_prompt:
         system += f"\n\nAdditional instructions from the researcher:\n{custom_prompt}"
 

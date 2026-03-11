@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
 from agents.base import RunLogger, emit_activity, search_arxiv
+from agents.llm import get_pydantic_ai_model
+from agents.prompts import MODEL_RESEARCH_ANALYSIS, MODEL_RESEARCH_SCREENING, MODEL_RESEARCH_SUGGESTION
 from models.paper import AgentRunRef, PaperCreate
 from services import paper_service, proposal_service, run_service
 
@@ -78,40 +80,29 @@ class ModelSuggestionsOutput(BaseModel):
 # Agents
 # ---------------------------------------------------------------------------
 
-_analysis_agent: Agent = Agent(
-    "openai:gpt-4o",
-    output_type=TaskAnalysisOutput,
-    system_prompt=(
-        "You are an expert ML researcher. Analyse the given problem statement to identify "
-        "the primary task type, data modality, key requirements, and generate an optimal "
-        "arXiv search query (slash-separated, max 4 terms) to find relevant model literature."
-    ),
-    defer_model_check=True,
-)
+def _make_analysis_agent() -> Agent:
+    return Agent(
+        get_pydantic_ai_model("agent"),
+        output_type=TaskAnalysisOutput,
+        system_prompt=MODEL_RESEARCH_ANALYSIS,
+        defer_model_check=True,
+    )
 
-_screening_agent: Agent = Agent(
-    "openai:gpt-4o-mini",
-    output_type=PaperScreeningOutput,
-    system_prompt=(
-        "You are an ML paper screener focused on model architecture relevance. "
-        "Score each paper 0–10 for how well it describes or evaluates ML models/architectures "
-        "applicable to the stated task. 8–10 = introduces or benchmarks a directly applicable model; "
-        "5–7 = discusses relevant approaches; 0–4 = unrelated."
-    ),
-    defer_model_check=True,
-)
+def _make_screening_agent() -> Agent:
+    return Agent(
+        get_pydantic_ai_model("agent_light"),
+        output_type=PaperScreeningOutput,
+        system_prompt=MODEL_RESEARCH_SCREENING,
+        defer_model_check=True,
+    )
 
-_suggestion_agent: Agent = Agent(
-    "openai:gpt-4o",
-    output_type=ModelSuggestionsOutput,
-    system_prompt=(
-        "You are a senior ML architect. Based on the task analysis and the retrieved literature, "
-        "recommend the top 3–5 most suitable model architectures. "
-        "For each, provide clear rationale, strengths, limitations, and implementation notes. "
-        "Ground recommendations in the provided paper evidence."
-    ),
-    defer_model_check=True,
-)
+def _make_suggestion_agent() -> Agent:
+    return Agent(
+        get_pydantic_ai_model("agent"),
+        output_type=ModelSuggestionsOutput,
+        system_prompt=MODEL_RESEARCH_SUGGESTION,
+        defer_model_check=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Workflow runner
@@ -139,7 +130,7 @@ async def run_model_researcher(
         log.set_progress(10, "Analysing task (Step 1/5)")
         log.agent("Decomposing ML task into categories and properties…")
 
-        analysis_result = await _analysis_agent.run(
+        analysis_result = await _make_analysis_agent().run(
             f"ML Problem: {prompt}\n\nDecompose this task and generate a search query."
         )
         analysis = analysis_result.output
@@ -211,7 +202,7 @@ async def run_model_researcher(
             log.agent(
                 f"Screening batch {batch_idx + 1}/{n_batches} ({len(batch)} papers)…"
             )
-            result = await _screening_agent.run(
+            result = await _make_screening_agent().run(
                 f"ML task: {prompt}\n\nPapers:\n{papers_text}"
             )
             for score in result.output.scores:
@@ -247,7 +238,7 @@ async def run_model_researcher(
             if s.arxiv_id in papers_by_id
         )
 
-        suggestion_result = await _suggestion_agent.run(
+        suggestion_result = await _make_suggestion_agent().run(
             f"ML Problem: {prompt}\n\n"
             f"Task Analysis:\n"
             f"- Type: {analysis.task_type}\n"

@@ -12,13 +12,14 @@ import math
 import os
 from typing import Optional
 
+from agents.llm import get_model
+
 from models.paper import Paper
 from services.storage import DATA_DIR, load_json, save_json
 
 logger = logging.getLogger(__name__)
 
 _EMBED_FILE = "embeddings.json"
-_MODEL = "text-embedding-3-small"
 
 
 # ---------------------------------------------------------------------------
@@ -48,9 +49,9 @@ async def _embed(text: str) -> Optional[list[float]]:
     if not api_key:
         return None
     try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=api_key)
-        resp = await client.embeddings.create(model=_MODEL, input=text[:8000])
+        from agents.llm import get_async_openai_client
+        client = get_async_openai_client()
+        resp = await client.embeddings.create(model=get_model("embedding"), input=text[:8000])
         return resp.data[0].embedding
     except Exception as exc:
         logger.warning("Embedding call failed: %s", exc)

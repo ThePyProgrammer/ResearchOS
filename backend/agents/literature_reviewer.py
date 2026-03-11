@@ -16,6 +16,8 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
 from agents.base import RunLogger, emit_activity, search_arxiv
+from agents.llm import get_pydantic_ai_model
+from agents.prompts import LIT_REVIEW_QUERY_GEN, LIT_REVIEW_SCREENING
 from models.paper import AgentRunRef, PaperCreate
 from services import paper_service, proposal_service, run_service
 
@@ -50,31 +52,21 @@ class ScreeningOutput(BaseModel):
 # pydantic-ai agents (module-level singletons, model loaded lazily)
 # ---------------------------------------------------------------------------
 
-_query_gen_agent: Agent = Agent(
-    "openai:gpt-4o-mini",
-    output_type=SearchQueriesOutput,
-    system_prompt=(
-        "You are an expert literature search specialist. "
-        "Given a research prompt, generate 2–4 concise, targeted arXiv-compatible search queries. "
-        "Each query must use slash-separated terms (max 4 terms), "
-        "e.g. 'transformer/attention/language model' or 'graph neural network/drug discovery'. "
-        "Generate diverse queries that capture different aspects of the topic."
-    ),
-    defer_model_check=True,
-)
+def _make_query_gen_agent() -> Agent:
+    return Agent(
+        get_pydantic_ai_model("agent_light"),
+        output_type=SearchQueriesOutput,
+        system_prompt=LIT_REVIEW_QUERY_GEN,
+        defer_model_check=True,
+    )
 
-_screening_agent: Agent = Agent(
-    "openai:gpt-4o-mini",
-    output_type=ScreeningOutput,
-    system_prompt=(
-        "You are an expert research paper screener. "
-        "Given a list of papers and a research topic, score each paper's relevance 0–10. "
-        "Scoring: 8–10 = directly addresses topic; 5–7 = useful context; 0–4 = tangential. "
-        "Also infer 2–5 short topic tags per paper. "
-        "Be strict: 8+ only if the paper clearly advances knowledge on the stated topic."
-    ),
-    defer_model_check=True,
-)
+def _make_screening_agent() -> Agent:
+    return Agent(
+        get_pydantic_ai_model("agent_light"),
+        output_type=ScreeningOutput,
+        system_prompt=LIT_REVIEW_SCREENING,
+        defer_model_check=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Workflow runner
@@ -107,7 +99,7 @@ async def run_literature_reviewer(
         log.set_progress(10, "Generating search queries (Step 1/4)")
         log.agent("Generating optimized arXiv search queries…")
 
-        query_result = await _query_gen_agent.run(
+        query_result = await _make_query_gen_agent().run(
             f"Research topic: {prompt}\n\n"
             "Generate 2–4 targeted arXiv search queries to find the most relevant papers."
         )
@@ -182,7 +174,7 @@ async def run_literature_reviewer(
                 f"Screening batch {batch_idx + 1}/{n_batches} "
                 f"({len(batch)} papers)…"
             )
-            screening_result = await _screening_agent.run(
+            screening_result = await _make_screening_agent().run(
                 f"Research topic: {prompt}\n\nPapers to screen:\n{papers_text}"
             )
             for score in screening_result.output.scores:

@@ -5,7 +5,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from openai import OpenAI
+from agents.llm import get_model, get_openai_client
+from agents.prompts import PAPER_CHAT, WEBSITE_CHAT
 
 from models.chat import ChatMessage
 from services.db import get_client
@@ -13,45 +14,6 @@ from services.db import get_client
 logger = logging.getLogger(__name__)
 
 _TABLE = "chat_messages"
-
-_PAPER_SYSTEM_PROMPT = """You are a helpful research copilot embedded in a paper reading and note-taking IDE.
-You have full access to the paper's extracted text content and the user's notes.
-Help the user understand the paper, answer questions, summarize sections, suggest related work,
-brainstorm ideas, and assist with writing notes.
-Be concise, accurate, and cite specifics from the paper when relevant.
-When referencing the paper, quote exact passages where possible.
-Format your responses in clean HTML suitable for display (use <p>, <strong>, <em>, <ul>, <li>, <code>, <pre>, <h3> tags).
-Do NOT use markdown formatting — use HTML tags directly.
-For mathematical expressions, use LaTeX with dollar sign delimiters: $...$ for inline math and $$...$$ for display math.
-The frontend renders LaTeX via KaTeX.
-
-IMPORTANT: You have tools to suggest edits to notes and create new note files.
-When the user asks you to write, edit, modify, add sections, or improve notes, USE THE TOOLS.
-You can make multiple suggestions in one response. Each suggestion is individually accept/reject-able by the user.
-When editing an existing note, provide the COMPLETE new content for the note (not just the diff).
-Note content is HTML (from a tiptap WYSIWYG editor).
-Always include a brief text explanation in your response alongside any tool calls.
-
-CRITICAL: When using suggest_note_edit, the note_id parameter MUST be the exact id value from the notes filesystem context (e.g. "note_a1b2c3d4"), NOT the file name. If a note does not exist yet, use suggest_note_create instead of suggest_note_edit."""
-
-_WEBSITE_SYSTEM_PROMPT = """You are a helpful research copilot embedded in a website reading and note-taking IDE.
-You have access to the website's metadata (title, description, URL, authors) and the user's notes about it.
-Help the user understand the content, answer questions, summarize key points, suggest related resources,
-brainstorm ideas, and assist with writing notes.
-Be concise and accurate.
-Format your responses in clean HTML suitable for display (use <p>, <strong>, <em>, <ul>, <li>, <code>, <pre>, <h3> tags).
-Do NOT use markdown formatting — use HTML tags directly.
-For mathematical expressions, use LaTeX with dollar sign delimiters: $...$ for inline math and $$...$$ for display math.
-The frontend renders LaTeX via KaTeX.
-
-IMPORTANT: You have tools to suggest edits to notes and create new note files.
-When the user asks you to write, edit, modify, add sections, or improve notes, USE THE TOOLS.
-You can make multiple suggestions in one response. Each suggestion is individually accept/reject-able by the user.
-When editing an existing note, provide the COMPLETE new content for the note (not just the diff).
-Note content is HTML (from a tiptap WYSIWYG editor).
-Always include a brief text explanation in your response alongside any tool calls.
-
-CRITICAL: When using suggest_note_edit, the note_id parameter MUST be the exact id value from the notes filesystem context (e.g. "note_a1b2c3d4"), NOT the file name. If a note does not exist yet, use suggest_note_create instead of suggest_note_edit."""
 
 TOOLS = [
     {
@@ -115,11 +77,8 @@ TOOLS = [
 ]
 
 
-def _get_openai() -> OpenAI:
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-    return OpenAI(api_key=api_key)
+def _get_openai():
+    return get_openai_client()
 
 
 def _process_tool_calls(choice) -> tuple[str, list[dict]]:
@@ -243,7 +202,7 @@ def generate_response(
     create_message(paper_id, "user", user_content)
 
     history = list_messages(paper_id)
-    messages = [{"role": "system", "content": _PAPER_SYSTEM_PROMPT}]
+    messages = [{"role": "system", "content": PAPER_CHAT}]
 
     paper_ctx = f"Paper title: {paper_title}"
     if paper_abstract:
@@ -285,7 +244,7 @@ def generate_response(
     try:
         client = _get_openai()
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=get_model("chat"),
             messages=messages,
             tools=TOOLS,
             max_tokens=4096,
@@ -370,7 +329,7 @@ def generate_response_for_website(
     create_message_for_website(website_id, "user", user_content)
 
     history = list_messages_for_website(website_id)
-    messages = [{"role": "system", "content": _WEBSITE_SYSTEM_PROMPT}]
+    messages = [{"role": "system", "content": WEBSITE_CHAT}]
 
     site_ctx = f"Website title: {website_title}\nURL: {website_url}"
     if website_authors:
@@ -399,7 +358,7 @@ def generate_response_for_website(
     try:
         client = _get_openai()
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=get_model("chat"),
             messages=messages,
             tools=TOOLS,
             max_tokens=4096,
