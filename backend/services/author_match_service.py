@@ -14,7 +14,7 @@ from typing import Optional
 
 import httpx
 
-from agents.llm import get_model, get_openai_client, get_async_openai_client
+from agents.llm import get_model, get_openai_client, get_async_openai_client, is_new_api_model, completion_params
 from agents.prompts import AUTHOR_ENRICHMENT
 
 from models.author import Author
@@ -226,12 +226,35 @@ async def enrich_author(author: Author) -> dict:
             no_web_note=no_web_note,
         )
 
-        response = client.chat.completions.create(
-            model=get_model("enrichment"),
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.1,
-        )
+        enrich_model = get_model("enrichment")
+        enrich_kwargs: dict = {
+            "model": enrich_model,
+            "messages": [{"role": "user", "content": prompt}],
+            **completion_params(enrich_model, max_tokens=2048, temperature=0.1),
+        }
+        if is_new_api_model(enrich_model):
+            enrich_kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "author_enrichment",
+                    "strict": False,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "affiliations": {"type": "array", "items": {"type": "object"}},
+                            "orcid": {"type": "string"},
+                            "google_scholar_url": {"type": "string"},
+                            "github_username": {"type": "string"},
+                            "website_url": {"type": "string"},
+                            "emails": {"type": "array", "items": {"type": "string"}},
+                            "confidence_notes": {"type": "string"},
+                        },
+                    },
+                },
+            }
+        else:
+            enrich_kwargs["response_format"] = {"type": "json_object"}
+        response = client.chat.completions.create(**enrich_kwargs)
 
         raw_content: str = response.choices[0].message.content or "{}"
         suggestions = json.loads(raw_content)

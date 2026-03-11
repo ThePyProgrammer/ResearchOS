@@ -214,3 +214,48 @@ def get_async_openai_client() -> AsyncOpenAI:
 def get_pydantic_ai_model(role: str) -> str:
     """Return a model string formatted for pydantic-ai (e.g. 'openai:gpt-4o')."""
     return f"openai:{get_model(role)}"
+
+
+# Models that require max_completion_tokens instead of max_tokens,
+# and don't support the temperature parameter.
+_NEW_API_PREFIXES = ("o1", "o3", "o4", "gpt-5", "gpt-6", "gpt-7", "gpt-8", "gpt-9")
+
+
+def is_new_api_model(model_id: str) -> bool:
+    """Check if a model uses the newer API conventions."""
+    return any(model_id.startswith(p) for p in _NEW_API_PREFIXES)
+
+
+def max_tokens_param(model_id: str, limit: int) -> dict:
+    """Return the correct max-tokens kwarg dict for the given model.
+
+    Usage::
+
+        client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            **max_tokens_param(model_id, 4096),
+        )
+    """
+    if is_new_api_model(model_id):
+        return {"max_completion_tokens": limit}
+    return {"max_tokens": limit}
+
+
+def completion_params(model_id: str, *, max_tokens: int, temperature: float = 0.7) -> dict:
+    """Build model-compatible kwargs for chat completions.
+
+    Handles differences between legacy and new API models:
+    - max_tokens vs max_completion_tokens
+    - temperature (unsupported on o-series, some gpt-5+ models — omitted)
+    """
+    params: dict = {}
+
+    if is_new_api_model(model_id):
+        params["max_completion_tokens"] = max_tokens
+        # o-series and newer models don't support temperature
+    else:
+        params["max_tokens"] = max_tokens
+        params["temperature"] = temperature
+
+    return params

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from agents.llm import get_model, get_openai_client
+from agents.llm import get_model, get_openai_client, is_new_api_model, completion_params
 from agents.prompts import NOTE_GENERATION
 
 from models.note import Note, NoteCreate, NoteUpdate
@@ -102,17 +102,69 @@ def _get_custom_prompt(library_id: Optional[str]) -> Optional[str]:
 def _call_openai_json(system: str, user_msg: str) -> dict:
     """Call OpenAI and parse a JSON response with the multi-note structure."""
     client = get_openai_client()
-    response = client.chat.completions.create(
-        model=get_model("notes"),
-        messages=[
+    model_id = get_model("notes")
+
+    create_kwargs: dict = {
+        "model": model_id,
+        "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user_msg},
         ],
-        response_format={"type": "json_object"},
-        max_tokens=4096,
-        temperature=0.4,
-    )
-    raw = response.choices[0].message.content or "{}"
+        **completion_params(model_id, max_tokens=4096, temperature=0.4),
+    }
+
+    if is_new_api_model(model_id):
+        # json_schema response format for newer models
+        create_kwargs["response_format"] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "notes_output",
+                "strict": False,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "notes": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "type": {"type": "string", "enum": ["file", "folder"]},
+                                    "content": {"type": "string"},
+                                    "children": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "name": {"type": "string"},
+                                                "type": {"type": "string", "enum": ["file", "folder"]},
+                                                "content": {"type": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    "required": ["notes"],
+                },
+            },
+        }
+    else:
+        create_kwargs["response_format"] = {"type": "json_object"}
+
+    response = client.chat.completions.create(**create_kwargs)
+    choice = response.choices[0]
+
+    # Check for refusal (newer models may refuse via a .refusal field)
+    refusal = getattr(choice.message, "refusal", None)
+    if refusal:
+        logger.warning("Model refused note generation: %s", refusal)
+        return {"notes": [{"name": "Error", "type": "file", "content": f"<p>Model refused: {refusal}</p>"}]}
+
+    raw = choice.message.content or "{}"
+    logger.info("Note generation raw response (%d chars): %.200s...", len(raw), raw)
+
     try:
         return json.loads(raw)
     except json.JSONDecodeError:

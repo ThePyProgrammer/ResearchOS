@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from agents.llm import get_model, get_openai_client
+from agents.llm import get_model, get_openai_client, completion_params
 from agents.prompts import PAPER_CHAT, WEBSITE_CHAT
 
 from models.chat import ChatMessage
@@ -243,12 +243,12 @@ def generate_response(
 
     try:
         client = _get_openai()
+        model_id = get_model("chat")
         response = client.chat.completions.create(
-            model=get_model("chat"),
+            model=model_id,
             messages=messages,
             tools=TOOLS,
-            max_tokens=4096,
-            temperature=0.7,
+            **completion_params(model_id, max_tokens=4096, temperature=0.7),
         )
         assistant_content, suggestions = _process_tool_calls(response.choices[0])
     except Exception as e:
@@ -357,12 +357,12 @@ def generate_response_for_website(
 
     try:
         client = _get_openai()
+        model_id = get_model("chat")
         response = client.chat.completions.create(
-            model=get_model("chat"),
+            model=model_id,
             messages=messages,
             tools=TOOLS,
-            max_tokens=4096,
-            temperature=0.7,
+            **completion_params(model_id, max_tokens=4096, temperature=0.7),
         )
         assistant_content, suggestions = _process_tool_calls(response.choices[0])
     except Exception as e:

@@ -7,7 +7,7 @@ import tempfile
 
 import pymupdf4llm
 
-from agents.llm import get_model, get_openai_client
+from agents.llm import get_model, get_openai_client, completion_params
 from agents.prompts import PDF_METADATA_EXTRACTION
 
 logger = logging.getLogger(__name__)
@@ -42,14 +42,14 @@ def extract_metadata_from_bytes(pdf_bytes: bytes) -> dict:
         md_text = md_text[:_MAX_EXTRACT_CHARS]
 
     client = get_openai_client()
+    model_id = get_model("metadata")
     response = client.chat.completions.create(
-        model=get_model("metadata"),
+        model=model_id,
         messages=[
             {"role": "system", "content": PDF_METADATA_EXTRACTION},
             {"role": "user", "content": md_text},
         ],
-        temperature=0,
-        max_tokens=1024,
+        **completion_params(model_id, max_tokens=1024, temperature=0),
     )
 
     raw = response.choices[0].message.content.strip()
