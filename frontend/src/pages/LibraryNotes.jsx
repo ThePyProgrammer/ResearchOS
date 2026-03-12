@@ -12,7 +12,7 @@ import Mathematics from '@tiptap/extension-mathematics'
 import 'katex/dist/katex.min.css'
 import { notesApi, papersApi, websitesApi, githubReposApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
-import { createWikiLinkExtension } from '../components/WikiLinkExtension'
+import { createWikiLinkExtension, extractWikiLinks } from '../components/WikiLinkExtension'
 import NoteGraphView from '../components/NoteGraphView'
 
 function Icon({ name, className = '' }) {
@@ -359,6 +359,106 @@ function TabBar({ tabs, activeTabId, onActivate, onClose, graphView, onToggleGra
   )
 }
 
+// ─── Note templates ───────────────────────────────────────────────────────────
+const TEMPLATES = [
+  {
+    id: 'blank',
+    label: 'Blank',
+    icon: 'description',
+    description: 'Start with an empty note',
+    content: '',
+  },
+  {
+    id: 'paper_summary',
+    label: 'Paper Summary',
+    icon: 'article',
+    description: 'Title, contributions, method, results, and takeaways',
+    content: '<h1>Paper Summary</h1><h2>Key Contributions</h2><ul><li><p></p></li></ul><h2>Methodology</h2><p></p><h2>Results</h2><p></p><h2>Limitations</h2><p></p><h2>My Takeaways</h2><p></p>',
+  },
+  {
+    id: 'experiment_log',
+    label: 'Experiment Log',
+    icon: 'science',
+    description: 'Hypothesis, setup, procedure, and observations',
+    content: '<h1>Experiment Log</h1><h2>Hypothesis</h2><p></p><h2>Setup</h2><p></p><h2>Procedure</h2><ul><li><p></p></li></ul><h2>Results</h2><p></p><h2>Observations &amp; Conclusions</h2><p></p>',
+  },
+  {
+    id: 'literature_review',
+    label: 'Literature Review',
+    icon: 'library_books',
+    description: 'Research question, key papers, themes, and synthesis',
+    content: '<h1>Literature Review</h1><h2>Research Question</h2><p></p><h2>Key Papers</h2><ul><li><p></p></li></ul><h2>Themes &amp; Patterns</h2><p></p><h2>Gaps in Literature</h2><p></p><h2>Synthesis</h2><p></p>',
+  },
+]
+
+// ─── Template picker modal ────────────────────────────────────────────────────
+function TemplatePickerModal({ noteName, onSelect, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-[480px] max-w-[90vw] p-6">
+        <div className="mb-5">
+          <h2 className="text-[15px] font-semibold text-slate-800">Choose a template</h2>
+          <p className="text-[12px] text-slate-500 mt-0.5">
+            Creating <span className="font-medium text-slate-700">"{noteName}"</span>
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {TEMPLATES.map(t => (
+            <button
+              key={t.id}
+              onClick={() => onSelect(t.content)}
+              className="flex flex-col items-start gap-1.5 p-3.5 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-left group"
+            >
+              <div className="flex items-center gap-2">
+                <Icon name={t.icon} className="text-[18px] text-slate-400 group-hover:text-blue-500 transition-colors" />
+                <span className="text-[13px] font-medium text-slate-700 group-hover:text-blue-700 transition-colors">{t.label}</span>
+              </div>
+              <span className="text-[11px] text-slate-400 leading-snug">{t.description}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={onCancel}
+            className="text-[12px] text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded hover:bg-slate-100 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Backlinks panel ──────────────────────────────────────────────────────────
+function BacklinksPanel({ backlinks, onNoteClick }) {
+  return (
+    <div className="w-56 border-l border-slate-200 flex flex-col bg-slate-50/60 flex-shrink-0 overflow-hidden">
+      <div className="px-3 py-2 border-b border-slate-200 bg-white flex items-center gap-1.5 flex-shrink-0">
+        <Icon name="link" className="text-[13px] text-slate-400" />
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Backlinks</span>
+        <span className="ml-auto text-[10px] text-slate-300">{backlinks.length}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto py-1 px-1">
+        {backlinks.length === 0 ? (
+          <p className="px-2 py-3 text-[11px] text-slate-400 italic">No notes link here.</p>
+        ) : (
+          backlinks.map(note => (
+            <button
+              key={note.id}
+              onClick={() => onNoteClick(note)}
+              className="w-full flex items-center gap-1.5 py-[3px] px-2 text-[12px] text-slate-600 hover:bg-slate-100 rounded transition-colors text-left"
+            >
+              <Icon name="description" className="text-[12px] text-slate-400 flex-shrink-0" />
+              <span className="truncate flex-1">{note.name}</span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Notes IDE page ──────────────────────────────────────────────────────
 export default function LibraryNotes() {
   const { activeLibraryId } = useLibrary()
@@ -388,6 +488,12 @@ export default function LibraryNotes() {
 
   // ── Graph view toggle ──────────────────────────────────────────────────────
   const [graphView, setGraphView] = useState(false)
+
+  // ── Backlinks panel toggle ─────────────────────────────────────────────────
+  const [showBacklinks, setShowBacklinks] = useState(false)
+
+  // ── Template picker: stores pending file-creation data while modal is open ─
+  const [templatePickerFor, setTemplatePickerFor] = useState(null)
 
   // ── Creation / rename / context menu ──────────────────────────────────────
   const [creating, setCreating] = useState(null)
@@ -622,6 +728,14 @@ export default function LibraryNotes() {
     e.preventDefault()
     if (!newName.trim() || !creating) return
     const { source, parentId, type } = creating
+
+    // For file creation show the template picker; it will call handleCreateWithTemplate
+    if (type === 'file') {
+      setTemplatePickerFor({ source, parentId, name: newName.trim() })
+      return
+    }
+
+    // Folder creation proceeds immediately
     try {
       const data = { name: newName.trim(), type, parentId: parentId || null }
       let note
@@ -636,9 +750,35 @@ export default function LibraryNotes() {
         setItemNotes(prev => ({ ...prev, [source]: [...(prev[source] || []), note] }))
       }
       if (parentId) setExpandedNotes(prev => ({ ...prev, [parentId]: true }))
-      if (note.type === 'file') openNoteInTab(note.id, source)
       setCreating(null)
       setNewName('')
+    } catch (err) {
+      console.error('Failed to create note:', err)
+    }
+  }
+
+  // ── Create note with a chosen template ────────────────────────────────────
+  async function handleCreateWithTemplate(templateContent) {
+    if (!templatePickerFor) return
+    const { source, parentId, name } = templatePickerFor
+    setTemplatePickerFor(null)
+    setCreating(null)
+    setNewName('')
+    try {
+      const data = { name, type: 'file', parentId: parentId || null, content: templateContent }
+      let note
+      if (source === 'library') {
+        note = await notesApi.createForLibrary(activeLibraryId, data)
+        setLibraryNotes(prev => [...prev, note])
+      } else {
+        const [itemType, itemId] = source.split(':')
+        if (itemType === 'paper') note = await notesApi.create(itemId, data)
+        else if (itemType === 'website') note = await notesApi.createForWebsite(itemId, data)
+        else if (itemType === 'github') note = await notesApi.createForGitHubRepo(itemId, data)
+        setItemNotes(prev => ({ ...prev, [source]: [...(prev[source] || []), note] }))
+      }
+      if (parentId) setExpandedNotes(prev => ({ ...prev, [parentId]: true }))
+      if (note) openNoteInTab(note.id, source)
     } catch (err) {
       console.error('Failed to create note:', err)
     }
@@ -722,6 +862,17 @@ export default function LibraryNotes() {
     () => allLoadedNotes,
     [allLoadedNotes]
   )
+
+  // ── Backlinks: notes that contain [[this note's name]] ────────────────────
+  const backlinks = useMemo(() => {
+    if (!selectedNote) return []
+    const noteName = selectedNote.name.toLowerCase()
+    return allLoadedNotes.filter(
+      n => n.type === 'file' &&
+        n.id !== selectedNote.id &&
+        extractWikiLinks(n.content || '').some(name => name.toLowerCase() === noteName)
+    )
+  }, [selectedNote, allLoadedNotes])
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -935,60 +1086,102 @@ export default function LibraryNotes() {
           />
         ) : (
           /* ── Editor view ────────────────────────────────────────────── */
-          <>
-            {selectedNote ? (
-              <>
-                {/* Editor header with breadcrumb */}
-                <div className="px-4 py-2 border-b border-slate-100 bg-white flex items-center justify-between flex-shrink-0">
-                  <div className="flex items-center gap-1 min-w-0 text-[12px] text-slate-500">
-                    {breadcrumb.map((part, i) => (
-                      <span key={i} className="flex items-center gap-1 min-w-0">
-                        {i > 0 && <Icon name="chevron_right" className="text-[14px] text-slate-300 flex-shrink-0" />}
-                        <span className={`${i === breadcrumb.length - 1 ? 'text-slate-700 font-medium' : 'truncate'}`}>
-                          {part}
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            {/* Editor column */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+              {selectedNote ? (
+                <>
+                  {/* Editor header with breadcrumb */}
+                  <div className="px-4 py-2 border-b border-slate-100 bg-white flex items-center justify-between flex-shrink-0">
+                    <div className="flex items-center gap-1 min-w-0 text-[12px] text-slate-500">
+                      {breadcrumb.map((part, i) => (
+                        <span key={i} className="flex items-center gap-1 min-w-0">
+                          {i > 0 && <Icon name="chevron_right" className="text-[14px] text-slate-300 flex-shrink-0" />}
+                          <span className={`${i === breadcrumb.length - 1 ? 'text-slate-700 font-medium' : 'truncate'}`}>
+                            {part}
+                          </span>
                         </span>
-                      </span>
-                    ))}
-                    {dirty && (
-                      <span className="ml-2 w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Unsaved changes" />
-                    )}
+                      ))}
+                      {dirty && (
+                        <span className="ml-2 w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Unsaved changes" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => setShowBacklinks(v => !v)}
+                        title={showBacklinks ? 'Hide backlinks' : 'Show backlinks'}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                          showBacklinks
+                            ? 'bg-indigo-100 text-indigo-600'
+                            : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <Icon name="link" className="text-[13px]" />
+                        Backlinks
+                        {backlinks.length > 0 && (
+                          <span className="ml-0.5 text-[10px]">{backlinks.length}</span>
+                        )}
+                      </button>
+                      <button
+                        onClick={save}
+                        disabled={!dirty}
+                        className="text-[11px] text-slate-400 hover:text-blue-600 disabled:opacity-30 font-medium px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
+                      >
+                        Save
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={save}
-                    disabled={!dirty}
-                    className="text-[11px] text-slate-400 hover:text-blue-600 disabled:opacity-30 font-medium px-2 py-0.5 rounded hover:bg-blue-50 transition-colors flex-shrink-0"
-                  >
-                    Save
-                  </button>
-                </div>
 
-                {/* Tiptap editor */}
-                <TiptapEditor
-                  key={selectedNote.id}
-                  content={content}
-                  onUpdate={html => { setContent(html); setDirty(true) }}
-                  onSave={save}
-                  getAllNotes={getAllNotesForSuggestion}
-                  onWikiLinkClick={handleWikiLinkClick}
-                />
-              </>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
-                <Icon name="edit_note" className="text-[48px] text-slate-200" />
-                <div className="text-center">
-                  <p className="text-[13px] text-slate-400 font-medium">Select a note to edit</p>
-                  <p className="text-[11px] text-slate-300 mt-1">
-                    Or click a paper folder to browse its notes
-                  </p>
-                  <p className="text-[11px] text-indigo-300 mt-1">
-                    Tip: type <span className="font-mono bg-slate-100 px-1 rounded text-indigo-500">[[</span> to link notes · click Graph to visualise
-                  </p>
+                  {/* Tiptap editor */}
+                  <TiptapEditor
+                    key={selectedNote.id}
+                    content={content}
+                    onUpdate={html => { setContent(html); setDirty(true) }}
+                    onSave={save}
+                    getAllNotes={getAllNotesForSuggestion}
+                    onWikiLinkClick={handleWikiLinkClick}
+                  />
+                </>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
+                  <Icon name="edit_note" className="text-[48px] text-slate-200" />
+                  <div className="text-center">
+                    <p className="text-[13px] text-slate-400 font-medium">Select a note to edit</p>
+                    <p className="text-[11px] text-slate-300 mt-1">
+                      Or click a paper folder to browse its notes
+                    </p>
+                    <p className="text-[11px] text-indigo-300 mt-1">
+                      Tip: type <span className="font-mono bg-slate-100 px-1 rounded text-indigo-500">[[</span> to link notes · click Graph to visualise
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
+            </div>
+
+            {/* Backlinks side panel */}
+            {showBacklinks && selectedNote && (
+              <BacklinksPanel
+                backlinks={backlinks}
+                onNoteClick={note => {
+                  const source = note.source === 'paper' || note.source === 'website' || note.source === 'github'
+                    ? Object.keys(itemNotes).find(key => itemNotes[key]?.some(n => n.id === note.id)) ?? 'library'
+                    : 'library'
+                  openNoteInTab(note.id, source)
+                }}
+              />
             )}
-          </>
+          </div>
         )}
       </div>
+
+      {/* ── Template picker modal ─────────────────────────────────────────── */}
+      {templatePickerFor && (
+        <TemplatePickerModal
+          noteName={templatePickerFor.name}
+          onSelect={handleCreateWithTemplate}
+          onCancel={() => { setTemplatePickerFor(null); setCreating(null); setNewName('') }}
+        />
+      )}
 
       {/* ── Context menu ──────────────────────────────────────────────────── */}
       {ctxMenu && (
