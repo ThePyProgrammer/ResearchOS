@@ -2,7 +2,7 @@
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, websitesApi, githubReposApi, searchApi, notesApi, collectionsApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
-import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips } from '../components/PaperInfoPanel'
+import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips, formatCitationBibTeX } from '../components/PaperInfoPanel'
 import WindowModal from '../components/WindowModal'
 import { useDragResize } from '../hooks/useDragResize'
 
@@ -89,6 +89,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
   const [titleDraft, setTitleDraft] = useState('')
   const [editingYear, setEditingYear] = useState(false)
   const [yearDraft, setYearDraft] = useState('')
+  const [copied, setCopied] = useState(false)
 
   const api = isWebsite ? websitesApi : isGitHubRepo ? githubReposApi : papersApi
 
@@ -127,7 +128,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
       }}
       onClick={() => onSelect(item)}
       onDoubleClick={() => onOpen?.(item)}
-      className={`cursor-pointer transition-colors ${
+      className={`group cursor-pointer transition-colors ${
         selected ? 'bg-blue-50' : checked ? 'bg-blue-50/50' : 'hover:bg-slate-50'
       }`}
     >
@@ -230,15 +231,31 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
         <span className="truncate block">{itemVenue(item)}</span>
       </td>
       <td className="px-3 py-3 text-sm text-slate-400">
-        {isGitHubRepo ? (
-          <Icon name="code" className="text-[16px] text-violet-400" />
-        ) : isWebsite ? (
-          <Icon name="link" className="text-[16px] text-teal-400" />
-        ) : item.source === 'agent' ? (
-          <Icon name="smart_toy" className="text-[16px] text-purple-400" />
-        ) : (
-          <Icon name="person" className="text-[16px] text-slate-300" />
-        )}
+        <div className="flex items-center gap-2">
+          {isGitHubRepo ? (
+            <Icon name="code" className="text-[16px] text-violet-400" />
+          ) : isWebsite ? (
+            <Icon name="link" className="text-[16px] text-teal-400" />
+          ) : item.source === 'agent' ? (
+            <Icon name="smart_toy" className="text-[16px] text-purple-400" />
+          ) : (
+            <Icon name="person" className="text-[16px] text-slate-300" />
+          )}
+          {!isWebsite && !isGitHubRepo && (
+            <button
+              onClick={e => {
+                e.stopPropagation()
+                navigator.clipboard.writeText(formatCitationBibTeX(item)).catch(console.error)
+                setCopied(true)
+                setTimeout(() => setCopied(false), 1500)
+              }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-blue-500"
+              title="Copy BibTeX citation"
+            >
+              <Icon name={copied ? 'check' : 'content_copy'} className="text-[14px]" />
+            </button>
+          )}
+        </div>
       </td>
     </tr>
   )
