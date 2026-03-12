@@ -120,6 +120,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { activeLibrary } = useLibrary()
   const [tab, setTab] = useState('all')
+  const [activityPage, setActivityPage] = useState(1)
   const [chartMode, setChartMode] = useState('cumulative')
   const [activity, setActivity] = useState([])
   const [runs, setRuns] = useState([])
@@ -151,6 +152,13 @@ export default function Dashboard() {
   // Filter locally — data is already scoped to the active library
   const filtered = tab === 'all' ? activity : activity.filter(a => a.type === tab)
   const runningCount = runs.filter(r => r.status === 'running').length
+
+  const ACTIVITY_PAGE_SIZE = 10
+  const totalActivityPages = Math.ceil(filtered.length / ACTIVITY_PAGE_SIZE)
+  const paginatedActivity = filtered.slice(
+    (activityPage - 1) * ACTIVITY_PAGE_SIZE,
+    activityPage * ACTIVITY_PAGE_SIZE,
+  )
 
   // Build cumulative "papers added over time" chart data grouped by day
   const chartData = useMemo(() => {
@@ -367,7 +375,7 @@ export default function Dashboard() {
             ].map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => setTab(key)}
+                onClick={() => { setTab(key); setActivityPage(1) }}
                 className={`px-3 py-1 rounded-md font-medium transition-colors ${
                   tab === key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                 }`}
@@ -390,9 +398,48 @@ export default function Dashboard() {
           ) : filtered.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">No activity to show.</p>
           ) : (
-            filtered.map(item => <ActivityItem key={item.id} item={item} />)
+            paginatedActivity.map(item => <ActivityItem key={item.id} item={item} />)
           )}
         </div>
+
+        {!loading && totalActivityPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100">
+            <span className="text-xs text-slate-400 leading-none self-center">
+              {(activityPage - 1) * ACTIVITY_PAGE_SIZE + 1}–{Math.min(activityPage * ACTIVITY_PAGE_SIZE, filtered.length)} of {filtered.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setActivityPage(1)}
+                disabled={activityPage === 1}
+                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center"
+              >
+                <Icon name="first_page" className="text-[18px] leading-none" />
+              </button>
+              <button
+                onClick={() => setActivityPage(p => p - 1)}
+                disabled={activityPage === 1}
+                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center"
+              >
+                <Icon name="chevron_left" className="text-[18px] leading-none" />
+              </button>
+              <span className="text-xs text-slate-500 px-1 leading-none self-center">{activityPage} / {totalActivityPages}</span>
+              <button
+                onClick={() => setActivityPage(p => p + 1)}
+                disabled={activityPage === totalActivityPages}
+                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center"
+              >
+                <Icon name="chevron_right" className="text-[18px] leading-none" />
+              </button>
+              <button
+                onClick={() => setActivityPage(totalActivityPages)}
+                disabled={activityPage === totalActivityPages}
+                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center"
+              >
+                <Icon name="last_page" className="text-[18px] leading-none" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
     </div>
