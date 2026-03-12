@@ -1939,7 +1939,7 @@ export default function Library() {
                             : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
                         }`}
                       >
-                        {tag}
+                        {tag} ({items.filter(i => i.tags?.includes(tag)).length})
                       </button>
                     ))}
                   </div>
