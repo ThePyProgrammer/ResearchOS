@@ -297,16 +297,34 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
     const nodeEls = g.append('g').attr('class', 'nodes')
       .selectAll('g').data(nodes).join('g')
       .attr('cursor', 'pointer')
-      .on('click',      (event, d) => { event.stopPropagation(); onNoteClick?.(d.id) })
-      .on('mouseenter', (_, d)     => setHoveredNode(d))
-      .on('mouseleave', ()         => setHoveredNode(null))
+      .on('click',       (event, d) => { event.stopPropagation(); onNoteClick?.(d.id) })
+      .on('contextmenu', (event, d) => {
+        event.preventDefault()
+        event.stopPropagation()
+        d.pinned = !d.pinned
+        if (d.pinned) { d.fx = d.x; d.fy = d.y }
+        else          { d.fx = null; d.fy = null; sim.alpha(0.2).restart() }
+        d3.select(event.currentTarget).select('.pin-ring')
+          .attr('display', d.pinned ? null : 'none')
+      })
+      .on('mouseenter',  (_, d) => setHoveredNode(d))
+      .on('mouseleave',  ()     => setHoveredNode(null))
     nodeElsRef.current = nodeEls
 
     nodeEls.call(d3.drag()
       .on('start', (event, d) => { if (!event.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y })
       .on('drag',  (event, d) => { d.fx = event.x; d.fy = event.y })
-      .on('end',   (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null })
+      .on('end',   (event, d) => { if (!event.active) sim.alphaTarget(0); if (!d.pinned) { d.fx = null; d.fy = null } })
     )
+
+    // Pin-ring: amber dashed ring, hidden by default, shown when node is pinned
+    nodeEls.append('circle').attr('class', 'pin-ring')
+      .attr('r', d => nodeRadius(d.degree) + 4)
+      .attr('fill', 'none')
+      .attr('stroke', '#f59e0b').attr('stroke-width', 1.5)
+      .attr('stroke-dasharray', '3,2')
+      .attr('display', 'none')
+      .attr('pointer-events', 'none')
 
     nodeEls.append('circle').attr('r', d => nodeRadius(d.degree) + 5).attr('fill', 'transparent')
     nodeEls.append('circle').attr('r', d => nodeRadius(d.degree))
