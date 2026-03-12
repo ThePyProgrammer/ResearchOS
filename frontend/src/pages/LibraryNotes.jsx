@@ -611,6 +611,22 @@ export default function LibraryNotes() {
   // ── Graph view toggle ──────────────────────────────────────────────────────
   const [graphView, setGraphView] = useState(false)
 
+  // ── Recently opened notes (per library, persisted to localStorage) ─────────
+  const [recentNoteIds, setRecentNoteIds] = useState([])
+
+  useEffect(() => {
+    if (!activeLibraryId) return
+    try {
+      const stored = localStorage.getItem(`researchos.notes.recent.${activeLibraryId}`)
+      setRecentNoteIds(stored ? JSON.parse(stored) : [])
+    } catch { setRecentNoteIds([]) }
+  }, [activeLibraryId])
+
+  useEffect(() => {
+    if (!activeLibraryId) return
+    try { localStorage.setItem(`researchos.notes.recent.${activeLibraryId}`, JSON.stringify(recentNoteIds)) } catch {}
+  }, [recentNoteIds, activeLibraryId])
+
   // ── Backlinks panel toggle ─────────────────────────────────────────────────
   const [showBacklinks, setShowBacklinks] = useState(false)
 
@@ -804,6 +820,7 @@ export default function LibraryNotes() {
     })
     setActiveTabId(noteId)
     setGraphView(false)
+    setRecentNoteIds(prev => [noteId, ...prev.filter(id => id !== noteId)].slice(0, 5))
   }
 
   // ── Open a PDF / website / GitHub URL in a resource tab ───────────────────
@@ -1275,6 +1292,37 @@ export default function LibraryNotes() {
             )
           ) : (
             <>
+              {/* ── Recently opened ── */}
+              {recentNoteIds.length > 0 && (() => {
+                const recentNotes = recentNoteIds
+                  .map(id => allLoadedNotes.find(n => n.id === id && n.type === 'file'))
+                  .filter(Boolean)
+                if (!recentNotes.length) return null
+                return (
+                  <div className="mb-2">
+                    <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">
+                      Recent
+                    </p>
+                    {recentNotes.map(note => (
+                      <button
+                        key={note.id}
+                        onClick={() => openNoteInTab(note.id, note.sourceKey)}
+                        className={`w-full flex items-center gap-1.5 py-[3px] px-2 rounded text-left text-[12px] transition-colors ${
+                          selected?.noteId === note.id
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <Icon name="description" className="text-[12px] text-slate-400 flex-shrink-0" />
+                        <span className="truncate flex-1">{note.name}</span>
+                        <span className="text-[9px] text-slate-400 flex-shrink-0 truncate max-w-[60px]">{note.sourceName}</span>
+                      </button>
+                    ))}
+                    <div className="mx-2 mt-1.5 mb-0.5 border-t border-slate-100" />
+                  </div>
+                )
+              })()}
+
               {/* ── Library notes ── */}
               {(libRootNotes.length > 0 || (creating?.source === 'library' && !creating.parentId)) && (
                 <div className="mb-1">
