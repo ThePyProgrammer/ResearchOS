@@ -654,6 +654,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         {/* Dashboard */}
         <div className="space-y-0.5">
           <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" collapsed={collapsed} />
+          <SidebarLink to="/library/notes" icon="edit_note" label="Notes" collapsed={collapsed} />
         </div>
 
         {/* Library tree (Quick Access + Collections) */}
@@ -666,11 +667,6 @@ export default function Sidebar({ collapsed, onToggle }) {
         {/* Authors */}
         <div className="pt-3 space-y-0.5">
           <SidebarLink to="/authors" icon="groups" label="Authors" collapsed={collapsed} />
-        </div>
-
-        {/* Notes IDE */}
-        <div className="pt-1 space-y-0.5">
-          <SidebarLink to="/library/notes" icon="edit_note" label="Notes" collapsed={collapsed} />
         </div>
 
         {/* Agent Workflows */}
