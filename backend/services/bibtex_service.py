@@ -426,16 +426,57 @@ def website_to_bibtex(website) -> str:
     return f"@misc{{{key},\n{fields_str}\n}}"
 
 
+def github_repo_to_bibtex(repo) -> str:
+    """Convert a GitHubRepo model to a BibTeX @software entry string."""
+    year = 0
+    if repo.published_date:
+        m = re.search(r"((?:19|20)\d{2})", repo.published_date)
+        if m:
+            year = int(m.group(1))
+
+    class _KeyHelper:
+        def __init__(self, title, authors, yr):
+            self.title = title
+            self.authors = authors
+            self.year = yr
+
+    key = _make_citation_key(_KeyHelper(repo.title, repo.authors or [], year))
+
+    fields = []
+    fields.append(f"  title={{{_escape_bibtex(repo.title)}}}")
+
+    if repo.authors:
+        fields.append(f"  author={{{_escape_bibtex(_format_authors_bibtex(repo.authors))}}}")
+
+    if year:
+        fields.append(f"  year={{{year}}}")
+
+    fields.append(f"  url={{{repo.url}}}")
+
+    if repo.version:
+        fields.append(f"  version={{{_escape_bibtex(repo.version)}}}")
+
+    if repo.description:
+        fields.append(f"  note={{{_escape_bibtex(repo.description)}}}")
+
+    fields_str = ",\n".join(fields)
+    return f"@software{{{key},\n{fields_str}\n}}"
+
+
 def _item_to_bibtex(item) -> str:
-    """Convert a Paper or Website to a BibTeX entry string."""
-    if getattr(item, "item_type", None) == "website":
+    """Convert a Paper, Website, or GitHubRepo to a BibTeX entry string."""
+    item_type = getattr(item, "item_type", None)
+    if item_type == "website":
         return website_to_bibtex(item)
+    if item_type == "github_repo":
+        return github_repo_to_bibtex(item)
     return paper_to_bibtex(item)
 
 
 def _item_citation_key(item) -> str:
-    """Get the citation key for a Paper or Website."""
-    if getattr(item, "item_type", None) == "website":
+    """Get the citation key for a Paper, Website, or GitHubRepo."""
+    item_type = getattr(item, "item_type", None)
+    if item_type in ("website", "github_repo"):
         year = 0
         if item.published_date:
             m = re.search(r"((?:19|20)\d{2})", item.published_date)
@@ -448,7 +489,7 @@ def _item_citation_key(item) -> str:
                 self.authors = authors
                 self.year = yr
 
-        return _make_citation_key(_KeyHelper(item.title, item.authors, year))
+        return _make_citation_key(_KeyHelper(item.title, item.authors or [], year))
     return _make_citation_key(item)
 
 

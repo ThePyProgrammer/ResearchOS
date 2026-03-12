@@ -100,7 +100,7 @@ async def export_bibtex_file(
     Accepts both paper IDs (p_*) and website IDs (w_*).
     Filter by library_id, collection_id, or a specific set of comma-separated IDs.
     """
-    from services import website_service
+    from services import website_service, github_repo_service
     from services.bibtex_service import export_bibtex
 
     if ids:
@@ -111,6 +111,10 @@ async def export_bibtex_file(
                 w = website_service.get_website(item_id)
                 if w:
                     items.append(w)
+            elif item_id.startswith("gh_"):
+                g = github_repo_service.get_github_repo(item_id)
+                if g:
+                    items.append(g)
             else:
                 p = paper_service.get_paper(item_id)
                 if p:

@@ -52,7 +52,7 @@ export default function Paper() {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const handleBack = () => location.key !== 'default' ? handleBack() : navigate('/library')
+  const handleBack = () => location.key !== 'default' ? navigate(-1) : navigate('/library')
   const [paper, setPaper] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -66,6 +66,7 @@ export default function Paper() {
   const [notes, setNotes] = useState([])
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
+  const [bibtexCopied, setBibtexCopied] = useState(false)
   const fileInputRef = useRef(null)
 
   // Resize state
@@ -127,6 +128,17 @@ export default function Paper() {
       setUploadError(err.message)
     } finally {
       setUploading(false)
+    }
+  }
+
+  async function handleCopyBibtex() {
+    try {
+      const bib = await papersApi.exportBibtex({ ids: [id] })
+      await navigator.clipboard.writeText(bib)
+      setBibtexCopied(true)
+      setTimeout(() => setBibtexCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy BibTeX:', err)
     }
   }
 
@@ -228,6 +240,14 @@ export default function Paper() {
           )}
         </div>
         <div className="flex items-center gap-1.5 ml-auto">
+          <button
+            onClick={handleCopyBibtex}
+            title="Copy BibTeX citation"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors text-xs font-medium"
+          >
+            <Icon name={bibtexCopied ? 'check' : 'content_copy'} className="text-[15px]" />
+            {bibtexCopied ? 'Copied!' : 'BibTeX'}
+          </button>
           {paper.githubUrl && (
             <a
               href={paper.githubUrl}

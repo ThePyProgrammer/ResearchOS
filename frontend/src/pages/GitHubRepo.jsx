@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { githubReposApi, notesApi } from '../services/api'
+import { githubReposApi, notesApi, papersApi } from '../services/api'
 import { statusConfig, NamedLinks, EditableField, EditableTextArea, TagChips, CollectionsPicker } from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
@@ -165,7 +165,7 @@ export default function GitHubRepo() {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const handleBack = () => location.key !== 'default' ? handleBack() : navigate('/library')
+  const handleBack = () => location.key !== 'default' ? navigate(-1) : navigate('/library')
   const [repo, setRepo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -174,6 +174,7 @@ export default function GitHubRepo() {
   const [copilotOpen, setCopilotOpen] = useState(true)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
+  const [bibtexCopied, setBibtexCopied] = useState(false)
 
   // Resize state
   const [leftWidth, setLeftWidth] = useState(null)
@@ -197,6 +198,17 @@ export default function GitHubRepo() {
   useEffect(() => { loadNotes() }, [loadNotes])
 
   const isNotes = sideTab === 'notes'
+
+  async function handleCopyBibtex() {
+    try {
+      const bib = await papersApi.exportBibtex({ ids: [id] })
+      await navigator.clipboard.writeText(bib)
+      setBibtexCopied(true)
+      setTimeout(() => setBibtexCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy BibTeX:', err)
+    }
+  }
 
   if (loading) {
     return (
@@ -291,6 +303,14 @@ export default function GitHubRepo() {
           )}
         </div>
         <div className="flex items-center gap-1.5 ml-auto">
+          <button
+            onClick={handleCopyBibtex}
+            title="Copy BibTeX citation"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors text-xs font-medium"
+          >
+            <Icon name={bibtexCopied ? 'check' : 'content_copy'} className="text-[15px]" />
+            {bibtexCopied ? 'Copied!' : 'BibTeX'}
+          </button>
           <a href={repo.url} target="_blank" rel="noreferrer" title="Open on GitHub"
             className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors flex items-center">
             <Icon name="open_in_new" className="text-[18px]" />
