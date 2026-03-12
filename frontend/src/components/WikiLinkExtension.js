@@ -33,6 +33,11 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
             'data-wiki-name': attributes.name,
           }),
         },
+        noteId: {
+          default: null,
+          parseHTML: element => element.getAttribute('data-wiki-id') || null,
+          renderHTML: attributes => attributes.noteId ? { 'data-wiki-id': attributes.noteId } : {},
+        },
       }
     },
 
@@ -231,7 +236,7 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
               const wikiMark = view.state.doc.resolve(pos).marks().find(m => m.type.name === markName)
               if (wikiMark) {
                 event.preventDefault()
-                onWikiLinkClick?.(wikiMark.attrs.name)
+                onWikiLinkClick?.(wikiMark.attrs.name, wikiMark.attrs.noteId || null)
                 return true
               }
               return false
@@ -266,7 +271,7 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
                 {
                   type: 'text',
                   text: props.name,
-                  marks: [{ type: markName, attrs: { name: props.name } }],
+                  marks: [{ type: markName, attrs: { name: props.name, noteId: props.noteId || null } }],
                 },
                 { type: 'text', text: ' ' },
               ])
@@ -397,7 +402,7 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
                 el.addEventListener('mouseleave', () => { el.style.background = '' })
                 el.addEventListener('mousedown', e => {
                   e.preventDefault()
-                  props.command({ name: item.name })
+                  props.command({ name: item.name, noteId: item.isNew ? null : (item.id || null) })
                 })
 
                 popup.appendChild(el)
@@ -472,19 +477,49 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
 }
 
 /**
- * Extract all [[wiki link]] target names from note HTML content.
- * Handles both rendered <span data-wiki-name="..."> and raw [[...]] text.
+ * Extract all wiki-link references from note HTML content.
+ * Returns an array of { name, noteId } objects.
+ *   - noteId is populated when the link was created via autocomplete (data-wiki-id present).
+ *   - noteId is null for links typed as raw [[...]] text.
+ * Handles both rendered <span data-wiki-name="..."> and raw [[...]] syntax.
  */
 export function extractWikiLinks(htmlContent) {
   if (!htmlContent) return []
-  const names = new Set()
+  const refs = []
+  // Track seen keys so we don't emit duplicates.
+  // ID-keyed spans also mark their name so raw-text duplicates are suppressed.
+  const seenIds   = new Set()
+  const seenNames = new Set()
 
-  const attrRegex = /data-wiki-name="([^"]+)"/g
+  const spanRegex = /<span\b([^>]*)>/g
   let m
-  while ((m = attrRegex.exec(htmlContent)) !== null) names.add(m[1].trim())
+  while ((m = spanRegex.exec(htmlContent)) !== null) {
+    const attrs = m[1]
+    const nameMatch = /data-wiki-name="([^"]*)"/.exec(attrs)
+    if (!nameMatch) continue
+    const name = nameMatch[1].trim()
+    if (!name) continue
+    const idMatch = /data-wiki-id="([^"]*)"/.exec(attrs)
+    const noteId  = idMatch ? idMatch[1] : null
+    if (noteId) {
+      if (seenIds.has(noteId)) continue
+      seenIds.add(noteId)
+      seenNames.add(name.toLowerCase()) // suppress same-name raw-text duplicate
+    } else {
+      if (seenNames.has(name.toLowerCase())) continue
+      seenNames.add(name.toLowerCase())
+    }
+    refs.push({ name, noteId })
+  }
 
+  // Also handle raw [[...]] text that hasn't been converted to a span yet
   const rawRegex = /\[\[([^\]|]+?)(?:\|[^\]]*)?\]\]/g
-  while ((m = rawRegex.exec(htmlContent)) !== null) names.add(m[1].trim())
+  while ((m = rawRegex.exec(htmlContent)) !== null) {
+    const name = m[1].trim()
+    if (seenNames.has(name.toLowerCase())) continue
+    seenNames.add(name.toLowerCase())
+    refs.push({ name, noteId: null })
+  }
 
-  return [...names]
+  return refs
 }

@@ -61,7 +61,16 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
   // ── Build graph data ───────────────────────────────────────────────────────
   const buildGraph = useCallback(() => {
     const fileNotes = allNotes.filter(n => n.type === 'file')
-    const nameMap   = new Map(fileNotes.map(n => [n.name.toLowerCase(), n]))
+
+    // Multi-map: name → [note, ...] so same-name notes in different sources
+    // can each be resolved without one overwriting the other.
+    const nameMultiMap = new Map()
+    for (const n of fileNotes) {
+      const key = n.name.toLowerCase()
+      if (!nameMultiMap.has(key)) nameMultiMap.set(key, [])
+      nameMultiMap.get(key).push(n)
+    }
+    const idMap = new Map(fileNotes.map(n => [n.id, n]))
 
     const nodes = fileNotes.map(n => ({
       id:         n.id,
@@ -76,8 +85,16 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
     const links     = []
 
     for (const note of fileNotes) {
-      for (const targetName of extractWikiLinks(note.content || '')) {
-        const target = nameMap.get(targetName.toLowerCase())
+      for (const { name: targetName, noteId: targetId } of extractWikiLinks(note.content || '')) {
+        let target
+        if (targetId) {
+          target = idMap.get(targetId)
+        } else {
+          // Name-only fallback: prefer a note in the same source to avoid
+          // cross-paper collisions (e.g. every paper having its own "Summary").
+          const candidates = nameMultiMap.get(targetName.toLowerCase()) || []
+          target = candidates.find(c => c.sourceKey === note.sourceKey) ?? candidates[0]
+        }
         if (!target || !nodeIdSet.has(target.id) || target.id === note.id) continue
         const key = `${note.id}→${target.id}`
         if (linkSet.has(key)) continue

@@ -616,11 +616,19 @@ export default function LibraryNotes() {
     setGraphView(false)
   }
 
-  // ── Handle wiki link click: find note by name, open it ────────────────────
-  function handleWikiLinkClick(noteName) {
-    const target = allLoadedNotes.find(
-      n => n.type === 'file' && n.name.toLowerCase() === noteName.toLowerCase()
-    )
+  // ── Handle wiki link click: resolve by ID first, fall back to name ────────
+  function handleWikiLinkClick(noteName, noteId) {
+    let target
+    if (noteId) {
+      target = allLoadedNotes.find(n => n.id === noteId)
+    } else {
+      // Name-only fallback: prefer a note in the same source as the current note
+      // to avoid cross-paper collisions (e.g. every paper having its own "Summary").
+      const nameLower = noteName.toLowerCase()
+      const candidates = allLoadedNotes.filter(n => n.type === 'file' && n.name.toLowerCase() === nameLower)
+      const currentSourceKey = selected?.source ?? 'library'
+      target = candidates.find(n => n.sourceKey === currentSourceKey) ?? candidates[0]
+    }
     if (target) {
       // Figure out source from allLoadedNotes entry
       const source = target.source === 'paper' || target.source === 'website' || target.source === 'github'
@@ -863,16 +871,31 @@ export default function LibraryNotes() {
     [allLoadedNotes]
   )
 
-  // ── Backlinks: notes that contain [[this note's name]] ────────────────────
+  // ── Backlinks: notes whose links resolve to the current note ─────────────
   const backlinks = useMemo(() => {
     if (!selectedNote) return []
-    const noteName = selectedNote.name.toLowerCase()
-    return allLoadedNotes.filter(
-      n => n.type === 'file' &&
-        n.id !== selectedNote.id &&
-        extractWikiLinks(n.content || '').some(name => name.toLowerCase() === noteName)
-    )
-  }, [selectedNote, allLoadedNotes])
+    const noteId          = selectedNote.id
+    const noteName        = selectedNote.name.toLowerCase()
+    const selectedSource  = selected?.source ?? 'library'
+
+    // How many file-notes share the same name?  Used to short-circuit the
+    // same-source check when the name is globally unique.
+    const sameNameCount = allLoadedNotes.filter(
+      n => n.type === 'file' && n.name.toLowerCase() === noteName
+    ).length
+
+    return allLoadedNotes.filter(n => {
+      if (n.type !== 'file' || n.id === noteId) return false
+      return extractWikiLinks(n.content || '').some(({ name, noteId: linkedId }) => {
+        if (linkedId) return linkedId === noteId
+        if (name.toLowerCase() !== noteName) return false
+        // Name-only resolution: this link points to selectedNote when the
+        // same-source heuristic would resolve here — i.e. N is in the same
+        // source as selectedNote, or selectedNote has a globally unique name.
+        return sameNameCount === 1 || n.sourceKey === selectedSource
+      })
+    })
+  }, [selectedNote, selected, allLoadedNotes])
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
