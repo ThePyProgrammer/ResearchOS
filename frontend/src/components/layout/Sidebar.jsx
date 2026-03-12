@@ -231,6 +231,32 @@ function CollectionModal({ parentName, onConfirm, onCancel }) {
 }
 function LibraryTree() {
   const { collections, createCollection, updateCollection, deleteCollection, refreshCollections, activeLibraryId } = useLibrary()
+  const [viewCounts, setViewCounts] = useState({})
+
+  useEffect(() => {
+    const lib = activeLibraryId ? { library_id: activeLibraryId } : {}
+    papersApi.list(lib).then(papers => {
+      const dupeKeys = new Map()
+      for (const p of papers) {
+        if (p.doi) { const k = `doi:${p.doi.trim().toLowerCase()}`; dupeKeys.set(k, (dupeKeys.get(k) || 0) + 1) }
+        if (p.arxivId) { const k = `arxiv:${p.arxivId.trim().toLowerCase()}`; dupeKeys.set(k, (dupeKeys.get(k) || 0) + 1) }
+      }
+      const dupeIds = new Set()
+      for (const p of papers) {
+        if ((p.doi && dupeKeys.get(`doi:${p.doi.trim().toLowerCase()}`) > 1) ||
+            (p.arxivId && dupeKeys.get(`arxiv:${p.arxivId.trim().toLowerCase()}`) > 1)) {
+          dupeIds.add(p.id)
+        }
+      }
+      setViewCounts({
+        all:        papers.length,
+        inbox:      papers.filter(p => p.status === 'inbox').length,
+        unfiled:    papers.filter(p => p.collections.length === 0).length,
+        duplicates: dupeIds.size,
+      })
+    }).catch(() => {})
+  }, [activeLibraryId])
+
   const [searchParams] = useSearchParams()
   const location = useLocation()
   const onLibraryPage = location.pathname === '/library'
@@ -573,6 +599,11 @@ function LibraryTree() {
         >
           <Icon name={item.icon} className="text-[18px] flex-shrink-0" />
           <span className="flex-1 text-left text-[13px]">{item.label}</span>
+          {viewCounts[item.id] > 0 && (
+            <span className="text-[11px] text-slate-600 flex-shrink-0">
+              {viewCounts[item.id]}
+            </span>
+          )}
         </button>
       ))}
 
