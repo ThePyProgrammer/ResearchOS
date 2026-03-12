@@ -526,9 +526,9 @@ function LibraryTree() {
   return (
     <>
       {/* Context menu */}
-      {ctxMenu && (
+      {ctxMenu && createPortal(
         <div
-          style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 50 }}
+          style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 9999 }}
           className="bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-52"
           onClick={e => e.stopPropagation()}
         >
@@ -607,7 +607,8 @@ function LibraryTree() {
               </button>
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Quick access */}
@@ -641,9 +642,9 @@ function LibraryTree() {
       ))}
 
       {/* Quick access context menu */}
-      {quickCtxMenu && (
+      {quickCtxMenu && createPortal(
         <div
-          style={{ position: 'fixed', top: quickCtxMenu.y, left: quickCtxMenu.x, zIndex: 50 }}
+          style={{ position: 'fixed', top: quickCtxMenu.y, left: quickCtxMenu.x, zIndex: 9999 }}
           className="bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-48"
           onClick={e => e.stopPropagation()}
         >
@@ -657,7 +658,8 @@ function LibraryTree() {
             <Icon name="download" className="text-[18px] text-slate-400" />
             Export BibTeX
           </button>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Collections header */}
