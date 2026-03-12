@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -12,6 +12,8 @@ import Mathematics from '@tiptap/extension-mathematics'
 import 'katex/dist/katex.min.css'
 import { notesApi, papersApi, websitesApi, githubReposApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
+import { createWikiLinkExtension } from '../components/WikiLinkExtension'
+import NoteGraphView from '../components/NoteGraphView'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -33,11 +35,28 @@ function ToolBtn({ icon, label, active, onClick }) {
 }
 
 // ─── Tiptap WYSIWYG editor ────────────────────────────────────────────────────
-function TiptapEditor({ content, onUpdate, onSave }) {
+function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick }) {
+  // Build wiki link extension once per editor instance; use refs so the callbacks
+  // always see the latest values without needing to recreate the extension.
+  const getAllNotesRef = useRef(getAllNotes)
+  const onWikiLinkClickRef = useRef(onWikiLinkClick)
+  useEffect(() => { getAllNotesRef.current = getAllNotes }, [getAllNotes])
+  useEffect(() => { onWikiLinkClickRef.current = onWikiLinkClick }, [onWikiLinkClick])
+
+  const wikiLinkExtension = useMemo(
+    () =>
+      createWikiLinkExtension({
+        getAllNotes: () => getAllNotesRef.current?.() ?? [],
+        onWikiLinkClick: name => onWikiLinkClickRef.current?.(name),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-      Placeholder.configure({ placeholder: 'Start writing…' }),
+      Placeholder.configure({ placeholder: 'Start writing… use [[ to link to other notes' }),
       Link.configure({ openOnClick: false }),
       Underline,
       TaskList,
@@ -45,6 +64,7 @@ function TiptapEditor({ content, onUpdate, onSave }) {
       Highlight.configure({ multicolor: false }),
       Typography,
       Mathematics,
+      wikiLinkExtension,
     ],
     content: content || '',
     editorProps: { attributes: { class: 'tiptap-editor focus:outline-none' } },
@@ -176,14 +196,14 @@ function NoteTreeNode({ note, allNotes, selectedNoteId, expandedNotes, onSelect,
   )
 }
 
-// ─── Item type styles (paper=blue, website=teal, github=violet) ───────────────
+// ─── Item type styles ─────────────────────────────────────────────────────────
 const ITEM_STYLES = {
   paper:   { text: 'text-blue-600',   bg: 'hover:bg-blue-50',   activeBg: 'bg-blue-50',   border: 'border-blue-100', icon: 'article',  chevron: 'text-blue-400',   badge: 'bg-blue-100 text-blue-600' },
   website: { text: 'text-teal-600',   bg: 'hover:bg-teal-50',   activeBg: 'bg-teal-50',   border: 'border-teal-100', icon: 'link',     chevron: 'text-teal-400',   badge: 'bg-teal-100 text-teal-600' },
   github:  { text: 'text-violet-600', bg: 'hover:bg-violet-50', activeBg: 'bg-violet-50', border: 'border-violet-100', icon: 'code',  chevron: 'text-violet-400', badge: 'bg-violet-100 text-violet-600' },
 }
 
-// ─── Item folder (paper / website / github repo) ──────────────────────────────
+// ─── Item folder ──────────────────────────────────────────────────────────────
 function ItemFolder({
   item, itemType, sourceKey,
   notes, loaded, isOpen,
@@ -206,7 +226,6 @@ function ItemFolder({
 
   return (
     <div>
-      {/* Folder header row */}
       <div
         onClick={onToggle}
         onContextMenu={e => { e.preventDefault(); onItemContextMenu(e) }}
@@ -217,7 +236,6 @@ function ItemFolder({
           name={isOpen ? 'expand_more' : 'chevron_right'}
           className={`text-[12px] ${s.chevron} flex-shrink-0`}
         />
-        {/* Paper-type icon with colored background badge */}
         <span className={`inline-flex items-center justify-center w-4 h-4 rounded flex-shrink-0 ${s.badge}`}>
           <Icon name={s.icon} className="text-[11px]" />
         </span>
@@ -227,7 +245,6 @@ function ItemFolder({
         )}
       </div>
 
-      {/* Expanded content */}
       {isOpen && (
         <div>
           {!loaded && (
@@ -252,7 +269,6 @@ function ItemFolder({
           {loaded && rootNotes.length === 0 && !creating && (
             <p className="pl-9 py-1 text-[11px] text-slate-400 italic">No notes yet</p>
           )}
-          {/* Inline creation form for this item */}
           {creating && (
             <form onSubmit={onCreateSubmit} className="pl-7 pr-2 py-0.5">
               <div className="flex items-center gap-1">
@@ -277,7 +293,7 @@ function ItemFolder({
   )
 }
 
-// ─── Build breadcrumb path to a note ─────────────────────────────────────────
+// ─── Breadcrumb path helper ───────────────────────────────────────────────────
 function buildPath(noteId, allNotes, sourceLabel) {
   const parts = []
   let cur = allNotes.find(n => n.id === noteId)
@@ -289,11 +305,65 @@ function buildPath(noteId, allNotes, sourceLabel) {
   return parts
 }
 
+// ─── Tab bar ──────────────────────────────────────────────────────────────────
+function TabBar({ tabs, activeTabId, onActivate, onClose, graphView, onToggleGraph }) {
+  return (
+    <div className="flex items-stretch flex-shrink-0 border-b border-slate-200 bg-slate-50 min-h-[34px]">
+      {/* Scrollable tab strip */}
+      <div className="flex items-end overflow-x-auto flex-1 px-1 pt-1 gap-0.5 min-w-0"
+        style={{ scrollbarWidth: 'none' }}
+      >
+        {tabs.map(tab => {
+          const isActive = tab.noteId === activeTabId
+          return (
+            <div
+              key={tab.noteId}
+              className={`group flex items-center gap-1 px-2.5 py-1 rounded-t text-[12px] cursor-pointer select-none flex-shrink-0 transition-colors border-t border-l border-r ${
+                isActive
+                  ? 'bg-white border-slate-200 text-slate-700 font-medium'
+                  : 'bg-slate-100 border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+              }`}
+              style={{ maxWidth: 180, borderBottom: isActive ? '1px solid white' : '1px solid transparent', marginBottom: isActive ? -1 : 0 }}
+              onClick={() => onActivate(tab.noteId)}
+            >
+              <Icon name="description" className="text-[12px] text-slate-400 flex-shrink-0" />
+              <span className="truncate">{tab.name}</span>
+              <button
+                onClick={e => { e.stopPropagation(); onClose(tab.noteId) }}
+                className="ml-0.5 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-slate-200 transition-all flex-shrink-0"
+                title="Close tab"
+              >
+                <Icon name="close" className="text-[10px]" />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Graph toggle — pinned to the right of the tab row */}
+      <div className="flex items-center px-2 flex-shrink-0 border-l border-slate-200">
+        <button
+          onClick={onToggleGraph}
+          title={graphView ? 'Switch to editor' : 'Switch to graph view'}
+          className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+            graphView
+              ? 'bg-indigo-600 text-white'
+              : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50'
+          }`}
+        >
+          <Icon name={graphView ? 'edit_note' : 'hub'} className="text-[14px]" />
+          {graphView ? 'Editor' : 'Graph'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Notes IDE page ──────────────────────────────────────────────────────
 export default function LibraryNotes() {
   const { activeLibraryId } = useLibrary()
 
-  // Data
+  // ── Data ───────────────────────────────────────────────────────────────────
   const [papers, setPapers] = useState([])
   const [websites, setWebsites] = useState([])
   const [githubRepos, setGithubRepos] = useState([])
@@ -303,28 +373,58 @@ export default function LibraryNotes() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Tree UI state
-  const [expandedItems, setExpandedItems] = useState({})  // sourceKey → bool
-  const [expandedNotes, setExpandedNotes] = useState({})  // noteId → bool
+  // ── Tree UI state ──────────────────────────────────────────────────────────
+  const [expandedItems, setExpandedItems] = useState({})
+  const [expandedNotes, setExpandedNotes] = useState({})
 
-  // Selection
-  const [selected, setSelected] = useState(null)  // { noteId, source }
+  // ── Tabs: each entry is { noteId, source, name } ──────────────────────────
+  const [openTabs, setOpenTabs] = useState([])
+  const [activeTabId, setActiveTabId] = useState(null)
 
-  // Editor
+  // ── Editor state ───────────────────────────────────────────────────────────
   const [content, setContent] = useState('')
   const [dirty, setDirty] = useState(false)
   const saveTimerRef = useRef(null)
 
-  // Creation
-  const [creating, setCreating] = useState(null)  // { source, parentId, type }
+  // ── Graph view toggle ──────────────────────────────────────────────────────
+  const [graphView, setGraphView] = useState(false)
+
+  // ── Creation / rename / context menu ──────────────────────────────────────
+  const [creating, setCreating] = useState(null)
   const [newName, setNewName] = useState('')
-
-  // Context menu
-  const [ctxMenu, setCtxMenu] = useState(null)  // { x, y, note?, source?, item?, itemType?, sourceKey?, isItem? }
-
-  // Renaming
-  const [renaming, setRenaming] = useState(null)  // { noteId, source }
+  const [ctxMenu, setCtxMenu] = useState(null)
+  const [renaming, setRenaming] = useState(null)
   const [renameDraft, setRenameDraft] = useState('')
+
+  // ── Derive `selected` from active tab ─────────────────────────────────────
+  const selected = useMemo(() => {
+    if (!activeTabId) return null
+    const tab = openTabs.find(t => t.noteId === activeTabId)
+    return tab ? { noteId: tab.noteId, source: tab.source } : null
+  }, [activeTabId, openTabs])
+
+  // ── Flat list of all loaded notes (for wiki-link suggestions + graph) ──────
+  const allLoadedNotes = useMemo(() => {
+    const result = libraryNotes.map(n => ({ ...n, source: 'library', sourceName: 'Library' }))
+    for (const [key, notes] of Object.entries(itemNotes)) {
+      const [type, id] = key.split(':')
+      let sourceName = ''
+      if (type === 'paper') {
+        const p = papers.find(p => p.id === id)
+        sourceName = p?.title || 'Paper'
+      } else if (type === 'website') {
+        const w = websites.find(w => w.id === id)
+        sourceName = w?.title || w?.url || 'Website'
+      } else if (type === 'github') {
+        const r = githubRepos.find(r => r.id === id)
+        sourceName = r ? `${r.owner}/${r.repoName}` : 'Repo'
+      }
+      for (const note of notes) {
+        result.push({ ...note, source: type, sourceName })
+      }
+    }
+    return result
+  }, [libraryNotes, itemNotes])
 
   // ── Load initial data ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -341,6 +441,26 @@ export default function LibraryNotes() {
       setWebsites(sites || [])
       setGithubRepos(repos || [])
       setLibraryNotes(libNotes || [])
+
+      // Eagerly load all item notes in the background so they are available
+      // for wiki-link suggestions and the graph view even before folders are
+      // expanded in the tree.
+      const paperKeys   = (paps   || []).map(p => ({ key: `paper:${p.id}`,   fetch: () => notesApi.list(p.id) }))
+      const websiteKeys = (sites  || []).map(s => ({ key: `website:${s.id}`, fetch: () => notesApi.listForWebsite(s.id) }))
+      const repoKeys    = (repos  || []).map(r => ({ key: `github:${r.id}`,  fetch: () => notesApi.listForGitHubRepo(r.id) }))
+      const allItems    = [...paperKeys, ...websiteKeys, ...repoKeys]
+
+      Promise.allSettled(allItems.map(({ fetch }) => fetch())).then(results => {
+        const notesMap = {}
+        const loadedMap = {}
+        results.forEach((result, i) => {
+          const key = allItems[i].key
+          notesMap[key]  = result.status === 'fulfilled' ? (result.value || []) : []
+          loadedMap[key] = true
+        })
+        setItemNotes(prev => ({ ...prev, ...notesMap }))
+        setLoadedItems(prev => ({ ...prev, ...loadedMap }))
+      })
     }).catch(err => {
       setError(err.message)
     }).finally(() => setLoading(false))
@@ -376,7 +496,56 @@ export default function LibraryNotes() {
     return null
   }
 
-  // ── Sync editor content when selection changes ─────────────────────────────
+  // ── Open a note in a tab (or activate existing tab) ────────────────────────
+  function openNoteInTab(noteId, source) {
+    const notes = getSourceNotes(source)
+    const note = notes.find(n => n.id === noteId)
+    if (!note || note.type === 'folder') return
+
+    setOpenTabs(prev => {
+      if (prev.some(t => t.noteId === noteId)) return prev
+      return [...prev, { noteId, source, name: note.name }]
+    })
+    setActiveTabId(noteId)
+    setGraphView(false)
+  }
+
+  // ── Handle wiki link click: find note by name, open it ────────────────────
+  function handleWikiLinkClick(noteName) {
+    const target = allLoadedNotes.find(
+      n => n.type === 'file' && n.name.toLowerCase() === noteName.toLowerCase()
+    )
+    if (target) {
+      // Figure out source from allLoadedNotes entry
+      const source = target.source === 'paper' || target.source === 'website' || target.source === 'github'
+        ? Object.keys(itemNotes).find(key => {
+            const notes = itemNotes[key]
+            return notes?.some(n => n.id === target.id)
+          }) ?? 'library'
+        : 'library'
+      openNoteInTab(target.id, source)
+    } else {
+      // Offer to create a new library note with that name
+      if (window.confirm(`Note "${noteName}" doesn't exist. Create it?`)) {
+        handleCreateByName(noteName, 'library')
+      }
+    }
+  }
+
+  async function handleCreateByName(name, source) {
+    try {
+      let note
+      if (source === 'library') {
+        note = await notesApi.createForLibrary(activeLibraryId, { name, type: 'file', content: '' })
+        setLibraryNotes(prev => [...prev, note])
+      }
+      if (note) openNoteInTab(note.id, 'library')
+    } catch (err) {
+      console.error('Failed to create note:', err)
+    }
+  }
+
+  // ── Sync editor content when active tab changes ────────────────────────────
   useEffect(() => {
     if (selectedNote) {
       setContent(selectedNote.content || '')
@@ -384,6 +553,16 @@ export default function LibraryNotes() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.noteId])
+
+  // Keep tab names in sync when notes are renamed
+  useEffect(() => {
+    setOpenTabs(prev =>
+      prev.map(tab => {
+        const note = allLoadedNotes.find(n => n.id === tab.noteId)
+        return note ? { ...tab, name: note.name } : tab
+      })
+    )
+  }, [allLoadedNotes])
 
   // ── Auto-save ──────────────────────────────────────────────────────────────
   const save = useCallback(async () => {
@@ -430,7 +609,6 @@ export default function LibraryNotes() {
     }
   }
 
-  // ── Toggle item folder ─────────────────────────────────────────────────────
   async function toggleItem(sourceKey) {
     const willOpen = !expandedItems[sourceKey]
     setExpandedItems(prev => ({ ...prev, [sourceKey]: !prev[sourceKey] }))
@@ -458,7 +636,7 @@ export default function LibraryNotes() {
         setItemNotes(prev => ({ ...prev, [source]: [...(prev[source] || []), note] }))
       }
       if (parentId) setExpandedNotes(prev => ({ ...prev, [parentId]: true }))
-      if (note.type === 'file') setSelected({ noteId: note.id, source })
+      if (note.type === 'file') openNoteInTab(note.id, source)
       setCreating(null)
       setNewName('')
     } catch (err) {
@@ -478,7 +656,16 @@ export default function LibraryNotes() {
       }
       collect(noteId)
       setSourceNotes(source, prev => prev.filter(n => !toRemove.has(n.id)))
-      if (toRemove.has(selected?.noteId)) setSelected(null)
+      // Close any tabs for deleted notes
+      setOpenTabs(prev => {
+        const remaining = prev.filter(t => !toRemove.has(t.noteId))
+        if (remaining.length < prev.length && toRemove.has(activeTabId)) {
+          const idx = prev.findIndex(t => t.noteId === activeTabId)
+          const next = remaining[idx] ?? remaining[idx - 1] ?? remaining[0]
+          setActiveTabId(next?.noteId ?? null)
+        }
+        return remaining
+      })
     } catch (err) {
       console.error('Failed to delete note:', err)
     }
@@ -498,7 +685,17 @@ export default function LibraryNotes() {
     setRenaming(null)
   }
 
-  // ── Context menu handlers ──────────────────────────────────────────────────
+  // ── Close a tab ────────────────────────────────────────────────────────────
+  function closeTab(noteId) {
+    setOpenTabs(prev => {
+      const idx = prev.findIndex(t => t.noteId === noteId)
+      const next = prev[idx + 1] ?? prev[idx - 1]
+      if (noteId === activeTabId) setActiveTabId(next?.noteId ?? null)
+      return prev.filter(t => t.noteId !== noteId)
+    })
+  }
+
+  // ── Context menu helpers ───────────────────────────────────────────────────
   function openNoteCtxMenu(e, note, source) {
     setCtxMenu({ note, source, x: e.clientX, y: e.clientY })
   }
@@ -519,6 +716,12 @@ export default function LibraryNotes() {
   const breadcrumb = selected
     ? buildPath(selected.noteId, getSourceNotes(selected.source), sourceLabel(selected.source))
     : []
+
+  // ── Wiki link suggestion callback (stable ref) ────────────────────────────
+  const getAllNotesForSuggestion = useCallback(
+    () => allLoadedNotes,
+    [allLoadedNotes]
+  )
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -561,7 +764,7 @@ export default function LibraryNotes() {
             <p className="px-3 py-4 text-[11px] text-red-500">{error}</p>
           ) : (
             <>
-              {/* ── Library notes section ── */}
+              {/* ── Library notes ── */}
               {(libRootNotes.length > 0 || (creating?.source === 'library' && !creating.parentId)) && (
                 <div className="mb-1">
                   <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">
@@ -574,13 +777,12 @@ export default function LibraryNotes() {
                       allNotes={libraryNotes}
                       selectedNoteId={selected?.source === 'library' ? selected.noteId : null}
                       expandedNotes={expandedNotes}
-                      onSelect={noteId => setSelected({ noteId, source: 'library' })}
+                      onSelect={noteId => openNoteInTab(noteId, 'library')}
                       onToggle={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
                       onContextMenu={(e, n) => openNoteCtxMenu(e, n, 'library')}
                       depth={0}
                     />
                   ))}
-                  {/* Library root creation form */}
                   {creating?.source === 'library' && !creating.parentId && (
                     <form onSubmit={handleCreate} className="px-1 py-0.5">
                       <div className="flex items-center gap-1">
@@ -602,108 +804,84 @@ export default function LibraryNotes() {
                 </div>
               )}
 
-              {/* ── Papers section ── */}
+              {/* ── Papers ── */}
               {sortedPapers.length > 0 && (
                 <div className="mb-1">
-                  <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">
-                    Papers
-                  </p>
+                  <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Papers</p>
                   {sortedPapers.map(paper => {
                     const sourceKey = `paper:${paper.id}`
                     return (
                       <ItemFolder
                         key={paper.id}
-                        item={paper}
-                        itemType="paper"
-                        sourceKey={sourceKey}
-                        notes={itemNotes[sourceKey]}
-                        loaded={!!loadedItems[sourceKey]}
+                        item={paper} itemType="paper" sourceKey={sourceKey}
+                        notes={itemNotes[sourceKey]} loaded={!!loadedItems[sourceKey]}
                         isOpen={!!expandedItems[sourceKey]}
-                        selectedNoteId={selected?.noteId}
-                        isActiveSource={selected?.source === sourceKey}
+                        selectedNoteId={selected?.noteId} isActiveSource={selected?.source === sourceKey}
                         expandedNotes={expandedNotes}
                         onToggle={() => toggleItem(sourceKey)}
-                        onSelectNote={noteId => setSelected({ noteId, source: sourceKey })}
+                        onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
                         onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
                         onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
                         onItemContextMenu={e => openItemCtxMenu(e, paper, 'paper', sourceKey)}
                         creating={creating?.source === sourceKey ? creating : null}
-                        newName={newName}
-                        setNewName={setNewName}
-                        onCreateSubmit={handleCreate}
-                        onCancelCreate={() => setCreating(null)}
+                        newName={newName} setNewName={setNewName}
+                        onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
                       />
                     )
                   })}
                 </div>
               )}
 
-              {/* ── Websites section ── */}
+              {/* ── Websites ── */}
               {sortedWebsites.length > 0 && (
                 <div className="mb-1">
-                  <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">
-                    Websites
-                  </p>
+                  <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Websites</p>
                   {sortedWebsites.map(site => {
                     const sourceKey = `website:${site.id}`
                     return (
                       <ItemFolder
                         key={site.id}
-                        item={site}
-                        itemType="website"
-                        sourceKey={sourceKey}
-                        notes={itemNotes[sourceKey]}
-                        loaded={!!loadedItems[sourceKey]}
+                        item={site} itemType="website" sourceKey={sourceKey}
+                        notes={itemNotes[sourceKey]} loaded={!!loadedItems[sourceKey]}
                         isOpen={!!expandedItems[sourceKey]}
-                        selectedNoteId={selected?.noteId}
-                        isActiveSource={selected?.source === sourceKey}
+                        selectedNoteId={selected?.noteId} isActiveSource={selected?.source === sourceKey}
                         expandedNotes={expandedNotes}
                         onToggle={() => toggleItem(sourceKey)}
-                        onSelectNote={noteId => setSelected({ noteId, source: sourceKey })}
+                        onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
                         onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
                         onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
                         onItemContextMenu={e => openItemCtxMenu(e, site, 'website', sourceKey)}
                         creating={creating?.source === sourceKey ? creating : null}
-                        newName={newName}
-                        setNewName={setNewName}
-                        onCreateSubmit={handleCreate}
-                        onCancelCreate={() => setCreating(null)}
+                        newName={newName} setNewName={setNewName}
+                        onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
                       />
                     )
                   })}
                 </div>
               )}
 
-              {/* ── GitHub Repos section ── */}
+              {/* ── GitHub Repos ── */}
               {sortedRepos.length > 0 && (
                 <div className="mb-1">
-                  <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">
-                    GitHub Repos
-                  </p>
+                  <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">GitHub Repos</p>
                   {sortedRepos.map(repo => {
                     const sourceKey = `github:${repo.id}`
                     return (
                       <ItemFolder
                         key={repo.id}
-                        item={repo}
-                        itemType="github"
-                        sourceKey={sourceKey}
-                        notes={itemNotes[sourceKey]}
-                        loaded={!!loadedItems[sourceKey]}
+                        item={repo} itemType="github" sourceKey={sourceKey}
+                        notes={itemNotes[sourceKey]} loaded={!!loadedItems[sourceKey]}
                         isOpen={!!expandedItems[sourceKey]}
-                        selectedNoteId={selected?.noteId}
-                        isActiveSource={selected?.source === sourceKey}
+                        selectedNoteId={selected?.noteId} isActiveSource={selected?.source === sourceKey}
                         expandedNotes={expandedNotes}
                         onToggle={() => toggleItem(sourceKey)}
-                        onSelectNote={noteId => setSelected({ noteId, source: sourceKey })}
+                        onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
                         onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
                         onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
                         onItemContextMenu={e => openItemCtxMenu(e, repo, 'github', sourceKey)}
                         creating={creating?.source === sourceKey ? creating : null}
-                        newName={newName}
-                        setNewName={setNewName}
-                        onCreateSubmit={handleCreate}
-                        onCancelCreate={() => setCreating(null)}
+                        newName={newName} setNewName={setNewName}
+                        onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
                       />
                     )
                   })}
@@ -729,51 +907,86 @@ export default function LibraryNotes() {
         </div>
       </div>
 
-      {/* ── Right: editor panel ───────────────────────────────────────────── */}
+      {/* ── Right: editor + tabs + graph ──────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {selectedNote ? (
-          <>
-            {/* Editor header with breadcrumb */}
-            <div className="px-4 py-2 border-b border-slate-100 bg-white flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-1 min-w-0 text-[12px] text-slate-500">
-                {breadcrumb.map((part, i) => (
-                  <span key={i} className="flex items-center gap-1 min-w-0">
-                    {i > 0 && <Icon name="chevron_right" className="text-[14px] text-slate-300 flex-shrink-0" />}
-                    <span className={`${i === breadcrumb.length - 1 ? 'text-slate-700 font-medium' : 'truncate'}`}>
-                      {part}
-                    </span>
-                  </span>
-                ))}
-                {dirty && (
-                  <span className="ml-2 w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Unsaved changes" />
-                )}
-              </div>
-              <button
-                onClick={save}
-                disabled={!dirty}
-                className="text-[11px] text-slate-400 hover:text-blue-600 disabled:opacity-30 font-medium px-2 py-0.5 rounded hover:bg-blue-50 transition-colors flex-shrink-0"
-              >
-                Save
-              </button>
-            </div>
 
-            {/* Tiptap editor */}
-            <TiptapEditor
-              content={content}
-              onUpdate={html => { setContent(html); setDirty(true) }}
-              onSave={save}
-            />
-          </>
+        {/* Tab bar — always visible; graph toggle lives on the right end */}
+        <TabBar
+          tabs={openTabs}
+          activeTabId={activeTabId}
+          onActivate={setActiveTabId}
+          onClose={closeTab}
+          graphView={graphView}
+          onToggleGraph={() => setGraphView(v => !v)}
+        />
+
+        {graphView ? (
+          /* ── Graph view ─────────────────────────────────────────────── */
+          <NoteGraphView
+            allNotes={allLoadedNotes}
+            onNoteClick={noteId => {
+              const note = allLoadedNotes.find(n => n.id === noteId)
+              if (!note) return
+              const source = note.source === 'paper' || note.source === 'website' || note.source === 'github'
+                ? Object.keys(itemNotes).find(key => itemNotes[key]?.some(n => n.id === noteId)) ?? 'library'
+                : 'library'
+              openNoteInTab(noteId, source)
+            }}
+          />
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
-            <Icon name="edit_note" className="text-[48px] text-slate-200" />
-            <div className="text-center">
-              <p className="text-[13px] text-slate-400 font-medium">Select a note to edit</p>
-              <p className="text-[11px] text-slate-300 mt-1">
-                Or click a paper folder to browse its notes
-              </p>
-            </div>
-          </div>
+          /* ── Editor view ────────────────────────────────────────────── */
+          <>
+            {selectedNote ? (
+              <>
+                {/* Editor header with breadcrumb */}
+                <div className="px-4 py-2 border-b border-slate-100 bg-white flex items-center justify-between flex-shrink-0">
+                  <div className="flex items-center gap-1 min-w-0 text-[12px] text-slate-500">
+                    {breadcrumb.map((part, i) => (
+                      <span key={i} className="flex items-center gap-1 min-w-0">
+                        {i > 0 && <Icon name="chevron_right" className="text-[14px] text-slate-300 flex-shrink-0" />}
+                        <span className={`${i === breadcrumb.length - 1 ? 'text-slate-700 font-medium' : 'truncate'}`}>
+                          {part}
+                        </span>
+                      </span>
+                    ))}
+                    {dirty && (
+                      <span className="ml-2 w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Unsaved changes" />
+                    )}
+                  </div>
+                  <button
+                    onClick={save}
+                    disabled={!dirty}
+                    className="text-[11px] text-slate-400 hover:text-blue-600 disabled:opacity-30 font-medium px-2 py-0.5 rounded hover:bg-blue-50 transition-colors flex-shrink-0"
+                  >
+                    Save
+                  </button>
+                </div>
+
+                {/* Tiptap editor */}
+                <TiptapEditor
+                  key={selectedNote.id}
+                  content={content}
+                  onUpdate={html => { setContent(html); setDirty(true) }}
+                  onSave={save}
+                  getAllNotes={getAllNotesForSuggestion}
+                  onWikiLinkClick={handleWikiLinkClick}
+                />
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
+                <Icon name="edit_note" className="text-[48px] text-slate-200" />
+                <div className="text-center">
+                  <p className="text-[13px] text-slate-400 font-medium">Select a note to edit</p>
+                  <p className="text-[11px] text-slate-300 mt-1">
+                    Or click a paper folder to browse its notes
+                  </p>
+                  <p className="text-[11px] text-indigo-300 mt-1">
+                    Tip: type <span className="font-mono bg-slate-100 px-1 rounded text-indigo-500">[[</span> to link notes · click Graph to visualise
+                  </p>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -785,7 +998,6 @@ export default function LibraryNotes() {
           onClick={e => e.stopPropagation()}
         >
           {ctxMenu.isItem ? (
-            /* Context menu for item folders (paper/website/github) */
             <>
               <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
                 <p className="text-[10px] text-slate-400 truncate font-medium uppercase tracking-wider">
@@ -842,7 +1054,6 @@ export default function LibraryNotes() {
               </button>
             </>
           ) : (
-            /* Context menu for individual notes */
             <>
               <div className="px-3 py-1 border-b border-slate-100 mb-1">
                 <p className="text-[11px] text-slate-400 truncate">{ctxMenu.note?.name}</p>

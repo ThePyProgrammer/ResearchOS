@@ -409,3 +409,30 @@
   margin: 0.75rem 0;
   text-align: center;
 }
+
+/* ── Wiki link mark styles ────────────────────────────────────────────────── */
+.tiptap-editor .wiki-link {
+  color: #6366f1;
+  background: #eef2ff;
+  border-bottom: 1px solid #a5b4fc;
+  border-radius: 3px;
+  padding: 0 3px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.tiptap-editor .wiki-link:hover {
+  background: #e0e7ff;
+  color: #4f46e5;
+  border-bottom-color: #6366f1;
+}
+
+/* ── Wiki link autocomplete popup (rendered imperatively outside React tree) */
+.wiki-link-popup {
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.wiki-link-popup div:hover {
+  background: #f8fafc;
+}
+
