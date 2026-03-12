@@ -405,7 +405,7 @@ export default function LibraryNotes() {
 
   // ── Flat list of all loaded notes (for wiki-link suggestions + graph) ──────
   const allLoadedNotes = useMemo(() => {
-    const result = libraryNotes.map(n => ({ ...n, source: 'library', sourceName: 'Library' }))
+    const result = libraryNotes.map(n => ({ ...n, source: 'library', sourceName: 'Library', sourceKey: 'library' }))
     for (const [key, notes] of Object.entries(itemNotes)) {
       const [type, id] = key.split(':')
       let sourceName = ''
@@ -420,7 +420,7 @@ export default function LibraryNotes() {
         sourceName = r ? `${r.owner}/${r.repoName}` : 'Repo'
       }
       for (const note of notes) {
-        result.push({ ...note, source: type, sourceName })
+        result.push({ ...note, source: type, sourceName, sourceKey: key })
       }
     }
     return result
