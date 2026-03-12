@@ -34,6 +34,7 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Editable tags for websites and GitHub repos** — tag chip editor available on all item types in detail panels, matching the existing paper tag editing experience
 - **Collections picker for GitHub repos** — GitHub repo detail panels now include the same collections picker available for papers and websites
 - **Export BibTeX from sidebar collection context menu** — the collection right-click menu includes an "Export BibTeX" action, making citation export accessible without opening the Library
+- **Semantic library map** — a 2D scatter plot of all papers, websites, and GitHub repos positioned by semantic similarity (UMAP over cached embeddings). Color-coded by collection or item type; hover for title and collection membership; click to navigate; brush-select a region to create a new collection from items that cluster together. No new AI calls — runs entirely on the existing embedding cache
 
 ## Tech Stack
 
@@ -42,7 +43,7 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **AI:** OpenAI
 - **Frontend:** React 18, Vite, React Router v6, Tailwind CSS 3
 - **Editor:** tiptap v3 with KaTeX
-- **Graph:** D3.js (note graph view)
+- **Graph:** D3.js (note graph view, library map)
 
 ## Quick Start
 
@@ -152,6 +153,7 @@ CI (`.github/workflows/tests.yml`) runs backend tests, frontend tests/build, and
 | `/dashboard` | Activity feed + run stats |
 | `/library` | Paper, website, and GitHub repo library with collections, filters, and detail panels |
 | `/library/notes` | Library-level Notes IDE with D3 wiki-link graph |
+| `/library/map` | Semantic library map — 2D UMAP scatter of all items by embedding similarity |
 | `/library/paper/:id` | PDF viewer + Notes IDE + AI Copilot |
 | `/library/website/:id` | Live iframe + Notes IDE + AI Copilot + Details |
 | `/library/github-repo/:id` | Repo overview + Notes IDE + AI Copilot |
@@ -211,6 +213,7 @@ All routes are prefixed `/api`. Responses are camelCase JSON. See the full API r
 | GET | `/api/authors` | List authors |
 | GET/PATCH/DELETE | `/api/authors/{id}` | Single author |
 | GET | `/api/search` | Search across all item types; `?q=&mode=lexical\|semantic&library_id=&types=` |
+| GET | `/api/search/map` | UMAP 2D layout for all embedded items in a library; `?library_id=` |
 | GET | `/api/workflows` | Workflow catalog (read-only) |
 | GET/POST | `/api/runs` | List / start a run |
 | GET | `/api/runs/{id}` | Run with logs, trace, and cost |

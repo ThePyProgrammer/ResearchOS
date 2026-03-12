@@ -64,13 +64,14 @@ The backend is a standard FastAPI application. Three directories mirror the laye
 - `note_service.py` — CRUD for the per-item note filesystem, plus AI note generation (OpenAI JSON mode producing a structured tree of files/folders). Supports papers, websites, GitHub repos, and library-level notes.
 - `chat_service.py` — AI copilot: OpenAI chat with tool calling that can suggest diffs to notes. Works across papers, websites, and GitHub repos.
 - `search_service.py` — Unified search across papers, websites, and GitHub repos. Supports two modes: **lexical** (weighted keyword scoring per field, no API key needed) and **semantic** (OpenAI `text-embedding-3-small` cosine similarity, falls back to lexical when the API key is absent). Embeddings are cached in `backend/data/embeddings.json`.
+- `map_service.py` — UMAP 2D projection of cached item embeddings for the library map visualisation. Fetches all items in a library, filters to those with a cached embedding, and runs UMAP (`cosine` metric, `n_neighbors=min(15,n−1)`, `random_state=42`) inside a thread-pool executor so the async event loop is never blocked. The projection is cached in `backend/data/map_cache.json` keyed by a SHA-256 signature over the sorted set of embedding cache keys; the cache is invalidated automatically when the item set changes. `invalidate_map_cache()` can also be called explicitly after indexing new items.
 - `related_paper_service.py` — OpenAlex-powered related paper discovery for a seed paper. Combines semantic similarity links, citation references, and cited-by lookups from OpenAlex; falls back to title-neighbor search when direct links are sparse. Results are ranked by reason type and citation count and annotated with duplicate detection against the user's library.
 - `author_service.py` / `author_match_service.py` — Author CRUD and fuzzy name-matching across papers.
 - `github_repo_service.py` — GitHub repository import and metadata sync.
 
 **`backend/routers/`** — One FastAPI router per resource. Thin handlers only. All routes are prefixed `/api`, and all responses are camelCase JSON via `model.model_dump(by_alias=True)`. Notable routers:
 
-- `search.py` — `GET /api/search` with `?q=&mode=lexical|semantic&library_id=&types=` query parameters.
+- `search.py` — `GET /api/search` with `?q=&mode=lexical|semantic&library_id=&types=` query parameters. Also `GET /api/search/map?library_id=` which delegates to `map_service.build_map()` and returns the UMAP projection as a JSON array.
 - `settings.py` — `GET/PATCH /api/settings/models` for runtime LLM model selection.
 
 **`backend/migrations/`** — SQL files run in order in the Supabase SQL editor. These are the schema source of truth.
@@ -133,6 +134,7 @@ The frontend is a React SPA with React Router v6 and Tailwind CSS.
 - `Website.jsx` — Three-pane layout: live iframe + Notes IDE + AI Copilot + Details panel.
 - `GitHubRepo.jsx` — Two-pane layout: repo overview (metadata, topics, description/abstract, links) + tabbed panel with Details and Notes IDE + AI Copilot.
 - `LibraryNotes.jsx` — Library-level Notes IDE with a file tree covering all notes across the library, a full-featured tiptap editor, and an optional D3 `NoteGraphView` sidebar for visualizing wiki-link connections.
+- `LibraryMap.jsx` — Semantic library map at `/library/map`. Fetches UMAP coordinates from `GET /api/search/map`, renders a D3 scatter plot on a dark dot-grid canvas, and supports zoom/pan (**Explore** mode) and brush-select (**Select** mode). Brush selection correctly inverts the current zoom transform when mapping pixel coordinates back to data space. Clicking a point navigates to the item's detail page. Color-coding toggles between first-collection and item-type. A collapsible legend panel mirrors the active colour scheme. Brush-selected items can be saved as a new collection via a `WindowModal` form that bulk-patches all selected items' `collections` field.
 - `Dashboard.jsx` — Activity feed, run stats, papers-over-time chart (Recharts). Triage health stat cards (Inbox / To Read / Read) are clickable and navigate to the corresponding filtered library view.
 - `Agents.jsx` — Workflow catalog and active runs with live log viewer.
 - `Proposals.jsx` — Human-in-the-loop approve/reject with diff view.
@@ -177,6 +179,20 @@ All AI features use OpenAI and share a pattern: extract context (PDF text, metad
 ### Search and Semantic Indexing
 
 `search_service.py` provides a unified search entry point over all item types. **Lexical mode** uses weighted keyword scoring per field (title, authors, tags, abstract, venue) and works without an API key. **Semantic mode** generates `text-embedding-3-small` embeddings via OpenAI, computes cosine similarity against cached item embeddings, and automatically falls back to lexical when the API key is absent or the call fails. Embeddings are persisted in `backend/data/embeddings.json` and are generated lazily on first search or on item import (as a background task). Cache keys are prefixed by type (`ws:` for websites, `gh:` for GitHub repos, bare ID for papers) for global uniqueness.
+
+### Library Map
+
+`map_service.py` turns the same embedding cache into a spatial overview of the whole library. On a `GET /api/search/map?library_id=` request it:
+
+1. Loads all items for the library from Supabase.
+2. Filters to items that already have a cached embedding in `data/embeddings.json` — no new OpenAI calls are made.
+3. Computes a **signature** (16-char SHA-256 prefix over the sorted embedding-key list) and checks `data/map_cache.json`. On a cache hit the stored `x`/`y` coordinates are returned immediately with freshly fetched metadata (title, collections may have changed).
+4. On a cache miss, runs `umap.UMAP(n_components=2, metric="cosine", random_state=42)` inside `asyncio.get_event_loop().run_in_executor(None, ...)` so the event loop stays unblocked. Points with fewer than five embeddings fall back to a circle layout (too few for a meaningful UMAP projection).
+5. Normalises coordinates to `[−1, 1]` on each axis, saves the result keyed by library ID, and returns the point list.
+
+The cache is invalidated whenever the set of embedded items changes — the signature check naturally catches additions and removals. `invalidate_map_cache()` can also be called explicitly.
+
+The frontend `LibraryMap.jsx` renders the points in a D3 scatter plot. The **Explore** mode attaches `d3.zoom()` to the SVG and stores the running `ZoomTransform` in a ref that survives chart rebuilds. The **Select** mode attaches `d3.brush()` to a separate overlay group and uses `currentTransform.invert()` to convert brush-pixel coordinates into scale-space coordinates before hit-testing against the circle positions — this keeps selection correct at any zoom level. Switching modes rebuilds the chart but restores the stored zoom transform, so the viewport does not jump.
 
 ### Related Paper Discovery
 
