@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
 import * as d3 from 'd3'
 import { extractWikiLinks } from './WikiLinkExtension'
 
@@ -38,16 +38,37 @@ function paddedHullPoints(nodePoints, radius = 30, resolution = 10) {
 const smoothLine = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5))
 
 export default function NoteGraphView({ allNotes, onNoteClick }) {
-  const svgRef       = useRef(null)
-  const containerRef = useRef(null)
-  const simRef       = useRef(null)
-  const clusterRef   = useRef(0.3)   // selective: same-source pull
-  const gravityRef   = useRef(0.5)   // global: all-nodes pull toward centre
+  const svgRef          = useRef(null)
+  const svgWrapperRef   = useRef(null)   // used for D3 size measurement
+  const simRef          = useRef(null)
+  const clusterRef      = useRef(0.3)    // selective: same-source pull
+  const gravityRef      = useRef(0.5)    // global: all-nodes pull toward centre
+  const hullEntriesRef  = useRef([])     // live D3 hull elements; updated after each rebuild
+  const collDropRef     = useRef(null)   // for outside-click detection on collection dropdown
 
-  const [hoveredNode,       setHoveredNode]       = useState(null)
-  const [clusterStrength,   setClusterStrength]   = useState(0.3)
-  const [gravityStrength,   setGravityStrength]   = useState(0.5)
+  const [hoveredNode,     setHoveredNode]     = useState(null)
+  const [clusterStrength, setClusterStrength] = useState(0.3)
+  const [gravityStrength, setGravityStrength] = useState(0.5)
 
+  // Options panel
+  const [panelOpen,       setPanelOpen]       = useState(false)
+  const [visibleTypes,    setVisibleTypes]    = useState({ library: true, paper: true, website: true, github: true })
+  const [hullCollections, setHullCollections] = useState([])  // empty = all shown
+  const [collSearch,      setCollSearch]      = useState('')
+  const [collDropOpen,    setCollDropOpen]    = useState(false)
+
+  // ── Close collection dropdown on outside click ──────────────────────────────
+  useEffect(() => {
+    function handleOutsideClick(e) {
+      if (collDropRef.current && !collDropRef.current.contains(e.target)) {
+        setCollDropOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [])
+
+  // ── Slider refs keep sim in sync without full rebuild ────────────────────────
   useEffect(() => {
     clusterRef.current = clusterStrength
     if (simRef.current) simRef.current.alpha(0.35).restart()
@@ -58,12 +79,34 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
     if (simRef.current) simRef.current.alpha(0.35).restart()
   }, [gravityStrength])
 
-  // ── Build graph data ───────────────────────────────────────────────────────
-  const buildGraph = useCallback(() => {
-    const fileNotes = allNotes.filter(n => n.type === 'file')
+  // ── Hull visibility: update SVG elements directly via ref (no rebuild) ───────
+  useEffect(() => {
+    for (const { sourceKey, path, label } of hullEntriesRef.current) {
+      const visible = hullCollections.length === 0 || hullCollections.includes(sourceKey)
+      path.attr('display',  visible ? null : 'none')
+      label.attr('display', visible ? null : 'none')
+    }
+  }, [hullCollections])
 
-    // Multi-map: name → [note, ...] so same-name notes in different sources
-    // can each be resolved without one overwriting the other.
+  // ── All distinct source groups for the collections autocomplete ──────────────
+  const allCollections = useMemo(() => {
+    const seen = new Map()
+    for (const n of allNotes) {
+      if (n.type !== 'file') continue
+      const key  = n.sourceKey  ?? n.source ?? 'library'
+      const name = n.sourceName ?? SOURCE_LABEL[n.source] ?? 'Library'
+      const src  = n.source     ?? 'library'
+      if (!seen.has(key)) seen.set(key, { key, name, source: src })
+    }
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [allNotes])
+
+  // ── Build graph data (filtered by visibleTypes) ──────────────────────────────
+  const buildGraph = useCallback(() => {
+    const fileNotes = allNotes.filter(n =>
+      n.type === 'file' && (visibleTypes[n.source ?? 'library'] !== false)
+    )
+
     const nameMultiMap = new Map()
     for (const n of fileNotes) {
       const key = n.name.toLowerCase()
@@ -90,8 +133,6 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
         if (targetId) {
           target = idMap.get(targetId)
         } else {
-          // Name-only fallback: prefer a note in the same source to avoid
-          // cross-paper collisions (e.g. every paper having its own "Summary").
           const candidates = nameMultiMap.get(targetName.toLowerCase()) || []
           target = candidates.find(c => c.sourceKey === note.sourceKey) ?? candidates[0]
         }
@@ -104,16 +145,16 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
     }
 
     return { nodes, links }
-  }, [allNotes])
+  }, [allNotes, visibleTypes])
 
-  // ── D3 render ──────────────────────────────────────────────────────────────
+  // ── D3 render ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!svgRef.current || !containerRef.current) return
+    if (!svgRef.current || !svgWrapperRef.current) return
 
     const { nodes, links } = buildGraph()
 
-    const width  = containerRef.current.clientWidth  || 900
-    const height = containerRef.current.clientHeight || 600
+    const width  = svgWrapperRef.current.clientWidth  || 900
+    const height = svgWrapperRef.current.clientHeight || 600
 
     const svgEl = d3.select(svgRef.current)
     svgEl.selectAll('*').remove()
@@ -149,52 +190,53 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
       .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
       .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#cbd5e1')
 
-    // ── Hull layer (behind everything) ────────────────────────────────────
+    // ── Hull layer (behind everything) ────────────────────────────────────────
     const hullLayer = g.append('g').attr('class', 'hulls')
+    const groupMap  = d3.group(nodes, d => d.sourceKey)
 
-    // Group nodes by sourceKey; skip singleton library notes when every
-    // note is library-only (the hull would just cover the whole canvas).
-    const groupMap = d3.group(nodes, d => d.sourceKey)
-
-    // Build one hull element per group
     const hullEntries = []
     for (const [key, groupNodes] of groupMap) {
-      const source     = groupNodes[0].source
-      const color      = SOURCE_COLOR[source] || SOURCE_COLOR.library
-      const label      = groupNodes[0].sourceName || SOURCE_LABEL[source] || key
+      const source   = groupNodes[0].source
+      const color    = SOURCE_COLOR[source] || SOURCE_COLOR.library
+      const label    = groupNodes[0].sourceName || SOURCE_LABEL[source] || key
+      const visible  = hullCollections.length === 0 || hullCollections.includes(key)
 
       const hullPath = hullLayer.append('path')
-        .attr('fill',         color)
-        .attr('fill-opacity', 0.07)
-        .attr('stroke',       color)
+        .attr('fill',           color)
+        .attr('fill-opacity',   0.07)
+        .attr('stroke',         color)
         .attr('stroke-opacity', 0.35)
-        .attr('stroke-width', 1.5)
+        .attr('stroke-width',   1.5)
         .attr('stroke-dasharray', '5,3')
         .attr('stroke-linejoin', 'round')
+        .attr('display', visible ? null : 'none')
 
-      // Truncate long labels (paper titles etc.)
       const displayLabel = label.length > 32 ? label.slice(0, 30) + '…' : label
 
       const hullLabel = hullLayer.append('text')
         .text(displayLabel)
-        .attr('font-size', '13px')
+        .attr('font-size',   '13px')
         .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
         .attr('font-weight', '500')
-        .attr('fill', color)
+        .attr('fill',         color)
         .attr('fill-opacity', 0.7)
-        .attr('text-anchor', 'middle')
+        .attr('text-anchor',  'middle')
         .attr('pointer-events', 'none')
+        .attr('display', visible ? null : 'none')
 
-      hullEntries.push({ nodes: groupNodes, path: hullPath, label: hullLabel })
+      hullEntries.push({ sourceKey: key, nodes: groupNodes, path: hullPath, label: hullLabel })
     }
 
-    // ── Links ─────────────────────────────────────────────────────────────
+    // Expose to the hullCollections effect so it can toggle visibility without rebuild
+    hullEntriesRef.current = hullEntries
+
+    // ── Links ─────────────────────────────────────────────────────────────────
     const linkEls = g.append('g').attr('class', 'links')
       .selectAll('line').data(links).join('line')
       .attr('stroke', '#cbd5e1').attr('stroke-width', 1.5)
       .attr('marker-end', 'url(#wiki-arrow)')
 
-    // ── Nodes ─────────────────────────────────────────────────────────────
+    // ── Nodes ─────────────────────────────────────────────────────────────────
     const nodeEls = g.append('g').attr('class', 'nodes')
       .selectAll('g').data(nodes).join('g')
       .attr('cursor', 'pointer')
@@ -214,13 +256,13 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
       .attr('stroke', '#fff').attr('stroke-width', 2.5)
     nodeEls.append('text').text(d => d.name)
       .attr('x', 0).attr('y', 22)
-      .attr('font-size', '11px')
+      .attr('font-size',   '11px')
       .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
-      .attr('fill', '#334155')
+      .attr('fill',        '#334155')
       .attr('text-anchor', 'middle')
       .attr('pointer-events', 'none')
 
-    // ── Selective clustering force (pulls same-source nodes together) ────
+    // ── Selective clustering force (pulls same-source nodes together) ─────────
     function clusterForce(alpha) {
       const strength = clusterRef.current
       if (!strength) return
@@ -240,8 +282,7 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
       })
     }
 
-    // ── Global gravity force (pulls every node toward canvas centre) ──────
-    // Keeps groups from flying apart when selective clustering is high.
+    // ── Global gravity force (pulls every node toward canvas centre) ──────────
     const cx = width / 2, cy = height / 2
     function gravityForce(alpha) {
       const g = gravityRef.current
@@ -252,7 +293,7 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
       })
     }
 
-    // ── Simulation ────────────────────────────────────────────────────────
+    // ── Simulation ────────────────────────────────────────────────────────────
     const sim = d3.forceSimulation(nodes)
       .force('link',      d3.forceLink(links).id(d => d.id).distance(100).strength(0.6))
       .force('charge',    d3.forceManyBody().strength(-250))
@@ -264,25 +305,19 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
     simRef.current = sim
 
     sim.on('tick', () => {
-      // Update links
       linkEls
         .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
         .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
 
-      // Update nodes
       nodeEls.attr('transform', d => `translate(${d.x},${d.y})`)
 
-      // Update hulls
       for (const { nodes: gNodes, path, label } of hullEntries) {
-        const pts = paddedHullPoints(gNodes.map(d => [d.x, d.y]))
+        const pts  = paddedHullPoints(gNodes.map(d => [d.x, d.y]))
         const hull = d3.polygonHull(pts)
         if (!hull) continue
-
         path.attr('d', smoothLine(hull))
-
-        // Place label at the top-centre of the hull
-        const topY   = Math.min(...hull.map(p => p[1]))
-        const centX  = d3.polygonCentroid(hull)[0]
+        const topY  = Math.min(...hull.map(p => p[1]))
+        const centX = d3.polygonCentroid(hull)[0]
         label.attr('x', centX).attr('y', topY - 5)
       }
     })
@@ -292,11 +327,27 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
     return () => sim.stop()
   }, [buildGraph, onNoteClick])
 
+  // ── Derive display data (no D3 side-effects) ─────────────────────────────────
   const { nodes, links } = buildGraph()
   const presentSources   = [...new Set(nodes.map(n => n.source))]
 
+  const filteredCollections = allCollections.filter(c =>
+    c.name.toLowerCase().includes(collSearch.toLowerCase())
+  )
+
+  function toggleType(type) {
+    setVisibleTypes(prev => ({ ...prev, [type]: !prev[type] }))
+  }
+
+  function toggleCollection(key) {
+    setHullCollections(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    )
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div ref={containerRef} className="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
       {/* Header bar */}
       <div className="px-4 py-2 border-b border-slate-100 bg-white flex items-center justify-between flex-shrink-0 gap-4">
@@ -310,47 +361,15 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
           </span>
         </div>
 
-        {/* Sliders */}
-        <div className="flex items-center gap-4 flex-1">
-          {/* Selective clustering */}
-          <div className="flex items-center gap-2 flex-1 max-w-[220px]">
-            <Icon name="grain" className="text-[14px] text-slate-400 flex-shrink-0" />
-            <span className="text-[11px] text-slate-500 flex-shrink-0 whitespace-nowrap">Selective</span>
-            <input
-              type="range" min="0" max="1" step="0.05"
-              value={clusterStrength}
-              onChange={e => setClusterStrength(parseFloat(e.target.value))}
-              className="flex-1 accent-indigo-500 cursor-pointer"
-              title={`Selective clustering: ${Math.round(clusterStrength * 100)}%`}
-            />
-            <span className="text-[11px] text-slate-400 w-7 text-right flex-shrink-0 tabular-nums">
-              {Math.round(clusterStrength * 100)}%
-            </span>
-          </div>
-
-          {/* Global gravity */}
-          <div className="flex items-center gap-2 flex-1 max-w-[220px]">
-            <Icon name="filter_center_focus" className="text-[14px] text-slate-400 flex-shrink-0" />
-            <span className="text-[11px] text-slate-500 flex-shrink-0 whitespace-nowrap">Gravity</span>
-            <input
-              type="range" min="0" max="1" step="0.05"
-              value={gravityStrength}
-              onChange={e => setGravityStrength(parseFloat(e.target.value))}
-              className="flex-1 accent-indigo-500 cursor-pointer"
-              title={`Global gravity: ${Math.round(gravityStrength * 100)}%`}
-            />
-            <span className="text-[11px] text-slate-400 w-7 text-right flex-shrink-0 tabular-nums">
-              {Math.round(gravityStrength * 100)}%
-            </span>
-          </div>
-        </div>
-
         {/* Legend + tip */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             {presentSources.map(src => (
               <div key={src} className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full" style={{ background: SOURCE_COLOR[src] }} />
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: SOURCE_COLOR[src] }}
+                />
                 <span className="text-[10px] text-slate-500">{SOURCE_LABEL[src]}</span>
               </div>
             ))}
@@ -361,7 +380,7 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
         </div>
       </div>
 
-      {/* Hovered node indicator — bottom left */}
+      {/* Hovered node tooltip — bottom left */}
       {hoveredNode && (
         <div
           className="absolute z-50 bg-slate-800 text-white text-[11px] rounded-md px-2 py-1 pointer-events-none"
@@ -384,11 +403,218 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
           </div>
         </div>
       ) : (
-        <svg
-          ref={svgRef}
-          className="flex-1 w-full h-full"
-          style={{ background: 'radial-gradient(ellipse at center, #f8fafc 0%, #f1f5f9 100%)' }}
-        />
+        /* SVG area — relative so the options panel can be absolutely positioned */
+        <div ref={svgWrapperRef} className="flex-1 relative overflow-hidden">
+          <svg
+            ref={svgRef}
+            className="w-full h-full"
+            style={{ background: 'radial-gradient(ellipse at center, #f8fafc 0%, #f1f5f9 100%)' }}
+          />
+
+          {/* ── Options panel — top-right overlay ─────────────────────────── */}
+          <div className="absolute top-3 right-3 z-10 flex flex-col items-end">
+
+            {/* Toggle button */}
+            <button
+              onClick={() => setPanelOpen(o => !o)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium shadow-sm border transition-all ${
+                panelOpen
+                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                  : 'bg-white/90 backdrop-blur border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+              title="Graph options"
+            >
+              <Icon name="tune" className="text-[14px]" />
+              Options
+              <Icon name={panelOpen ? 'expand_less' : 'expand_more'} className="text-[13px]" />
+            </button>
+
+            {/* Collapsible panel */}
+            {panelOpen && (
+              <div className="mt-1.5 bg-white/95 backdrop-blur border border-slate-200 rounded-xl shadow-xl p-4 w-72 flex flex-col gap-4">
+
+                {/* ── Physics ───────────────────────────────────────────── */}
+                <div>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
+                    Physics
+                  </p>
+
+                  {/* Selective gravity */}
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <Icon name="grain" className="text-[13px] text-slate-400 flex-shrink-0" />
+                    <span className="text-[11px] text-slate-600 flex-shrink-0 w-20">Selective</span>
+                    <input
+                      type="range" min="0" max="1" step="0.05"
+                      value={clusterStrength}
+                      onChange={e => setClusterStrength(parseFloat(e.target.value))}
+                      className="flex-1 accent-indigo-500 cursor-pointer"
+                      title={`Selective clustering: ${Math.round(clusterStrength * 100)}%`}
+                    />
+                    <span className="text-[11px] text-slate-400 w-7 text-right tabular-nums flex-shrink-0">
+                      {Math.round(clusterStrength * 100)}%
+                    </span>
+                  </div>
+
+                  {/* Overall gravity */}
+                  <div className="flex items-center gap-2">
+                    <Icon name="filter_center_focus" className="text-[13px] text-slate-400 flex-shrink-0" />
+                    <span className="text-[11px] text-slate-600 flex-shrink-0 w-20">Gravity</span>
+                    <input
+                      type="range" min="0" max="1" step="0.05"
+                      value={gravityStrength}
+                      onChange={e => setGravityStrength(parseFloat(e.target.value))}
+                      className="flex-1 accent-indigo-500 cursor-pointer"
+                      title={`Global gravity: ${Math.round(gravityStrength * 100)}%`}
+                    />
+                    <span className="text-[11px] text-slate-400 w-7 text-right tabular-nums flex-shrink-0">
+                      {Math.round(gravityStrength * 100)}%
+                    </span>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100" />
+
+                {/* ── Show ──────────────────────────────────────────────── */}
+                <div>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
+                    Show
+                  </p>
+                  <div className="grid grid-cols-2 gap-y-2 gap-x-3">
+                    {(['library', 'paper', 'website', 'github']).map(type => (
+                      <label key={type} className="flex items-center gap-2 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={!!visibleTypes[type]}
+                          onChange={() => toggleType(type)}
+                          className="accent-indigo-500 cursor-pointer w-3.5 h-3.5"
+                        />
+                        <div
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ background: SOURCE_COLOR[type] }}
+                        />
+                        <span className="text-[11px] text-slate-600 group-hover:text-slate-800 transition-colors">
+                          {SOURCE_LABEL[type]}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100" />
+
+                {/* ── Hull Collections ──────────────────────────────────── */}
+                <div ref={collDropRef}>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                      Hull Collections
+                    </p>
+                    {hullCollections.length > 0 && (
+                      <button
+                        onClick={() => { setHullCollections([]); setCollSearch('') }}
+                        className="text-[10px] text-indigo-500 hover:text-indigo-700 transition-colors"
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Selected collection chips */}
+                  {hullCollections.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {hullCollections.map(key => {
+                        const coll = allCollections.find(c => c.key === key)
+                        if (!coll) return null
+                        return (
+                          <span
+                            key={key}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                            style={{
+                              background: SOURCE_COLOR[coll.source] + '1a',
+                              color:      SOURCE_COLOR[coll.source],
+                              border:     `1px solid ${SOURCE_COLOR[coll.source]}40`,
+                            }}
+                          >
+                            {coll.name.length > 22 ? coll.name.slice(0, 20) + '…' : coll.name}
+                            <button
+                              onClick={() => toggleCollection(key)}
+                              className="ml-0.5 leading-none hover:opacity-60 transition-opacity"
+                              title={`Remove ${coll.name}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Autocomplete input + dropdown */}
+                  <div className="relative">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder={
+                          hullCollections.length === 0
+                            ? 'All collections shown…'
+                            : 'Add another…'
+                        }
+                        value={collSearch}
+                        onChange={e => { setCollSearch(e.target.value); setCollDropOpen(true) }}
+                        onFocus={() => setCollDropOpen(true)}
+                        className="w-full text-[11px] px-2.5 pr-7 py-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-300 focus:border-indigo-300 transition"
+                      />
+                      <button
+                        onMouseDown={e => { e.preventDefault(); setCollDropOpen(o => !o) }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                        tabIndex={-1}
+                      >
+                        <Icon
+                          name={collDropOpen ? 'expand_less' : 'expand_more'}
+                          className="text-[15px]"
+                        />
+                      </button>
+                    </div>
+
+                    {/* Dropdown list */}
+                    {collDropOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto z-20">
+                        {filteredCollections.length === 0 ? (
+                          <p className="text-[11px] text-slate-400 px-3 py-2">No collections found</p>
+                        ) : (
+                          filteredCollections.map(coll => (
+                            <label
+                              key={coll.key}
+                              className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-slate-50 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={hullCollections.includes(coll.key)}
+                                onChange={() => toggleCollection(coll.key)}
+                                className="accent-indigo-500 w-3.5 h-3.5 cursor-pointer flex-shrink-0"
+                              />
+                              <div
+                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                style={{ background: SOURCE_COLOR[coll.source] }}
+                              />
+                              <span className="text-[11px] text-slate-600 truncate">{coll.name}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
+                    {hullCollections.length === 0
+                      ? 'All hull boundaries visible'
+                      : `${hullCollections.length} collection${hullCollections.length > 1 ? 's' : ''} selected`}
+                  </p>
+                </div>
+
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
