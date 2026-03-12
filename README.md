@@ -28,6 +28,12 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Authors** — first-class author entities with fuzzy name matching across papers
 - **Activity feed** — full audit trail of agent and human actions
 - **LLM configuration** — per-role model selection (chat, notes, metadata, agent, embeddings) configurable at runtime from the settings page
+- **Keyboard shortcut help overlay** — press `?` anywhere in the Library to display a compact modal listing all active keyboard shortcuts (`j`/`k`, `Enter`, `Escape`, status keys, etc.)
+- **⌘K / Ctrl+K global search shortcut** — focuses the Library search box from anywhere in the app
+- **Clickable Dashboard triage cards** — Inbox / To Read / Read stat cards navigate directly to the filtered library view on click
+- **Editable tags for websites and GitHub repos** — tag chip editor available on all item types in detail panels, matching the existing paper tag editing experience
+- **Collections picker for GitHub repos** — GitHub repo detail panels now include the same collections picker available for papers and websites
+- **Export BibTeX from sidebar collection context menu** — the collection right-click menu includes an "Export BibTeX" action, making citation export accessible without opening the Library
 
 ## Tech Stack
 

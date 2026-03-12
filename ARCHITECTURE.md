@@ -115,7 +115,7 @@ The frontend is a React SPA with React Router v6 and Tailwind CSS.
 
 **`hooks/useDragResize.js`** — Custom hook for drag-to-resize panels. Used in the Paper, Website, GitHubRepo, and LibraryNotes pages to resize the split-pane layouts.
 
-**`components/layout/`** — The app shell: `Layout.jsx` (sidebar + header + outlet), `Sidebar.jsx` (library switcher, collections tree with drag-drop), `Header.jsx` (search bar, Quick Add modal with localStorage persistence).
+**`components/layout/`** — The app shell: `Layout.jsx` (sidebar + header + outlet), `Sidebar.jsx` (library switcher, collections tree with drag-drop, collection context menu with "Export BibTeX" action), `Header.jsx` (search bar with ⌘K/Ctrl+K global keyboard shortcut, Quick Add modal with localStorage persistence).
 
 **`components/`** — Shared UI components used across pages:
 
@@ -123,17 +123,17 @@ The frontend is a React SPA with React Router v6 and Tailwind CSS.
 - `WikiLinkExtension.js` — Custom tiptap extension that renders `[[note-name]]` syntax as clickable blue links. Provides autocomplete suggestions from existing notes and fires a callback on click so the notes panel can navigate to the linked file.
 - `NoteGraphView.jsx` — D3 force-directed graph of all notes in the library, with edges representing `[[wiki-link]]` connections between notes. Nodes are color-coded by source type (library, paper, website, GitHub). Used in the Library Notes IDE (`/library/notes`).
 - `CopilotPanel.jsx` — AI chat panel that suggests diffs to notes. Generic across papers, websites, and GitHub repos.
-- `PaperInfoPanel.jsx` — Paper metadata editor with author chips (drag-reorder, inline edit, comma-paste split) and a collections picker. Exports reusable `EditableField`, `EditableTextArea`, `NamedLinks`, and `statusConfig` used by other detail pages.
+- `PaperInfoPanel.jsx` — Paper metadata editor with author chips (drag-reorder, inline edit, comma-paste split) and a collections picker. Exports reusable `EditableField`, `EditableTextArea`, `NamedLinks`, `TagChips`, and `statusConfig` used by other detail pages; `CollectionsPicker` and `AuthorChips` are also exported and shared across paper, website, and GitHub repo detail panels.
 - `WindowModal.jsx` — Reusable windowed modal shell with minimize/fullscreen/close and docked minimization. Used by Quick Add, collection creation, bulk-action modals, and agent config.
 
 **`pages/`** — One component per route:
 
-- `Library.jsx` — Unified paper/website/GitHub repo table with multi-select, bulk actions, filter panel, and inline detail panels.
+- `Library.jsx` — Unified paper/website/GitHub repo table with multi-select, bulk actions, filter panel, and inline detail panels. `WebsiteDetail` and `GitHubRepoDetail` sub-components include full `CollectionsPicker` and `TagChips` parity with papers. Includes a keyboard shortcut help overlay (`?` key) listing all active shortcuts.
 - `Paper.jsx` — Three-pane layout: PDF viewer + Notes IDE + AI Copilot.
 - `Website.jsx` — Three-pane layout: live iframe + Notes IDE + AI Copilot + Details panel.
 - `GitHubRepo.jsx` — Two-pane layout: repo overview (metadata, topics, description/abstract, links) + tabbed panel with Details and Notes IDE + AI Copilot.
 - `LibraryNotes.jsx` — Library-level Notes IDE with a file tree covering all notes across the library, a full-featured tiptap editor, and an optional D3 `NoteGraphView` sidebar for visualizing wiki-link connections.
-- `Dashboard.jsx` — Activity feed, run stats, papers-over-time chart (Recharts).
+- `Dashboard.jsx` — Activity feed, run stats, papers-over-time chart (Recharts). Triage health stat cards (Inbox / To Read / Read) are clickable and navigate to the corresponding filtered library view.
 - `Agents.jsx` — Workflow catalog and active runs with live log viewer.
 - `Proposals.jsx` — Human-in-the-loop approve/reject with diff view.
 - `Authors.jsx` / `AuthorDetail.jsx` — Author list and single author view.
