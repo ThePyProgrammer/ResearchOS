@@ -127,6 +127,14 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
       }
     }
 
+    // Degree = total connections (in + out) per node
+    const degree = Object.fromEntries(nodes.map(n => [n.id, 0]))
+    for (const l of links) {
+      degree[l.source] = (degree[l.source] || 0) + 1
+      degree[l.target] = (degree[l.target] || 0) + 1
+    }
+    for (const n of nodes) n.degree = degree[n.id] || 0
+
     return { nodes, links }
   }, [allNotes, visibleTypes, hullCollections, sourceKeyCollections])
 
@@ -214,6 +222,9 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
       .attr('marker-end', 'url(#wiki-arrow)')
 
     // ── Nodes ─────────────────────────────────────────────────────────────────
+    const maxDegree = Math.max(1, ...nodes.map(d => d.degree))
+    const nodeRadius = d3.scaleSqrt().domain([0, maxDegree]).range([6, 16])
+
     const nodeEls = g.append('g').attr('class', 'nodes')
       .selectAll('g').data(nodes).join('g')
       .attr('cursor', 'pointer')
@@ -227,12 +238,12 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
       .on('end',   (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null })
     )
 
-    nodeEls.append('circle').attr('r', 14).attr('fill', 'transparent')
-    nodeEls.append('circle').attr('r', 9)
+    nodeEls.append('circle').attr('r', d => nodeRadius(d.degree) + 5).attr('fill', 'transparent')
+    nodeEls.append('circle').attr('r', d => nodeRadius(d.degree))
       .attr('fill',   d => SOURCE_COLOR[d.source] || SOURCE_COLOR.library)
       .attr('stroke', '#fff').attr('stroke-width', 2.5)
     nodeEls.append('text').text(d => d.name)
-      .attr('x', 0).attr('y', 22)
+      .attr('x', 0).attr('y', d => nodeRadius(d.degree) + 13)
       .attr('font-size',   '11px')
       .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
       .attr('fill',        '#334155')
@@ -275,7 +286,7 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
       .force('link',      d3.forceLink(links).id(d => d.id).distance(100).strength(0.6))
       .force('charge',    d3.forceManyBody().strength(-250))
       .force('center',    d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide(d => Math.max(32, d.name.length * 3.8)))
+      .force('collision', d3.forceCollide(d => nodeRadius(d.degree) + Math.max(20, d.name.length * 3.2)))
       .force('cluster',   clusterForce)
       .force('gravity',   gravityForce)
 
