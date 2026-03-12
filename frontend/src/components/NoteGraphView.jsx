@@ -199,11 +199,36 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
     const svgEl = d3.select(svgRef.current)
     svgEl.selectAll('*').remove()
 
+    // ── Defs: arrow marker + dot-grid pattern ─────────────────────────────────
+    const defs = svgEl.append('defs')
+
+    defs.append('marker')
+      .attr('id', 'wiki-arrow').attr('viewBox', '0 -5 10 10')
+      .attr('refX', 22).attr('refY', 0)
+      .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
+      .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#cbd5e1')
+
+    const dotPattern = defs.append('pattern')
+      .attr('id', 'dot-grid')
+      .attr('patternUnits', 'userSpaceOnUse')
+      .attr('width', 24).attr('height', 24)
+    dotPattern.append('circle')
+      .attr('cx', 12).attr('cy', 12).attr('r', 1)
+      .attr('fill', '#cbd5e1')
+
+    // Background rect — sits behind the zoom group, pattern moves with zoom
+    svgEl.append('rect')
+      .attr('width', width).attr('height', height)
+      .attr('fill', 'url(#dot-grid)')
+
     const g = svgEl.append('g')
 
     const zoom = d3.zoom()
       .scaleExtent([0.1, 5])
-      .on('zoom', ({ transform }) => g.attr('transform', transform))
+      .on('zoom', ({ transform }) => {
+        g.attr('transform', transform)
+        dotPattern.attr('patternTransform', transform)
+      })
     svgEl.call(zoom)
 
     function fitView() {
@@ -222,13 +247,6 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
           .scale(scale)
       )
     }
-
-    // Arrow marker
-    svgEl.append('defs').append('marker')
-      .attr('id', 'wiki-arrow').attr('viewBox', '0 -5 10 10')
-      .attr('refX', 22).attr('refY', 0)
-      .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
-      .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#cbd5e1')
 
     // ── Hull layer (behind everything) ────────────────────────────────────────
     const hullLayer = g.append('g').attr('class', 'hulls')
