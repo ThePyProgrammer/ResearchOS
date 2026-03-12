@@ -1657,7 +1657,7 @@ export default function Library() {
     }
   }
 
-  const allTags = useMemo(() => [...new Set(items.flatMap(p => p.tags))].sort(), [items])
+  const allTags = useMemo(() => [...new Set(items.flatMap(p => p.tags || []))].sort(), [items])
   const activeFilterCount = (sourceFilter !== 'all' ? 1 : 0)
     + (pdfFilter !== 'all' ? 1 : 0)
     + (yearFrom || yearTo ? 1 : 0)

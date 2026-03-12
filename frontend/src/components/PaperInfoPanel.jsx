@@ -953,7 +953,7 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate, a
   }
 
   const tagSuggestions = allTags.filter(t =>
-    t.toLowerCase().includes(tagInput.toLowerCase()) &&
+    t && t.toLowerCase().includes(tagInput.toLowerCase()) &&
     !(paper.tags || []).includes(t)
   )
 
