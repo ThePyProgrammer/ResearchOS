@@ -933,9 +933,11 @@ export function CollectionsPicker({ item, onUpdate, updateFn }) {
   )
 }
 
-export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate }) {
+export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate, allTags = [] }) {
   const [paperAuthorLinks, setPaperAuthorLinks] = useState([])
-
+  const [tagInput, setTagInput] = useState('')
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false)
+  const tagContainerRef = useRef(null)
   useEffect(() => {
     if (paper?.id) loadAuthorLinks()
     function onLinksChanged() { loadAuthorLinks() }
@@ -949,6 +951,39 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
       setPaperAuthorLinks(links)
     } catch (_) { /* silently fail — links are optional enrichment */ }
   }
+
+  const tagSuggestions = allTags.filter(t =>
+    t.toLowerCase().includes(tagInput.toLowerCase()) &&
+    !(paper.tags || []).includes(t)
+  )
+
+  async function saveTags(newTags) {
+    try {
+      const updated = await papersApi.update(paper.id, { tags: newTags })
+      onPaperUpdate?.(updated)
+    } catch (err) {
+      console.error('Failed to update tags:', err)
+    }
+  }
+
+  function addTag(tag) {
+    const trimmed = tag.trim()
+    if (!trimmed || (paper.tags || []).includes(trimmed)) return
+    saveTags([...(paper.tags || []), trimmed])
+    setTagInput('')
+    setShowTagSuggestions(false)
+  }
+
+  useEffect(() => {
+    if (!showTagSuggestions) return
+    const handleClickOutside = (e) => {
+      if (tagContainerRef.current && !tagContainerRef.current.contains(e.target)) {
+        setShowTagSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showTagSuggestions])
 
   async function handleStatusChange(newStatus) {
     try {
@@ -1062,23 +1097,55 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
       <CitationPanel paper={paper} />
 
       {/* Tags */}
-      {paper.tags?.length > 0 && (
-        <div>
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
-          <div className="flex flex-wrap gap-1.5">
-            {paper.tags.map(tag => (
-              <span
-                key={tag}
-                className={`text-[11px] px-2 py-0.5 rounded-full ${
-                  paper.source === 'agent' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'
-                }`}
+      <div>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
+        <div className="flex flex-wrap gap-1.5 items-center">
+          {(paper.tags || []).map(tag => (
+            <span
+              key={tag}
+              className={`group flex items-center gap-0.5 text-[11px] pl-2 pr-1 py-0.5 rounded-full ${
+                paper.source === 'agent' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {tag}
+              <button
+                onClick={() => saveTags((paper.tags || []).filter(t => t !== tag))}
+                className="text-slate-400 hover:text-red-500 transition-colors leading-none"
+                title="Remove tag"
               >
-                {tag}
-              </span>
-            ))}
+                <Icon name="close" className="text-[10px]" />
+              </button>
+            </span>
+          ))}
+          {/* Inline add input */}
+          <div className="relative" ref={tagContainerRef}>
+            <input
+              value={tagInput}
+              onChange={e => { setTagInput(e.target.value); setShowTagSuggestions(true) }}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && tagInput.trim()) { e.preventDefault(); addTag(tagInput.trim()) }
+                else if (e.key === 'Escape') { setShowTagSuggestions(false); setTagInput('') }
+              }}
+              onFocus={() => setShowTagSuggestions(true)}
+              placeholder="Add tag…"
+              className="text-[11px] px-2 py-0.5 rounded-full border border-dashed border-slate-300 bg-transparent text-slate-500 placeholder-slate-300 focus:outline-none focus:border-blue-400 w-20 focus:w-28 transition-all"
+            />
+            {showTagSuggestions && tagSuggestions.length > 0 && (
+              <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg py-1 max-h-36 overflow-y-auto min-w-[120px]">
+                {tagSuggestions.map(s => (
+                  <button
+                    key={s}
+                    onMouseDown={e => { e.preventDefault(); addTag(s) }}
+                    className="flex items-center w-full px-3 py-1 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Agent provenance */}
       {paper.source === 'agent' && paper.agentRun && (

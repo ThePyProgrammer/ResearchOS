@@ -245,7 +245,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
 }
 
 
-function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete, width }) {
+function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete, width, allTags = [] }) {
   const [tab, setTab] = useState('info')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -506,6 +506,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete, 
             paper={paper}
             onStatusChange={onStatusChange}
             onPaperUpdate={onPaperUpdate}
+            allTags={allTags}
           />
         )}
 
@@ -2229,6 +2230,7 @@ export default function Library() {
           onPaperUpdate={handleItemUpdate}
           onDelete={handleDelete}
           width={detailWidth}
+          allTags={allTags}
         />
       )}
 
