@@ -151,34 +151,6 @@ function RunDetails({ details }) {
         </Link>
       </div>
 
-      {details.cost && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-slate-800 mb-3">Budget & API Usage</h3>
-          <div className="space-y-3">
-            {Object.entries(details.cost).filter(([k]) => k !== 'total').map(([key, item]) => (
-              <div key={key}>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-600">{item.label}</span>
-                  <span className="font-semibold text-slate-800">{item.amount}</span>
-                </div>
-                <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-400 rounded-full"
-                    style={{ width: `${item.pct || 0}%` }}
-                  />
-                </div>
-                {item.tokens && <p className="text-[10px] text-slate-400 mt-0.5">{item.tokens}</p>}
-                {item.calls && <p className="text-[10px] text-slate-400 mt-0.5">{item.calls}{item.limit ? ` · ${item.limit}` : ''}</p>}
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
-            <span className="text-xs font-semibold text-slate-600">Total Run Cost</span>
-            <span className="text-sm font-bold text-emerald-600">{details.cost.total}</span>
-          </div>
-        </div>
-      )}
-
       {details.trace && (
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <h3 className="text-sm font-semibold text-slate-800 mb-3">Run Trace</h3>

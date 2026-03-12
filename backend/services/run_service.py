@@ -14,7 +14,8 @@ _TABLE = "runs"
 def list_runs(library_id: Optional[str] = None) -> list[Run]:
     query = get_client().table(_TABLE).select("*")
     if library_id:
-        query = query.eq("library_id", library_id)
+        # Include runs scoped to this library AND legacy runs with no library_id
+        query = query.or_(f"library_id.eq.{library_id},library_id.is.null")
     result = query.execute()
     return [Run.model_validate(r) for r in result.data]
 

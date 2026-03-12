@@ -351,6 +351,41 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Budget & API Usage */}
+      {!loading && runs.some(r => r.cost) && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mt-8">
+          <h2 className="text-base font-semibold text-slate-800 mb-4">Budget & API Usage</h2>
+          <div className="space-y-6">
+            {runs.filter(r => r.cost).map(run => (
+              <div key={run.id}>
+                {runs.filter(r => r.cost).length > 1 && (
+                  <p className="text-xs font-medium text-slate-500 mb-3">{run.workflowName}</p>
+                )}
+                <div className="space-y-3">
+                  {Object.entries(run.cost).filter(([k]) => k !== 'total').map(([key, item]) => (
+                    <div key={key}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-600">{item.label}</span>
+                        <span className="font-semibold text-slate-800">{item.amount}</span>
+                      </div>
+                      <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-400 rounded-full" style={{ width: `${item.pct || 0}%` }} />
+                      </div>
+                      {item.tokens && <p className="text-[10px] text-slate-400 mt-0.5">{item.tokens}</p>}
+                      {item.calls && <p className="text-[10px] text-slate-400 mt-0.5">{item.calls}{item.limit ? ` · ${item.limit}` : ''}</p>}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
+                  <span className="text-xs font-semibold text-slate-600">Total Run Cost</span>
+                  <span className="text-sm font-bold text-emerald-600">{run.cost.total}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
