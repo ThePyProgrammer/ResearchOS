@@ -1715,6 +1715,13 @@ export default function Library() {
   filteredRef.current = filtered
   selectedItemRef.current = selectedItem
 
+  // Tags visible in the current view, sorted by frequency descending — drives the filter bar
+  const visibleTagCounts = useMemo(() => {
+    const counts = new Map()
+    filtered.forEach(p => (p.tags || []).forEach(t => counts.set(t, (counts.get(t) || 0) + 1)))
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]) // [[tag, count], ...]
+  }, [filtered])
+
   function toggleSort(key) {
     if (sortKey === key) {
       if (sortDir === 'asc') setSortDir('desc')
@@ -1926,7 +1933,7 @@ export default function Library() {
               </div>
 
               {/* Tags */}
-              {allTags.length > 0 && (
+              {visibleTagCounts.length > 0 && (
                 <div className="flex items-start gap-3">
                   <div className="flex items-center gap-1.5 w-14 flex-shrink-0 pt-1">
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tags</span>
@@ -1941,7 +1948,7 @@ export default function Library() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {allTags.map(tag => (
+                    {visibleTagCounts.map(([tag, count]) => (
                       <button
                         key={tag}
                         onClick={() => toggleTag(tag)}
@@ -1951,7 +1958,7 @@ export default function Library() {
                             : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
                         }`}
                       >
-                        {tag} ({items.filter(i => i.tags?.includes(tag)).length})
+                        {tag} ({count})
                       </button>
                     ))}
                   </div>
