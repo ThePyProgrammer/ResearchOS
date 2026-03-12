@@ -495,6 +495,9 @@ export default function LibraryNotes() {
   // ── Template picker: stores pending file-creation data while modal is open ─
   const [templatePickerFor, setTemplatePickerFor] = useState(null)
 
+  // ── Content search ─────────────────────────────────────────────────────────
+  const [noteSearch, setNoteSearch] = useState('')
+
   // ── Creation / rename / context menu ──────────────────────────────────────
   const [creating, setCreating] = useState(null)
   const [newName, setNewName] = useState('')
@@ -508,6 +511,33 @@ export default function LibraryNotes() {
     const tab = openTabs.find(t => t.noteId === activeTabId)
     return tab ? { noteId: tab.noteId, source: tab.source } : null
   }, [activeTabId, openTabs])
+
+  // ── Note content search helpers ────────────────────────────────────────────
+  function stripHtml(html) {
+    if (!html) return ''
+    return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+      .replace(/\s+/g, ' ').trim()
+  }
+
+  function getMatchSnippet(text, query) {
+    const lc = text.toLowerCase()
+    const qi = lc.indexOf(query.toLowerCase())
+    if (qi === -1) return null
+    const start = Math.max(0, qi - 50)
+    const end = Math.min(text.length, qi + query.length + 70)
+    return {
+      before: (start > 0 ? '…' : '') + text.slice(start, qi),
+      match: text.slice(qi, qi + query.length),
+      after: text.slice(qi + query.length, end) + (end < text.length ? '…' : ''),
+    }
+  }
+
+  function splitHighlight(text, query) {
+    const li = text.toLowerCase().indexOf(query.toLowerCase())
+    if (li === -1) return { before: text, match: '', after: '' }
+    return { before: text.slice(0, li), match: text.slice(li, li + query.length), after: text.slice(li + query.length) }
+  }
 
   // ── Flat list of all loaded notes (for wiki-link suggestions + graph) ──────
   const allLoadedNotes = useMemo(() => {
@@ -531,6 +561,25 @@ export default function LibraryNotes() {
     }
     return result
   }, [libraryNotes, itemNotes])
+
+  // ── Search results: flat filtered list matching name or content ────────────
+  const noteSearchResults = useMemo(() => {
+    const q = noteSearch.trim()
+    if (q.length < 2) return []
+    const qLow = q.toLowerCase()
+    return allLoadedNotes
+      .filter(n => n.type === 'file')
+      .filter(n => {
+        const nameMatch = n.name.toLowerCase().includes(qLow)
+        const contentMatch = stripHtml(n.content).toLowerCase().includes(qLow)
+        return nameMatch || contentMatch
+      })
+      .map(n => {
+        const plain = stripHtml(n.content)
+        return { ...n, snippet: getMatchSnippet(plain, q) }
+      })
+      .slice(0, 50)
+  }, [allLoadedNotes, noteSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load initial data ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -927,6 +976,28 @@ export default function LibraryNotes() {
           </div>
         </div>
 
+        {/* Search bar */}
+        <div className="px-2 py-1.5 border-b border-slate-200 bg-white flex-shrink-0">
+          <div className="relative flex items-center">
+            <Icon name="search" className="absolute left-1.5 text-[13px] text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={noteSearch}
+              onChange={e => setNoteSearch(e.target.value)}
+              placeholder="Search notes…"
+              className="w-full pl-6 pr-5 py-0.5 text-[11px] bg-slate-100 border border-transparent rounded focus:outline-none focus:border-blue-400 focus:bg-white transition-colors placeholder-slate-400"
+            />
+            {noteSearch && (
+              <button
+                onClick={() => setNoteSearch('')}
+                className="absolute right-1.5 text-slate-400 hover:text-slate-600"
+              >
+                <Icon name="close" className="text-[12px]" />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Tree body */}
         <div className="flex-1 overflow-y-auto py-1 px-1">
           {loading ? (
@@ -936,6 +1007,50 @@ export default function LibraryNotes() {
             </div>
           ) : error ? (
             <p className="px-3 py-4 text-[11px] text-red-500">{error}</p>
+          ) : noteSearch.trim().length >= 2 ? (
+            /* ── Search results ── */
+            noteSearchResults.length === 0 ? (
+              <div className="px-3 py-8 text-center">
+                <Icon name="search_off" className="text-[28px] text-slate-300 mb-2" />
+                <p className="text-[11px] text-slate-400">No notes match "{noteSearch.trim()}"</p>
+              </div>
+            ) : (
+              <div className="py-1">
+                <p className="px-2 pt-1 pb-1 text-[9px] font-semibold uppercase tracking-widest text-slate-400">
+                  {noteSearchResults.length} result{noteSearchResults.length !== 1 ? 's' : ''}
+                </p>
+                {noteSearchResults.map(note => {
+                  const { before: nb, match: nm, after: na } = splitHighlight(note.name, noteSearch.trim())
+                  const isActive = selected?.noteId === note.id
+                  return (
+                    <button
+                      key={note.id}
+                      onClick={() => openNoteInTab(note.id, note.sourceKey)}
+                      className={`w-full text-left px-2 py-1.5 rounded mb-0.5 transition-colors ${
+                        isActive ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1 min-w-0">
+                        <Icon name="description" className="text-[12px] flex-shrink-0 text-slate-400" />
+                        <span className="text-[11px] font-medium truncate">
+                          {nb}
+                          {nm && <mark className="bg-yellow-200 text-inherit rounded-sm px-0">{nm}</mark>}
+                          {na}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-slate-400 truncate pl-4 mt-0.5">{note.sourceName || 'Library'}</p>
+                      {note.snippet && (
+                        <p className="text-[10px] text-slate-500 pl-4 mt-0.5 leading-relaxed line-clamp-2">
+                          {note.snippet.before}
+                          <mark className="bg-yellow-200 text-inherit rounded-sm px-0">{note.snippet.match}</mark>
+                          {note.snippet.after}
+                        </p>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )
           ) : (
             <>
               {/* ── Library notes ── */}
