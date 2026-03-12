@@ -197,6 +197,42 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Status Breakdown */}
+      {!loading && papers.length > 0 && (() => {
+        const inbox   = papers.filter(p => p.status === 'inbox').length
+        const toRead  = papers.filter(p => p.status === 'to-read').length
+        const read    = papers.filter(p => p.status === 'read').length
+        const total   = papers.length
+        const pct     = n => total ? Math.round((n / total) * 100) : 0
+        return (
+          <div className="bg-white rounded-xl border border-slate-200 p-5 mb-8">
+            <h2 className="text-base font-semibold text-slate-800 mb-4">Triage Health</h2>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              {[
+                { label: 'Inbox',   value: inbox,  pct: pct(inbox),  color: 'text-blue-600',   bg: 'bg-blue-50',   bar: 'bg-blue-400'  },
+                { label: 'To Read', value: toRead, pct: pct(toRead), color: 'text-amber-600',  bg: 'bg-amber-50',  bar: 'bg-amber-400' },
+                { label: 'Read',    value: read,   pct: pct(read),   color: 'text-emerald-600', bg: 'bg-emerald-50', bar: 'bg-emerald-400' },
+              ].map(({ label, value, pct: p, color, bg }) => (
+                <div key={label} className={`${bg} rounded-lg p-3 text-center`}>
+                  <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString()}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+                  <p className="text-xs text-slate-400">{p}%</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
+              {[
+                { pct: pct(inbox),  bar: 'bg-blue-400'    },
+                { pct: pct(toRead), bar: 'bg-amber-400'   },
+                { pct: pct(read),   bar: 'bg-emerald-400' },
+              ].filter(s => s.pct > 0).map(({ pct: p, bar }, i) => (
+                <div key={i} className={`${bar} rounded-full`} style={{ width: `${p}%` }} />
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Papers over time */}
       {chartData.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 mb-8">
