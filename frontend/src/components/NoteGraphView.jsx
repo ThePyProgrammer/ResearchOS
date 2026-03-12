@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import * as d3 from 'd3'
 import { extractWikiLinks } from './WikiLinkExtension'
 
@@ -37,13 +37,12 @@ function paddedHullPoints(nodePoints, radius = 30, resolution = 10) {
 // Smooth closed path through hull vertices using Catmull-Rom
 const smoothLine = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5))
 
-export default function NoteGraphView({ allNotes, onNoteClick }) {
+export default function NoteGraphView({ allNotes, collections = [], sourceKeyCollections = {}, onNoteClick }) {
   const svgRef          = useRef(null)
   const svgWrapperRef   = useRef(null)   // used for D3 size measurement
   const simRef          = useRef(null)
   const clusterRef      = useRef(0.3)    // selective: same-source pull
   const gravityRef      = useRef(0.5)    // global: all-nodes pull toward centre
-  const hullEntriesRef  = useRef([])     // live D3 hull elements; updated after each rebuild
   const collDropRef     = useRef(null)   // for outside-click detection on collection dropdown
 
   const [hoveredNode,     setHoveredNode]     = useState(null)
@@ -79,33 +78,17 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
     if (simRef.current) simRef.current.alpha(0.35).restart()
   }, [gravityStrength])
 
-  // ── Hull visibility: update SVG elements directly via ref (no rebuild) ───────
-  useEffect(() => {
-    for (const { sourceKey, path, label } of hullEntriesRef.current) {
-      const visible = hullCollections.length === 0 || hullCollections.includes(sourceKey)
-      path.attr('display',  visible ? null : 'none')
-      label.attr('display', visible ? null : 'none')
-    }
-  }, [hullCollections])
-
-  // ── All distinct source groups for the collections autocomplete ──────────────
-  const allCollections = useMemo(() => {
-    const seen = new Map()
-    for (const n of allNotes) {
-      if (n.type !== 'file') continue
-      const key  = n.sourceKey  ?? n.source ?? 'library'
-      const name = n.sourceName ?? SOURCE_LABEL[n.source] ?? 'Library'
-      const src  = n.source     ?? 'library'
-      if (!seen.has(key)) seen.set(key, { key, name, source: src })
-    }
-    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))
-  }, [allNotes])
-
-  // ── Build graph data (filtered by visibleTypes) ──────────────────────────────
+  // ── Build graph data (filtered by visibleTypes and selected collections) ───────
   const buildGraph = useCallback(() => {
-    const fileNotes = allNotes.filter(n =>
-      n.type === 'file' && (visibleTypes[n.source ?? 'library'] !== false)
-    )
+    const fileNotes = allNotes.filter(n => {
+      if (n.type !== 'file') return false
+      if (visibleTypes[n.source ?? 'library'] === false) return false
+      if (hullCollections.length > 0 && (n.sourceKey ?? n.source ?? 'library') !== 'library') {
+        const collIds = sourceKeyCollections[n.sourceKey ?? n.source ?? 'library'] || []
+        if (!collIds.some(id => hullCollections.includes(id))) return false
+      }
+      return true
+    })
 
     const nameMultiMap = new Map()
     for (const n of fileNotes) {
@@ -145,7 +128,7 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
     }
 
     return { nodes, links }
-  }, [allNotes, visibleTypes])
+  }, [allNotes, visibleTypes, hullCollections, sourceKeyCollections])
 
   // ── D3 render ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -199,7 +182,6 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
       const source   = groupNodes[0].source
       const color    = SOURCE_COLOR[source] || SOURCE_COLOR.library
       const label    = groupNodes[0].sourceName || SOURCE_LABEL[source] || key
-      const visible  = hullCollections.length === 0 || hullCollections.includes(key)
 
       const hullPath = hullLayer.append('path')
         .attr('fill',           color)
@@ -209,7 +191,6 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
         .attr('stroke-width',   1.5)
         .attr('stroke-dasharray', '5,3')
         .attr('stroke-linejoin', 'round')
-        .attr('display', visible ? null : 'none')
 
       const displayLabel = label.length > 32 ? label.slice(0, 30) + '…' : label
 
@@ -222,13 +203,9 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
         .attr('fill-opacity', 0.7)
         .attr('text-anchor',  'middle')
         .attr('pointer-events', 'none')
-        .attr('display', visible ? null : 'none')
 
       hullEntries.push({ sourceKey: key, nodes: groupNodes, path: hullPath, label: hullLabel })
     }
-
-    // Expose to the hullCollections effect so it can toggle visibility without rebuild
-    hullEntriesRef.current = hullEntries
 
     // ── Links ─────────────────────────────────────────────────────────────────
     const linkEls = g.append('g').attr('class', 'links')
@@ -331,7 +308,7 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
   const { nodes, links } = buildGraph()
   const presentSources   = [...new Set(nodes.map(n => n.source))]
 
-  const filteredCollections = allCollections.filter(c =>
+  const filteredCollections = collections.filter(c =>
     c.name.toLowerCase().includes(collSearch.toLowerCase())
   )
 
@@ -521,22 +498,17 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
                   {/* Selected collection chips */}
                   {hullCollections.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-2">
-                      {hullCollections.map(key => {
-                        const coll = allCollections.find(c => c.key === key)
+                      {hullCollections.map(id => {
+                        const coll = collections.find(c => c.id === id)
                         if (!coll) return null
                         return (
                           <span
-                            key={key}
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
-                            style={{
-                              background: SOURCE_COLOR[coll.source] + '1a',
-                              color:      SOURCE_COLOR[coll.source],
-                              border:     `1px solid ${SOURCE_COLOR[coll.source]}40`,
-                            }}
+                            key={id}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200"
                           >
                             {coll.name.length > 22 ? coll.name.slice(0, 20) + '…' : coll.name}
                             <button
-                              onClick={() => toggleCollection(key)}
+                              onClick={() => toggleCollection(id)}
                               className="ml-0.5 leading-none hover:opacity-60 transition-opacity"
                               title={`Remove ${coll.name}`}
                             >
@@ -579,23 +551,22 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
                     {collDropOpen && (
                       <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto z-20">
                         {filteredCollections.length === 0 ? (
-                          <p className="text-[11px] text-slate-400 px-3 py-2">No collections found</p>
+                          <p className="text-[11px] text-slate-400 px-3 py-2">
+                            {collections.length === 0 ? 'No collections in this library' : 'No collections found'}
+                          </p>
                         ) : (
                           filteredCollections.map(coll => (
                             <label
-                              key={coll.key}
+                              key={coll.id}
                               className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-slate-50 cursor-pointer"
                             >
                               <input
                                 type="checkbox"
-                                checked={hullCollections.includes(coll.key)}
-                                onChange={() => toggleCollection(coll.key)}
+                                checked={hullCollections.includes(coll.id)}
+                                onChange={() => toggleCollection(coll.id)}
                                 className="accent-indigo-500 w-3.5 h-3.5 cursor-pointer flex-shrink-0"
                               />
-                              <div
-                                className="w-2 h-2 rounded-full flex-shrink-0"
-                                style={{ background: SOURCE_COLOR[coll.source] }}
-                              />
+                              <Icon name="folder" className="text-[13px] text-amber-500 flex-shrink-0" />
                               <span className="text-[11px] text-slate-600 truncate">{coll.name}</span>
                             </label>
                           ))
