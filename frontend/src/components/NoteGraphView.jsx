@@ -6,6 +6,23 @@ function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
 }
 
+// Persists a single value to localStorage under the given key.
+// Falls back to defaultValue on first load or parse failure.
+function useLocalStorage(key, defaultValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = localStorage.getItem(key)
+      return stored !== null ? JSON.parse(stored) : defaultValue
+    } catch {
+      return defaultValue
+    }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+  }, [key, value])
+  return [value, setValue]
+}
+
 const SOURCE_COLOR = {
   library: '#64748b',
   paper:   '#3b82f6',
@@ -49,13 +66,13 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
   const hullEntriesRef  = useRef([])     // hull {path, label, nodes}   — for search highlight
 
   const [hoveredNode,     setHoveredNode]     = useState(null)
-  const [clusterStrength, setClusterStrength] = useState(0.3)
-  const [gravityStrength, setGravityStrength] = useState(0.5)
+  const [clusterStrength, setClusterStrength] = useLocalStorage('researchos.graph.clusterStrength', 0.3)
+  const [gravityStrength, setGravityStrength] = useLocalStorage('researchos.graph.gravityStrength', 0.5)
 
   // Options panel
-  const [panelOpen,       setPanelOpen]       = useState(false)
-  const [visibleTypes,    setVisibleTypes]    = useState({ library: true, paper: true, website: true, github: true })
-  const [hullCollections, setHullCollections] = useState([])  // empty = all shown
+  const [panelOpen,       setPanelOpen]       = useLocalStorage('researchos.graph.panelOpen',       false)
+  const [visibleTypes,    setVisibleTypes]    = useLocalStorage('researchos.graph.visibleTypes',    { library: true, paper: true, website: true, github: true })
+  const [hullCollections, setHullCollections] = useLocalStorage('researchos.graph.hullCollections', [])
   const [collSearch,      setCollSearch]      = useState('')
   const [collDropOpen,    setCollDropOpen]    = useState(false)
 
