@@ -199,17 +199,26 @@ function NoteTreeNode({ note, allNotes, selectedNoteId, expandedNotes, onSelect,
 // ─── Item type styles ─────────────────────────────────────────────────────────
 const ITEM_STYLES = {
   paper:   { text: 'text-blue-600',   bg: 'hover:bg-blue-50',   activeBg: 'bg-blue-50',   border: 'border-blue-100', icon: 'article',  chevron: 'text-blue-400',   badge: 'bg-blue-100 text-blue-600' },
-  website: { text: 'text-teal-600',   bg: 'hover:bg-teal-50',   activeBg: 'bg-teal-50',   border: 'border-teal-100', icon: 'link',     chevron: 'text-teal-400',   badge: 'bg-teal-100 text-teal-600' },
+  website: { text: 'text-teal-600',   bg: 'hover:bg-teal-50',   activeBg: 'bg-teal-50',   border: 'border-teal-100', icon: 'language',     chevron: 'text-teal-400',   badge: 'bg-teal-100 text-teal-600' },
   github:  { text: 'text-violet-600', bg: 'hover:bg-violet-50', activeBg: 'bg-violet-50', border: 'border-violet-100', icon: 'code',  chevron: 'text-violet-400', badge: 'bg-violet-100 text-violet-600' },
+}
+
+// ─── Tab type icons (used in TabBar and resource viewer header) ───────────────
+const TAB_ICONS = {
+  note:    { name: 'description',    cls: 'text-slate-400' },
+  pdf:     { name: 'picture_as_pdf', cls: 'text-red-400' },
+  website: { name: 'language',       cls: 'text-teal-500' },
+  github:  { name: 'code',           cls: 'text-violet-500' },
 }
 
 // ─── Item folder ──────────────────────────────────────────────────────────────
 function ItemFolder({
   item, itemType, sourceKey,
   notes, loaded, isOpen,
-  selectedNoteId, isActiveSource,
+  selectedNoteId, isActiveSource, activeResourceTabId,
   expandedNotes,
   onToggle, onSelectNote, onToggleNote, onNoteContextMenu, onItemContextMenu,
+  onOpenResource,
   creating, newName, setNewName, onCreateSubmit, onCancelCreate,
 }) {
   const s = ITEM_STYLES[itemType]
@@ -224,13 +233,31 @@ function ItemFolder({
 
   const noteCount = (notes || []).length
 
+  // Derive the resource entry (PDF / website / GitHub repo link)
+  const resourceEntry = (() => {
+    if (itemType === 'paper' && item.pdfUrl) {
+      const tabId = `__resource__pdf:${item.id}`
+      return { tabId, tabType: 'pdf', url: item.pdfUrl, label: 'PDF', icon: 'picture_as_pdf', iconCls: 'text-red-400' }
+    }
+    if (itemType === 'website' && item.url) {
+      const tabId = `__resource__website:${item.id}`
+      return { tabId, tabType: 'website', url: item.url, label: 'Website', icon: 'language', iconCls: 'text-teal-500' }
+    }
+    if (itemType === 'github') {
+      const url = `https://github.com/${item.owner}/${item.repoName}`
+      const tabId = `__resource__github:${item.id}`
+      return { tabId, tabType: 'github', url, label: 'Repository', icon: 'code', iconCls: 'text-violet-500' }
+    }
+    return null
+  })()
+
   return (
     <div>
       <div
         onClick={onToggle}
         onContextMenu={e => { e.preventDefault(); onItemContextMenu(e) }}
         title={title}
-        className={`flex items-center gap-1.5 py-[3px] px-1.5 rounded cursor-pointer text-[12px] transition-colors ${s.bg} ${isActiveSource ? s.activeBg : ''}`}
+        className={`group flex items-center gap-1.5 py-[3px] px-1.5 rounded cursor-pointer text-[12px] transition-colors ${s.bg} ${isActiveSource ? s.activeBg : ''}`}
       >
         <Icon
           name={isOpen ? 'expand_more' : 'chevron_right'}
@@ -239,14 +266,47 @@ function ItemFolder({
         <span className={`inline-flex items-center justify-center w-4 h-4 rounded flex-shrink-0 ${s.badge}`}>
           <Icon name={s.icon} className="text-[11px]" />
         </span>
-        <span className={`flex-1 truncate font-medium ${s.text}`}>{title}</span>
-        {loaded && noteCount > 0 && (
+        <span className={`flex-1 truncate font-medium ${s.text} min-w-0`}>{title}</span>
+        {/* Resource quick-open button — always visible on hover */}
+        {resourceEntry && (
+          <button
+            onClick={e => {
+              e.stopPropagation()
+              onOpenResource(resourceEntry.tabId, resourceEntry.tabType, resourceEntry.url, resourceEntry.label, sourceKey)
+            }}
+            title={`Open ${resourceEntry.label}`}
+            className={`flex-shrink-0 p-0.5 rounded transition-all opacity-0 group-hover:opacity-100 ${
+              activeResourceTabId === resourceEntry.tabId ? 'opacity-100 bg-white/60' : 'hover:bg-white/60'
+            }`}
+          >
+            <Icon name={resourceEntry.icon} className={`text-[13px] ${resourceEntry.iconCls}`} />
+          </button>
+        )}
+        {loaded && noteCount > 0 && !resourceEntry && (
           <span className={`text-[10px] opacity-60 ${s.text} flex-shrink-0`}>{noteCount}</span>
         )}
       </div>
 
       {isOpen && (
         <div>
+          {/* Resource entry inside expanded folder */}
+          {resourceEntry && (
+            <button
+              onClick={() => onOpenResource(resourceEntry.tabId, resourceEntry.tabType, resourceEntry.url, resourceEntry.label, sourceKey)}
+              title={resourceEntry.url}
+              className={`w-full flex items-center gap-1 py-[3px] text-[12px] rounded transition-colors text-left ${
+                activeResourceTabId === resourceEntry.tabId
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+              style={{ paddingLeft: 22, paddingRight: 6 }}
+            >
+              <span className="w-[12px] flex-shrink-0" />
+              <Icon name={resourceEntry.icon} className={`text-[13px] flex-shrink-0 ${resourceEntry.iconCls}`} />
+              <span className="truncate flex-1">{resourceEntry.label}</span>
+            </button>
+          )}
+
           {!loaded && (
             <div className="flex items-center gap-1.5 pl-9 pr-2 py-1 text-[11px] text-slate-400">
               <Icon name="autorenew" className="text-[12px] animate-spin" />
@@ -266,7 +326,7 @@ function ItemFolder({
               depth={1}
             />
           ))}
-          {loaded && rootNotes.length === 0 && !creating && (
+          {loaded && rootNotes.length === 0 && !creating && !resourceEntry && (
             <p className="pl-9 py-1 text-[11px] text-slate-400 italic">No notes yet</p>
           )}
           {creating && (
@@ -326,7 +386,10 @@ function TabBar({ tabs, activeTabId, onActivate, onClose, graphView, onToggleGra
               style={{ maxWidth: 180, borderBottom: isActive ? '1px solid white' : '1px solid transparent', marginBottom: isActive ? -1 : 0 }}
               onClick={() => onActivate(tab.noteId)}
             >
-              <Icon name="description" className="text-[12px] text-slate-400 flex-shrink-0" />
+              <Icon
+                name={TAB_ICONS[tab.tabType]?.name || 'description'}
+                className={`text-[12px] flex-shrink-0 ${TAB_ICONS[tab.tabType]?.cls || 'text-slate-400'}`}
+              />
               <span className="truncate">{tab.name}</span>
               <button
                 onClick={e => { e.stopPropagation(); onClose(tab.noteId) }}
@@ -642,6 +705,12 @@ export default function LibraryNotes() {
     ? getSourceNotes(selected.source).find(n => n.id === selected.noteId) ?? null
     : null
 
+  // Resource tab (PDF / website / GitHub) currently active in the editor area
+  const activeResourceTab = useMemo(
+    () => openTabs.find(t => t.noteId === activeTabId && t.tabType && t.tabType !== 'note') ?? null,
+    [openTabs, activeTabId]
+  )
+
   function sourceLabel(source) {
     if (source === 'library') return activeLibraryId ? 'Library' : null
     const [type, id] = source.split(':')
@@ -659,9 +728,19 @@ export default function LibraryNotes() {
 
     setOpenTabs(prev => {
       if (prev.some(t => t.noteId === noteId)) return prev
-      return [...prev, { noteId, source, name: note.name }]
+      return [...prev, { noteId, tabType: 'note', source, name: note.name }]
     })
     setActiveTabId(noteId)
+    setGraphView(false)
+  }
+
+  // ── Open a PDF / website / GitHub URL in a resource tab ───────────────────
+  function openResourceInTab(tabId, tabType, url, name, source) {
+    setOpenTabs(prev => {
+      if (prev.some(t => t.noteId === tabId)) return prev
+      return [...prev, { noteId: tabId, tabType, url, source, name }]
+    })
+    setActiveTabId(tabId)
     setGraphView(false)
   }
 
@@ -1106,12 +1185,14 @@ export default function LibraryNotes() {
                         notes={itemNotes[sourceKey]} loaded={!!loadedItems[sourceKey]}
                         isOpen={!!expandedItems[sourceKey]}
                         selectedNoteId={selected?.noteId} isActiveSource={selected?.source === sourceKey}
+                        activeResourceTabId={activeTabId}
                         expandedNotes={expandedNotes}
                         onToggle={() => toggleItem(sourceKey)}
                         onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
                         onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
                         onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
                         onItemContextMenu={e => openItemCtxMenu(e, paper, 'paper', sourceKey)}
+                        onOpenResource={openResourceInTab}
                         creating={creating?.source === sourceKey ? creating : null}
                         newName={newName} setNewName={setNewName}
                         onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
@@ -1134,12 +1215,14 @@ export default function LibraryNotes() {
                         notes={itemNotes[sourceKey]} loaded={!!loadedItems[sourceKey]}
                         isOpen={!!expandedItems[sourceKey]}
                         selectedNoteId={selected?.noteId} isActiveSource={selected?.source === sourceKey}
+                        activeResourceTabId={activeTabId}
                         expandedNotes={expandedNotes}
                         onToggle={() => toggleItem(sourceKey)}
                         onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
                         onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
                         onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
                         onItemContextMenu={e => openItemCtxMenu(e, site, 'website', sourceKey)}
+                        onOpenResource={openResourceInTab}
                         creating={creating?.source === sourceKey ? creating : null}
                         newName={newName} setNewName={setNewName}
                         onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
@@ -1162,12 +1245,14 @@ export default function LibraryNotes() {
                         notes={itemNotes[sourceKey]} loaded={!!loadedItems[sourceKey]}
                         isOpen={!!expandedItems[sourceKey]}
                         selectedNoteId={selected?.noteId} isActiveSource={selected?.source === sourceKey}
+                        activeResourceTabId={activeTabId}
                         expandedNotes={expandedNotes}
                         onToggle={() => toggleItem(sourceKey)}
                         onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
                         onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
                         onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
                         onItemContextMenu={e => openItemCtxMenu(e, repo, 'github', sourceKey)}
+                        onOpenResource={openResourceInTab}
                         creating={creating?.source === sourceKey ? creating : null}
                         newName={newName} setNewName={setNewName}
                         onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
@@ -1227,7 +1312,57 @@ export default function LibraryNotes() {
           <div className="flex flex-1 min-h-0 overflow-hidden">
             {/* Editor column */}
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-              {selectedNote ? (
+              {activeResourceTab ? (
+                /* ── Resource viewer (PDF / website / GitHub) ─────────── */
+                <>
+                  <div className="px-4 py-2 border-b border-slate-100 bg-white flex items-center justify-between flex-shrink-0">
+                    <div className="flex items-center gap-2 min-w-0 text-[12px]">
+                      <Icon
+                        name={TAB_ICONS[activeResourceTab.tabType]?.name || 'description'}
+                        className={`text-[15px] flex-shrink-0 ${TAB_ICONS[activeResourceTab.tabType]?.cls || 'text-slate-400'}`}
+                      />
+                      <span className="font-medium text-slate-700 truncate">{activeResourceTab.name}</span>
+                    </div>
+                    <a
+                      href={activeResourceTab.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex-shrink-0"
+                    >
+                      <Icon name="open_in_new" className="text-[13px]" />
+                      Open in new tab
+                    </a>
+                  </div>
+                  {activeResourceTab.tabType === 'github' ? (
+                    /* GitHub refuses iframe embedding — show a launch panel */
+                    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-400">
+                      <Icon name="code" className="text-[48px] text-violet-200" />
+                      <div className="text-center">
+                        <p className="text-[13px] text-slate-500 font-medium">GitHub can't be embedded</p>
+                        <p className="text-[11px] text-slate-400 mt-1">{activeResourceTab.url}</p>
+                      </div>
+                      <a
+                        href={activeResourceTab.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 text-white text-[12px] font-medium hover:bg-violet-700 transition-colors"
+                      >
+                        <Icon name="open_in_new" className="text-[14px]" />
+                        Open on GitHub
+                      </a>
+                    </div>
+                  ) : (
+                    /* PDF and websites: plain iframe, no sandbox (sandbox blocks Chrome's
+                       PDF renderer and causes most sites to reject embedding) */
+                    <iframe
+                      key={activeResourceTab.noteId}
+                      src={activeResourceTab.url}
+                      title={activeResourceTab.name}
+                      className="flex-1 border-0 w-full"
+                    />
+                  )}
+                </>
+              ) : selectedNote ? (
                 <>
                   {/* Editor header with breadcrumb */}
                   <div className="px-4 py-2 border-b border-slate-100 bg-white flex items-center justify-between flex-shrink-0">
