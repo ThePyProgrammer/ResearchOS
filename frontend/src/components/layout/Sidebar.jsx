@@ -4,6 +4,7 @@ import { NavLink, useNavigate, useSearchParams, useLocation } from 'react-router
 import { proposalsApi, papersApi, websitesApi } from '../../services/api'
 import { useLibrary } from '../../context/LibraryContext'
 import WindowModal from '../WindowModal'
+import BibtexExportModal from '../BibtexExportModal'
 
 const user = { name: 'Dr. Researcher', org: 'Lab Alpha', initials: 'DR' }
 
@@ -232,6 +233,7 @@ function CollectionModal({ parentName, onConfirm, onCancel }) {
 function LibraryTree() {
   const { collections, createCollection, updateCollection, deleteCollection, refreshCollections, activeLibraryId } = useLibrary()
   const [viewCounts, setViewCounts] = useState({})
+  const [viewIds, setViewIds] = useState({})
 
   useEffect(() => {
     const lib = activeLibraryId ? { library_id: activeLibraryId } : {}
@@ -248,11 +250,19 @@ function LibraryTree() {
           dupeIds.add(p.id)
         }
       }
+      const inboxPapers   = papers.filter(p => p.status === 'inbox')
+      const unfiledPapers = papers.filter(p => p.collections.length === 0)
       setViewCounts({
         all:        papers.length,
-        inbox:      papers.filter(p => p.status === 'inbox').length,
-        unfiled:    papers.filter(p => p.collections.length === 0).length,
+        inbox:      inboxPapers.length,
+        unfiled:    unfiledPapers.length,
         duplicates: dupeIds.size,
+      })
+      setViewIds({
+        all:        papers.map(p => p.id),
+        inbox:      inboxPapers.map(p => p.id),
+        unfiled:    unfiledPapers.map(p => p.id),
+        duplicates: [...dupeIds],
       })
     }).catch(() => {})
   }, [activeLibraryId])
@@ -267,6 +277,20 @@ function LibraryTree() {
   const [renamingId, setRenamingId] = useState(null)
   const [renameValue, setRenameValue] = useState('')
   const [dragOverId, setDragOverId] = useState(null)
+  const [bibtexExportCollectionId, setBibtexExportCollectionId] = useState(null)
+  const [bibtexExportIds, setBibtexExportIds] = useState(null) // non-null array = modal open for quick-access
+  const [quickCtxMenu, setQuickCtxMenu] = useState(null) // { id, label, x, y }
+
+  useEffect(() => {
+    if (!quickCtxMenu) return
+    const close = () => setQuickCtxMenu(null)
+    window.addEventListener('click', close)
+    window.addEventListener('keydown', e => { if (e.key === 'Escape') close() })
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('keydown', e => { if (e.key === 'Escape') close() })
+    }
+  }, [!!quickCtxMenu])
 
   useEffect(() => {
     if (!ctxMenu) return
@@ -567,6 +591,14 @@ function LibraryTree() {
               )}
               <div className="my-1 border-t border-slate-100" />
               <button
+                onClick={() => { const id = ctxMenu.col.id; setCtxMenu(null); setBibtexExportCollectionId(id) }}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <Icon name="download" className="text-[18px] text-slate-400" />
+                Export BibTeX
+              </button>
+              <div className="my-1 border-t border-slate-100" />
+              <button
                 onClick={() => setCtxMenu(m => ({ ...m, confirming: true }))}
                 className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
               >
@@ -591,6 +623,7 @@ function LibraryTree() {
         <button
           key={item.id}
           onClick={() => select(item.id)}
+          onContextMenu={e => { e.preventDefault(); setQuickCtxMenu({ id: item.id, label: item.label, x: e.clientX, y: e.clientY }) }}
           className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-colors ${
             activeCollection === item.id
               ? 'bg-white/10 text-white font-medium'
@@ -606,6 +639,26 @@ function LibraryTree() {
           )}
         </button>
       ))}
+
+      {/* Quick access context menu */}
+      {quickCtxMenu && (
+        <div
+          style={{ position: 'fixed', top: quickCtxMenu.y, left: quickCtxMenu.x, zIndex: 50 }}
+          className="bg-white rounded-lg shadow-xl border border-slate-200 py-1 w-48"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="px-3 py-1.5 border-b border-slate-100 mb-1">
+            <p className="text-xs text-slate-400 truncate">{quickCtxMenu.label}</p>
+          </div>
+          <button
+            onClick={() => { const id = quickCtxMenu.id; setQuickCtxMenu(null); setBibtexExportIds(viewIds[id] || []) }}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <Icon name="download" className="text-[18px] text-slate-400" />
+            Export BibTeX
+          </button>
+        </div>
+      )}
 
       {/* Collections header */}
       <div
@@ -636,6 +689,16 @@ function LibraryTree() {
           onCancel={() => setModal(null)}
         />
       )}
+      <BibtexExportModal
+        open={!!bibtexExportCollectionId}
+        onClose={() => setBibtexExportCollectionId(null)}
+        fetchParams={{ collectionId: bibtexExportCollectionId }}
+      />
+      <BibtexExportModal
+        open={bibtexExportIds !== null}
+        onClose={() => setBibtexExportIds(null)}
+        fetchParams={{ ids: bibtexExportIds || [] }}
+      />
     </>
   )
 }
