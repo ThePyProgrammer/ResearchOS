@@ -119,6 +119,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
 
   return (
     <tr
+      data-item-id={item.id}
       draggable
       onDragStart={e => {
         e.dataTransfer.setData('application/researchos-item', JSON.stringify({ id: item.id, itemType: item.itemType || 'paper', collections: item.collections }))
@@ -1356,6 +1357,10 @@ export default function Library() {
   const [detailWidth, setDetailWidth] = useState(320)
   const containerRef = useRef(null)
   const onDetailDrag = useDragResize({ containerRef, setSize: setDetailWidth, reverse: true, minPx: 260, maxOffset: 400 })
+
+  // Refs for keyboard navigation — updated on every render so the keydown handler never sees stale values
+  const filteredRef = useRef([])
+  const selectedItemRef = useRef(null)
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkMoving, setBulkMoving] = useState(false)
   const [bulkStatusChanging, setBulkStatusChanging] = useState(false)
@@ -1375,6 +1380,50 @@ export default function Library() {
     const handler = () => setRefreshKey(k => k + 1)
     window.addEventListener('researchos:items-changed', handler)
     return () => window.removeEventListener('researchos:items-changed', handler)
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't hijack keystrokes while typing in any input / editable element
+      const tag = e.target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return
+      // Don't interfere with modifier combos (Ctrl+K, etc.)
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+
+      const f = filteredRef.current
+      const sel = selectedItemRef.current
+
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        if (f.length === 0) return
+        e.preventDefault()
+        const idx = sel ? f.findIndex(i => i.id === sel.id) : -1
+        const next = f[Math.min(idx + 1, f.length - 1)]
+        setSelectedItem(next)
+        requestAnimationFrame(() => {
+          document.querySelector(`tr[data-item-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest' })
+        })
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        if (f.length === 0) return
+        e.preventDefault()
+        const idx = sel ? f.findIndex(i => i.id === sel.id) : f.length
+        const next = f[Math.max(idx - 1, 0)]
+        setSelectedItem(next)
+        requestAnimationFrame(() => {
+          document.querySelector(`tr[data-item-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest' })
+        })
+      } else if (e.key === 'Escape' && sel) {
+        e.preventDefault()
+        setSelectedItem(null)
+      } else if (e.key === 'Enter' && sel) {
+        e.preventDefault()
+        const url = sel.itemType === 'website' ? `/library/website/${sel.id}`
+          : sel.itemType === 'github_repo' ? `/library/github-repo/${sel.id}`
+          : `/library/paper/${sel.id}`
+        window.open(url, '_blank')
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
   const [yearFrom, setYearFrom] = useState('')
   const [yearTo, setYearTo] = useState('')
@@ -1655,6 +1704,10 @@ export default function Library() {
     }
     return result
   }, [items, urlQuery, filterTab, activeCollection, sourceFilter, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters, authorFilter, sortKey, sortDir])
+
+  // Keep nav refs current on every render (no effect needed — plain assignment is safe here)
+  filteredRef.current = filtered
+  selectedItemRef.current = selectedItem
 
   function toggleSort(key) {
     if (sortKey === key) {
