@@ -1699,6 +1699,10 @@ export default function Library() {
         if (sortKey === 'authors') {
           return dir * formatAuthors(a.authors).localeCompare(formatAuthors(b.authors))
         }
+        if (sortKey === 'status') {
+          const order = ['inbox', 'to-read', 'read']
+          return dir * (order.indexOf(a.status) - order.indexOf(b.status))
+        }
         return 0
       })
     }
@@ -2115,7 +2119,12 @@ export default function Library() {
                       onChange={toggleSelectAll}
                     />
                   </th>
-                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors" onClick={() => toggleSort('status')}>
+                    <span className="flex items-center gap-1">
+                      Status
+                      {sortKey === 'status' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
+                    </span>
+                  </th>
                   <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors" onClick={() => toggleSort('title')}>
                     <span className="flex items-center gap-1">
                       Title
