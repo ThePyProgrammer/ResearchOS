@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { papersApi, notesApi } from '../services/api'
 import PaperInfoPanel from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
@@ -51,6 +51,8 @@ function PdfPage({ page }) {
 export default function Paper() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const handleBack = () => location.key !== 'default' ? handleBack() : navigate('/library')
   const [paper, setPaper] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -140,7 +142,7 @@ export default function Paper() {
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-slate-500">
+          <button onClick={() => handleBack()} className="flex items-center gap-1 text-sm text-slate-500">
             <Icon name="arrow_back" className="text-[18px]" />
             Back
           </button>
@@ -156,7 +158,7 @@ export default function Paper() {
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-slate-500">
+          <button onClick={() => handleBack()} className="flex items-center gap-1 text-sm text-slate-500">
             <Icon name="arrow_back" className="text-[18px]" />
             Back
           </button>
@@ -176,7 +178,7 @@ export default function Paper() {
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => handleBack()}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors"
         >
           <Icon name="arrow_back" className="text-[18px]" />
