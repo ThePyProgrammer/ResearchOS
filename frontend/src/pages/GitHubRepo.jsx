@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { githubReposApi, notesApi } from '../services/api'
-import { statusConfig, NamedLinks, EditableField, EditableTextArea, TagChips } from '../components/PaperInfoPanel'
+import { statusConfig, NamedLinks, EditableField, EditableTextArea, TagChips, CollectionsPicker } from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
 import { useDragResize } from '../hooks/useDragResize'
@@ -95,6 +95,13 @@ function RepoInfoPanel({ repo, onUpdate, onStatusChange }) {
           })}
         </div>
       </div>
+
+      {/* Collections */}
+      <CollectionsPicker
+        item={repo}
+        onUpdate={onUpdate}
+        updateFn={(id, data) => githubReposApi.update(id, data)}
+      />
 
       {/* Abstract / Description */}
       <EditableTextArea
