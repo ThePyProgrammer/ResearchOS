@@ -20,20 +20,34 @@ const SOURCE_LABEL = {
   github:  'GitHub',
 }
 
+// Generate padding points in a circle around a node position.
+// Using multiple points per node means the convex hull naturally
+// becomes a smooth "inflated" shape even for 1–2 node groups.
+function paddedHullPoints(nodePoints, radius = 30, resolution = 10) {
+  const result = []
+  for (const [x, y] of nodePoints) {
+    for (let i = 0; i < resolution; i++) {
+      const angle = (i / resolution) * Math.PI * 2
+      result.push([x + Math.cos(angle) * radius, y + Math.sin(angle) * radius])
+    }
+  }
+  return result
+}
+
+// Smooth closed path through hull vertices using Catmull-Rom
+const smoothLine = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5))
+
 export default function NoteGraphView({ allNotes, onNoteClick }) {
-  const svgRef        = useRef(null)
-  const containerRef  = useRef(null)
-  const simRef        = useRef(null)
-  const nodesRef      = useRef([])          // live D3-mutated node array
-  const clusterRef    = useRef(0.3)         // read by the force function each tick
+  const svgRef       = useRef(null)
+  const containerRef = useRef(null)
+  const simRef       = useRef(null)
+  const clusterRef   = useRef(0.3)
 
   const [hoveredNode,     setHoveredNode]     = useState(null)
   const [clusterStrength, setClusterStrength] = useState(0.3)
 
-  // Keep the ref in sync so the running force always reads the latest value
   useEffect(() => {
     clusterRef.current = clusterStrength
-    // Reheat gently so the new strength takes effect visually
     if (simRef.current) simRef.current.alpha(0.35).restart()
   }, [clusterStrength])
 
@@ -43,10 +57,11 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
     const nameMap   = new Map(fileNotes.map(n => [n.name.toLowerCase(), n]))
 
     const nodes = fileNotes.map(n => ({
-      id:        n.id,
-      name:      n.name,
-      source:    n.source    ?? 'library',
-      sourceKey: n.sourceKey ?? n.source ?? 'library',
+      id:         n.id,
+      name:       n.name,
+      source:     n.source     ?? 'library',
+      sourceKey:  n.sourceKey  ?? n.source ?? 'library',
+      sourceName: n.sourceName ?? SOURCE_LABEL[n.source] ?? 'Library',
     }))
 
     const nodeIdSet = new Set(nodes.map(n => n.id))
@@ -67,12 +82,11 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
     return { nodes, links }
   }, [allNotes])
 
-  // ── Build + render D3 graph ────────────────────────────────────────────────
+  // ── D3 render ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return
 
     const { nodes, links } = buildGraph()
-    nodesRef.current = nodes
 
     const width  = containerRef.current.clientWidth  || 900
     const height = containerRef.current.clientHeight || 600
@@ -93,7 +107,7 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
       const minX = Math.min(...xs), maxX = Math.max(...xs)
       const minY = Math.min(...ys), maxY = Math.max(...ys)
       const w = maxX - minX || 1, h = maxY - minY || 1
-      const pad   = 80
+      const pad   = 100
       const scale = Math.min(0.9, (width - pad * 2) / w, (height - pad * 2) / h)
       svgEl.transition().duration(600).call(
         zoom.transform,
@@ -108,17 +122,55 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
     svgEl.append('defs').append('marker')
       .attr('id', 'wiki-arrow').attr('viewBox', '0 -5 10 10')
       .attr('refX', 22).attr('refY', 0)
-      .attr('markerWidth', 5).attr('markerHeight', 5)
-      .attr('orient', 'auto')
+      .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
       .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#cbd5e1')
 
-    // Links
+    // ── Hull layer (behind everything) ────────────────────────────────────
+    const hullLayer = g.append('g').attr('class', 'hulls')
+
+    // Group nodes by sourceKey; skip singleton library notes when every
+    // note is library-only (the hull would just cover the whole canvas).
+    const groupMap = d3.group(nodes, d => d.sourceKey)
+
+    // Build one hull element per group
+    const hullEntries = []
+    for (const [key, groupNodes] of groupMap) {
+      const source     = groupNodes[0].source
+      const color      = SOURCE_COLOR[source] || SOURCE_COLOR.library
+      const label      = groupNodes[0].sourceName || SOURCE_LABEL[source] || key
+
+      const hullPath = hullLayer.append('path')
+        .attr('fill',         color)
+        .attr('fill-opacity', 0.07)
+        .attr('stroke',       color)
+        .attr('stroke-opacity', 0.35)
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '5,3')
+        .attr('stroke-linejoin', 'round')
+
+      // Truncate long labels (paper titles etc.)
+      const displayLabel = label.length > 32 ? label.slice(0, 30) + '…' : label
+
+      const hullLabel = hullLayer.append('text')
+        .text(displayLabel)
+        .attr('font-size', '10px')
+        .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
+        .attr('font-weight', '500')
+        .attr('fill', color)
+        .attr('fill-opacity', 0.7)
+        .attr('text-anchor', 'middle')
+        .attr('pointer-events', 'none')
+
+      hullEntries.push({ nodes: groupNodes, path: hullPath, label: hullLabel })
+    }
+
+    // ── Links ─────────────────────────────────────────────────────────────
     const linkEls = g.append('g').attr('class', 'links')
       .selectAll('line').data(links).join('line')
       .attr('stroke', '#cbd5e1').attr('stroke-width', 1.5)
       .attr('marker-end', 'url(#wiki-arrow)')
 
-    // Node groups
+    // ── Nodes ─────────────────────────────────────────────────────────────
     const nodeEls = g.append('g').attr('class', 'nodes')
       .selectAll('g').data(nodes).join('g')
       .attr('cursor', 'pointer')
@@ -132,22 +184,19 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
       .on('end',   (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null })
     )
 
-    nodeEls.append('circle').attr('r', 14).attr('fill', 'transparent')          // hit area
+    nodeEls.append('circle').attr('r', 14).attr('fill', 'transparent')
     nodeEls.append('circle').attr('r', 9)
-      .attr('fill', d => SOURCE_COLOR[d.source] || SOURCE_COLOR.library)
+      .attr('fill',   d => SOURCE_COLOR[d.source] || SOURCE_COLOR.library)
       .attr('stroke', '#fff').attr('stroke-width', 2.5)
     nodeEls.append('text').text(d => d.name)
-      .attr('x', 13).attr('y', 4)
-      .attr('font-size', '11px')
+      .attr('x', 13).attr('y', 4).attr('font-size', '11px')
       .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
       .attr('fill', '#334155').attr('pointer-events', 'none')
 
-    // ── Clustering force (reads clusterRef each tick) ──────────────────────
+    // ── Clustering force ──────────────────────────────────────────────────
     function clusterForce(alpha) {
       const strength = clusterRef.current
       if (!strength) return
-
-      // Compute centroid per sourceKey group
       const centroids = {}
       nodes.forEach(d => {
         if (!centroids[d.sourceKey]) centroids[d.sourceKey] = { x: 0, y: 0, n: 0 }
@@ -156,8 +205,6 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
         centroids[d.sourceKey].n++
       })
       for (const c of Object.values(centroids)) { c.x /= c.n; c.y /= c.n }
-
-      // Pull each node toward its group centroid
       nodes.forEach(d => {
         const c = centroids[d.sourceKey]
         if (!c) return
@@ -166,37 +213,53 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
       })
     }
 
-    // ── Simulation ─────────────────────────────────────────────────────────
+    // ── Simulation ────────────────────────────────────────────────────────
     const sim = d3.forceSimulation(nodes)
       .force('link',      d3.forceLink(links).id(d => d.id).distance(100).strength(0.6))
       .force('charge',    d3.forceManyBody().strength(-250))
       .force('center',    d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide(22))
-      .force('cluster',   clusterForce)   // custom force registered by name
+      .force('cluster',   clusterForce)
 
     simRef.current = sim
 
     sim.on('tick', () => {
+      // Update links
       linkEls
         .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
         .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
+
+      // Update nodes
       nodeEls.attr('transform', d => `translate(${d.x},${d.y})`)
+
+      // Update hulls
+      for (const { nodes: gNodes, path, label } of hullEntries) {
+        const pts = paddedHullPoints(gNodes.map(d => [d.x, d.y]))
+        const hull = d3.polygonHull(pts)
+        if (!hull) continue
+
+        path.attr('d', smoothLine(hull))
+
+        // Place label at the top-centre of the hull
+        const topY   = Math.min(...hull.map(p => p[1]))
+        const centX  = d3.polygonCentroid(hull)[0]
+        label.attr('x', centX).attr('y', topY - 5)
+      }
     })
+
     sim.on('end', fitView)
 
     return () => sim.stop()
   }, [buildGraph, onNoteClick])
 
   const { nodes, links } = buildGraph()
-
-  const presentSources = [...new Set(nodes.map(n => n.source))]
+  const presentSources   = [...new Set(nodes.map(n => n.source))]
 
   return (
     <div ref={containerRef} className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
       {/* Header bar */}
       <div className="px-4 py-2 border-b border-slate-100 bg-white flex items-center justify-between flex-shrink-0 gap-4">
-        {/* Left: title + counts */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <span className="text-[12px] font-semibold text-slate-700 flex items-center gap-1.5">
             <Icon name="hub" className="text-[15px] text-indigo-500" />
@@ -207,13 +270,12 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
           </span>
         </div>
 
-        {/* Centre: clustering slider */}
+        {/* Clustering slider */}
         <div className="flex items-center gap-2 flex-1 max-w-xs">
           <Icon name="grain" className="text-[14px] text-slate-400 flex-shrink-0" />
           <span className="text-[11px] text-slate-500 flex-shrink-0 whitespace-nowrap">Clustering</span>
           <input
-            type="range"
-            min="0" max="1" step="0.05"
+            type="range" min="0" max="1" step="0.05"
             value={clusterStrength}
             onChange={e => setClusterStrength(parseFloat(e.target.value))}
             className="flex-1 accent-indigo-500 cursor-pointer"
@@ -224,7 +286,7 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
           </span>
         </div>
 
-        {/* Right: legend + tip */}
+        {/* Legend + tip */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             {presentSources.map(src => (
@@ -240,7 +302,7 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
         </div>
       </div>
 
-      {/* Hovered node label — bottom left */}
+      {/* Hovered node indicator — bottom left */}
       {hoveredNode && (
         <div
           className="absolute z-50 bg-slate-800 text-white text-[11px] rounded-md px-2 py-1 pointer-events-none"
