@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { websitesApi, notesApi } from '../services/api'
-import { statusConfig, NamedLinks, EditableField, EditableTextArea, AuthorChips } from '../components/PaperInfoPanel'
+import { statusConfig, NamedLinks, EditableField, EditableTextArea, AuthorChips, TagChips } from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
 import { useDragResize } from '../hooks/useDragResize'
@@ -128,16 +128,14 @@ function WebsiteInfoPanel({ site, onUpdate, onStatusChange }) {
       </div>
 
       {/* Tags */}
-      {site.tags?.length > 0 && (
-        <div>
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
-          <div className="flex flex-wrap gap-1.5">
-            {site.tags.map(tag => (
-              <span key={tag} className="text-[11px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">{tag}</span>
-            ))}
-          </div>
-        </div>
-      )}
+      <div>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
+        <TagChips
+          tags={site.tags || []}
+          onSave={v => handleFieldSave('tags', v)}
+          chipClassName="bg-teal-100 text-teal-700"
+        />
+      </div>
     </div>
   )
 }

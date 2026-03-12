@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { githubReposApi, notesApi } from '../services/api'
-import { statusConfig, NamedLinks, EditableField, EditableTextArea } from '../components/PaperInfoPanel'
+import { statusConfig, NamedLinks, EditableField, EditableTextArea, TagChips } from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
 import { useDragResize } from '../hooks/useDragResize'
@@ -139,16 +139,14 @@ function RepoInfoPanel({ repo, onUpdate, onStatusChange }) {
       </div>
 
       {/* Tags */}
-      {repo.tags?.length > 0 && (
-        <div>
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
-          <div className="flex flex-wrap gap-1.5">
-            {repo.tags.map(tag => (
-              <span key={tag} className="text-[11px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{tag}</span>
-            ))}
-          </div>
-        </div>
-      )}
+      <div>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
+        <TagChips
+          tags={repo.tags || []}
+          onSave={v => handleFieldSave('tags', v)}
+          chipClassName="bg-violet-100 text-violet-700"
+        />
+      </div>
     </div>
   )
 }

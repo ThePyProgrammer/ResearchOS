@@ -2,7 +2,7 @@
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { papersApi, websitesApi, githubReposApi, searchApi, notesApi, collectionsApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
-import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips, formatCitationBibTeX } from '../components/PaperInfoPanel'
+import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips, TagChips, formatCitationBibTeX } from '../components/PaperInfoPanel'
 import WindowModal from '../components/WindowModal'
 import { useDragResize } from '../hooks/useDragResize'
 
@@ -941,16 +941,14 @@ function WebsiteDetail({ item, onClose, onStatusChange, onUpdate, onDelete, widt
             </div>
 
             {/* Tags */}
-            {item.tags?.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {item.tags.map(tag => (
-                    <span key={tag} className="text-[11px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">{tag}</span>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
+              <TagChips
+                tags={item.tags || []}
+                onSave={v => handleFieldSave('tags', v)}
+                chipClassName="bg-teal-100 text-teal-700"
+              />
+            </div>
           </div>
         )}
 
@@ -1340,6 +1338,15 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete, w
                   </div>
                 )}
               </div>
+            </div>
+            {/* Tags */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Tags</p>
+              <TagChips
+                tags={item.tags || []}
+                onSave={v => handleFieldSave('tags', v)}
+                chipClassName="bg-violet-100 text-violet-700"
+              />
             </div>
           </div>
         )}
