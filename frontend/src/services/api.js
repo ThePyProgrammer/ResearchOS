@@ -213,6 +213,8 @@ export const notesApi = {
   createForGitHubRepo: (repoId, data) => apiFetch(`/github-repos/${repoId}/notes`, { method: 'POST', body: data }),
   generateForGitHubRepo: (repoId, libraryId) =>
     apiFetch(`/github-repos/${repoId}/notes/generate`, { method: 'POST', body: { library_id: libraryId || null } }),
+  listForLibrary: (libraryId) => apiFetch(`/libraries/${libraryId}/notes`),
+  createForLibrary: (libraryId, data) => apiFetch(`/libraries/${libraryId}/notes`, { method: 'POST', body: data }),
 }
 
 export const chatApi = {

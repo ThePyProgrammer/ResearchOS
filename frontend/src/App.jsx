@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout, { LayoutBare } from './components/layout/Layout'
 import Dashboard from './pages/Dashboard'
 import Library from './pages/Library'
+import LibraryNotes from './pages/LibraryNotes'
 import Paper from './pages/Paper'
 import Agents from './pages/Agents'
 import Proposals from './pages/Proposals'
@@ -21,6 +22,7 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="library" element={<Library />} />
+            <Route path="library/notes" element={<LibraryNotes />} />
             <Route path="library/settings" element={<LibrarySettings />} />
             <Route path="authors" element={<Authors />} />
             <Route path="authors/:id" element={<AuthorDetail />} />

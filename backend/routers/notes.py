@@ -128,3 +128,19 @@ async def delete_note(note_id: str):
     deleted = note_service.delete_note(note_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
+
+
+# ---------------------------------------------------------------------------
+# Library-level notes (not tied to a specific paper/website/repo)
+# ---------------------------------------------------------------------------
+
+@router.get("/libraries/{library_id}/notes")
+async def list_library_notes(library_id: str):
+    notes = note_service.list_notes(library_id=library_id)
+    return JSONResponse([n.model_dump(by_alias=True) for n in notes])
+
+
+@router.post("/libraries/{library_id}/notes", status_code=201)
+async def create_library_note(library_id: str, data: NoteCreate):
+    note = note_service.create_note(data, library_id=library_id)
+    return JSONResponse(note.model_dump(by_alias=True), status_code=201)

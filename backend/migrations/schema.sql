@@ -1,7 +1,7 @@
 -- =============================================================================
 -- ResearchOS — full schema (merged)
 -- =============================================================================
--- This single file replaces running migrations 001–011 individually.
+-- This single file replaces running migrations 001–012 individually.
 -- New users: paste this into the Supabase SQL Editor and run it once.
 --
 -- All statements use IF NOT EXISTS / IF NOT EXISTS so the script is safe to
@@ -268,14 +268,15 @@ ALTER TABLE activity DISABLE ROW LEVEL SECURITY;
 
 
 -- =============================================================================
--- NOTES  (per-paper, per-website, and per-GitHub-repo file tree)
+-- NOTES  (per-paper, per-website, per-GitHub-repo, and per-library file tree)
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS notes (
     id             TEXT PRIMARY KEY,
-    paper_id       TEXT,                               -- NULL for website/repo notes
-    website_id     TEXT,                               -- NULL for paper/repo notes
-    github_repo_id TEXT,                               -- NULL for paper/website notes
+    paper_id       TEXT,                               -- NULL for website/repo/library notes
+    website_id     TEXT,                               -- NULL for paper/repo/library notes
+    github_repo_id TEXT,                               -- NULL for paper/website/library notes
+    library_id     TEXT,                               -- NULL for paper/website/repo notes; set for library-level notes
     name           TEXT NOT NULL,
     parent_id      TEXT,
     type           TEXT NOT NULL DEFAULT 'file',       -- file | folder
@@ -283,6 +284,8 @@ CREATE TABLE IF NOT EXISTS notes (
     created_at     TEXT NOT NULL,
     updated_at     TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_notes_library ON notes (library_id);
 
 ALTER TABLE notes DISABLE ROW LEVEL SECURITY;
 

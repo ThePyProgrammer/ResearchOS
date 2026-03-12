@@ -668,6 +668,11 @@ export default function Sidebar({ collapsed, onToggle }) {
           <SidebarLink to="/authors" icon="groups" label="Authors" collapsed={collapsed} />
         </div>
 
+        {/* Notes IDE */}
+        <div className="pt-1 space-y-0.5">
+          <SidebarLink to="/library/notes" icon="edit_note" label="Notes" collapsed={collapsed} />
+        </div>
+
         {/* Agent Workflows */}
         <div className="pt-3">
           {!collapsed && (

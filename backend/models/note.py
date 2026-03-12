@@ -7,6 +7,7 @@ class Note(CamelModel):
     paper_id: Optional[str] = None
     website_id: Optional[str] = None
     github_repo_id: Optional[str] = None
+    library_id: Optional[str] = None
     name: str
     parent_id: Optional[str] = None
     type: str = "file"  # file | folder
