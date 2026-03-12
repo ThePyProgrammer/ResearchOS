@@ -1631,6 +1631,17 @@ export default function LibraryNotes() {
                     getAllNotes={getAllNotesForSuggestion}
                     onWikiLinkClick={handleWikiLinkClick}
                   />
+
+                  {/* Word count + reading time */}
+                  {(() => {
+                    const words = stripHtml(content).trim().split(/\s+/).filter(Boolean).length
+                    const mins  = Math.ceil(words / 200)
+                    return (
+                      <div className="flex-shrink-0 px-5 py-1.5 border-t border-slate-100 bg-slate-50/60 text-[10px] text-slate-400 select-none">
+                        {words.toLocaleString()} {words === 1 ? 'word' : 'words'} · {mins} min read
+                      </div>
+                    )
+                  })()}
                 </>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
