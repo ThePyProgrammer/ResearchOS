@@ -198,46 +198,6 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Status Breakdown */}
-      {!loading && papers.length > 0 && (() => {
-        const inbox   = papers.filter(p => p.status === 'inbox').length
-        const toRead  = papers.filter(p => p.status === 'to-read').length
-        const read    = papers.filter(p => p.status === 'read').length
-        const total   = papers.length
-        const pct     = n => total ? Math.round((n / total) * 100) : 0
-        return (
-          <div className="bg-white rounded-xl border border-slate-200 p-5 mb-8">
-            <h2 className="text-base font-semibold text-slate-800 mb-4">Triage Health</h2>
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              {[
-                { label: 'Inbox',   value: inbox,  pct: pct(inbox),  color: 'text-blue-600',    bg: 'bg-blue-50',    bar: 'bg-blue-400',   status: 'inbox'   },
-                { label: 'To Read', value: toRead, pct: pct(toRead), color: 'text-amber-600',   bg: 'bg-amber-50',   bar: 'bg-amber-400',  status: 'to-read' },
-                { label: 'Read',    value: read,   pct: pct(read),   color: 'text-emerald-600', bg: 'bg-emerald-50', bar: 'bg-emerald-400', status: 'read'    },
-              ].map(({ label, value, pct: p, color, bg, status }) => (
-                <button
-                  key={label}
-                  onClick={() => navigate(`/library?status=${status}`)}
-                  className={`${bg} rounded-lg p-3 text-center transition-opacity hover:opacity-80 cursor-pointer`}
-                >
-                  <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString()}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-                  <p className="text-xs text-slate-400">{p}%</p>
-                </button>
-              ))}
-            </div>
-            <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
-              {[
-                { pct: pct(inbox),  bar: 'bg-blue-400'    },
-                { pct: pct(toRead), bar: 'bg-amber-400'   },
-                { pct: pct(read),   bar: 'bg-emerald-400' },
-              ].filter(s => s.pct > 0).map(({ pct: p, bar }, i) => (
-                <div key={i} className={`${bar} rounded-full`} style={{ width: `${p}%` }} />
-              ))}
-            </div>
-          </div>
-        )
-      })()}
-
       {/* Papers over time */}
       {chartData.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 mb-8">
@@ -312,6 +272,89 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Triage + Budget grid */}
+      {!loading && (papers.length > 0 || runs.some(r => r.cost)) && (() => {
+        const inbox    = papers.filter(p => p.status === 'inbox').length
+        const toRead   = papers.filter(p => p.status === 'to-read').length
+        const read     = papers.filter(p => p.status === 'read').length
+        const total    = papers.length
+        const pct      = n => total ? Math.round((n / total) * 100) : 0
+        const hasTriage = papers.length > 0
+        const hasBudget = runs.some(r => r.cost)
+        return (
+          <div className={`mb-8 ${hasTriage && hasBudget ? 'grid grid-cols-2 gap-4 items-start' : ''}`}>
+
+            {hasTriage && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h2 className="text-base font-semibold text-slate-800 mb-4">Triage Health</h2>
+                <div className="space-y-4">
+                  {[
+                    { label: 'Inbox',   value: inbox,  pct: pct(inbox),  color: 'text-blue-600',    dot: 'bg-blue-400',    bar: 'bg-blue-400',    status: 'inbox'   },
+                    { label: 'To Read', value: toRead, pct: pct(toRead), color: 'text-amber-600',   dot: 'bg-amber-400',   bar: 'bg-amber-400',   status: 'to-read' },
+                    { label: 'Read',    value: read,   pct: pct(read),   color: 'text-emerald-600', dot: 'bg-emerald-400', bar: 'bg-emerald-400', status: 'read'    },
+                  ].map(({ label, value, pct: p, color, dot, bar, status }) => (
+                    <button
+                      key={label}
+                      onClick={() => navigate(`/library?status=${status}`)}
+                      className="w-full text-left group"
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${dot} flex-shrink-0`} />
+                          <span className="text-sm text-slate-600 group-hover:text-slate-800 transition-colors">{label}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-bold ${color}`}>{value.toLocaleString()}</span>
+                          <span className="text-xs text-slate-400 w-7 text-right">{p}%</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${bar} rounded-full transition-all`} style={{ width: `${p}%` }} />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {hasBudget && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h2 className="text-base font-semibold text-slate-800 mb-4">Budget & API Usage</h2>
+                <div className="space-y-6">
+                  {runs.filter(r => r.cost).map(run => (
+                    <div key={run.id}>
+                      {runs.filter(r => r.cost).length > 1 && (
+                        <p className="text-xs font-medium text-slate-500 mb-3">{run.workflowName}</p>
+                      )}
+                      <div className="space-y-3">
+                        {Object.entries(run.cost).filter(([k]) => k !== 'total').map(([key, item]) => (
+                          <div key={key}>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-slate-600">{item.label}</span>
+                              <span className="font-semibold text-slate-800">{item.amount}</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-400 rounded-full" style={{ width: `${item.pct || 0}%` }} />
+                            </div>
+                            {item.tokens && <p className="text-[10px] text-slate-400 mt-0.5">{item.tokens}</p>}
+                            {item.calls && <p className="text-[10px] text-slate-400 mt-0.5">{item.calls}{item.limit ? ` · ${item.limit}` : ''}</p>}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
+                        <span className="text-xs font-semibold text-slate-600">Total Run Cost</span>
+                        <span className="text-sm font-bold text-emerald-600">{run.cost.total}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        )
+      })()}
+
       {/* Activity Feed */}
       <div className="bg-white rounded-xl border border-slate-200">
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
@@ -352,40 +395,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Budget & API Usage */}
-      {!loading && runs.some(r => r.cost) && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5 mt-8">
-          <h2 className="text-base font-semibold text-slate-800 mb-4">Budget & API Usage</h2>
-          <div className="space-y-6">
-            {runs.filter(r => r.cost).map(run => (
-              <div key={run.id}>
-                {runs.filter(r => r.cost).length > 1 && (
-                  <p className="text-xs font-medium text-slate-500 mb-3">{run.workflowName}</p>
-                )}
-                <div className="space-y-3">
-                  {Object.entries(run.cost).filter(([k]) => k !== 'total').map(([key, item]) => (
-                    <div key={key}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-slate-600">{item.label}</span>
-                        <span className="font-semibold text-slate-800">{item.amount}</span>
-                      </div>
-                      <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-400 rounded-full" style={{ width: `${item.pct || 0}%` }} />
-                      </div>
-                      {item.tokens && <p className="text-[10px] text-slate-400 mt-0.5">{item.tokens}</p>}
-                      {item.calls && <p className="text-[10px] text-slate-400 mt-0.5">{item.calls}{item.limit ? ` · ${item.limit}` : ''}</p>}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
-                  <span className="text-xs font-semibold text-slate-600">Total Run Cost</span>
-                  <span className="text-sm font-bold text-emerald-600">{run.cost.total}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
