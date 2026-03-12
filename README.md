@@ -1,5 +1,10 @@
 # ResearchOS
 
+[![Tests](https://github.com/prannvat/researchos/actions/workflows/tests.yml/badge.svg)](https://github.com/prannvat/researchos/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Node 18+](https://img.shields.io/badge/node-18+-green.svg)](https://nodejs.org/)
+
 An AI-powered research operating system that merges a Zotero-like reference manager with a multi-agent workflow engine. Agents read from and write back to a shared knowledge library with full provenance.
 
 ## Features
@@ -7,6 +12,7 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Library management** — import papers and websites via DOI, arXiv ID, URL, OpenReview, or Zenodo; organize into nested collections with drag-and-drop
 - **Multiple libraries** — create and switch between independent libraries
 - **Websites as first-class items** — blog posts, articles, and any URL live alongside papers with their own metadata
+- **GitHub repos as first-class items** — track repositories alongside papers and websites
 - **BibTeX import/export** — bulk-import `.bib` files with a two-phase preview/confirm flow; export papers and websites as `.bib` with a tree-view editor for reviewing and editing entries before download
 - **Duplicate detection** — centralized three-tier dedup (DOI, arXiv ID, normalized title) across all import paths: identifier import, PDF upload, and BibTeX import; surfaces warnings with "Import anyway" option
 - **PDF upload with metadata extraction** — drag-and-drop PDFs; LLM-powered extraction of title, authors, date, venue, abstract, and DOI
@@ -16,6 +22,7 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **AI copilot** — context-aware research assistant that can suggest diffs to your notes
 - **Agent workflows** — multi-step research workflows (literature review, gap analysis, etc.) powered by OpenAI via pydantic-ai
 - **Human-in-the-loop proposals** — agents propose changes that you approve or reject with a diff view
+- **Authors** — first-class author entities with fuzzy name matching across papers
 - **Activity feed** — full audit trail of agent and human actions
 
 ## Tech Stack
@@ -63,6 +70,9 @@ backend/migrations/004_website_notes.sql
 backend/migrations/005_paper_texts.sql
 backend/migrations/006_chat_suggestions.sql
 backend/migrations/007_website_chat.sql
+backend/migrations/008_paper_published_date.sql
+backend/migrations/009_authors.sql
+backend/migrations/010_github_repos.sql
 ```
 
 ### Running
@@ -126,6 +136,8 @@ CI (`.github/workflows/tests.yml`) runs backend tests, frontend tests/build, and
 | `/library/settings` | Library settings (rename, AI Auto-Note-Taker, delete) |
 | `/agents` | Workflow catalog + active runs with live logs |
 | `/proposals` | Agent proposals — approve/reject with diff view |
+| `/authors` | Authors list |
+| `/authors/:id` | Author detail |
 
 ## API
 
@@ -157,6 +169,11 @@ All routes are prefixed `/api`. Responses are camelCase JSON. See the full API r
 | GET | `/api/collections` | List collections with computed `paperCount` |
 | POST | `/api/collections` | Create collection |
 | GET/PATCH/DELETE | `/api/collections/{id}` | Single collection |
+| GET | `/api/authors` | List authors |
+| GET/PATCH/DELETE | `/api/authors/{id}` | Single author |
+| GET | `/api/github-repos` | List GitHub repos |
+| POST | `/api/github-repos` | Add a GitHub repo |
+| GET/PATCH/DELETE | `/api/github-repos/{id}` | Single GitHub repo |
 | GET | `/api/workflows` | Workflow catalog (read-only) |
 | GET/POST | `/api/runs` | List / start a run |
 | GET | `/api/runs/{id}` | Run with logs, trace, and cost |
@@ -186,6 +203,7 @@ researchos/
 │   ├── models/             # Pydantic domain models
 │   ├── services/           # Business logic + DB access
 │   ├── routers/            # FastAPI route handlers
+│   ├── agents/             # pydantic-ai agent definitions
 │   └── migrations/         # SQL migrations for Supabase
 ├── frontend/
 │   └── src/
@@ -194,10 +212,15 @@ researchos/
 │       ├── components/     # Shared UI (NotesPanel, CopilotPanel, etc.)
 │       └── pages/          # Route components
 ├── ARCHITECTURE.md         # Codebase architecture guide
-└── CLAUDE.md               # AI agent instructions
+├── CONTRIBUTING.md         # How to contribute
+└── LICENSE                 # MIT
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed walkthrough of the codebase.
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) to get started. By participating you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Roadmap
 
@@ -210,3 +233,7 @@ Scoped for a single-user, local research OS (no auth, no collaboration, no multi
 5. **PDF Annotations** — in-document highlights, anchored comments, annotation export
 6. **Agent Runtime Hardening** — durable execution, ag-ui-protocol streaming, structured run artifacts
 7. **Advanced PDF Processing** — GROBID integration, citation graph from PDFs, section-aware chunking
+
+## License
+
+[MIT](LICENSE)
