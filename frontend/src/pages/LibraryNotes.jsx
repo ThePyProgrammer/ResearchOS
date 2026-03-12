@@ -583,7 +583,7 @@ function BacklinksPanel({ backlinks, onNoteClick }) {
 
 // ─── Main Notes IDE page ──────────────────────────────────────────────────────
 export default function LibraryNotes() {
-  const { activeLibraryId } = useLibrary()
+  const { activeLibraryId, collections } = useLibrary()
 
   // ── Data ───────────────────────────────────────────────────────────────────
   const [papers, setPapers] = useState([])
@@ -688,6 +688,14 @@ export default function LibraryNotes() {
     }
     return result
   }, [libraryNotes, itemNotes])
+
+  // ── Map each sourceKey → its collection IDs (for the graph options panel) ──
+  const sourceKeyCollections = useMemo(() => {
+    const map = {}
+    for (const p of papers)   map[`paper:${p.id}`]   = p.collections   || []
+    for (const w of websites) map[`website:${w.id}`] = w.collections   || []
+    return map
+  }, [papers, websites])
 
   // ── Search results: flat filtered list matching name or content ────────────
   const noteSearchResults = useMemo(() => {
@@ -1457,6 +1465,8 @@ export default function LibraryNotes() {
           /* ── Graph view ─────────────────────────────────────────────── */
           <NoteGraphView
             allNotes={allLoadedNotes}
+            collections={collections}
+            sourceKeyCollections={sourceKeyCollections}
             onNoteClick={noteId => {
               const note = allLoadedNotes.find(n => n.id === noteId)
               if (!note) return

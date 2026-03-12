@@ -1358,6 +1358,9 @@ export default function Library() {
   const onDetailDrag = useDragResize({ containerRef, setSize: setDetailWidth, reverse: true, minPx: 260, maxOffset: 400 })
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkMoving, setBulkMoving] = useState(false)
+  const [bulkStatusChanging, setBulkStatusChanging] = useState(false)
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+  const statusDropdownRef = useRef(null)
   const [showFetchModal, setShowFetchModal] = useState(false)
   const [fetchStatuses, setFetchStatuses] = useState({}) // { paperId: 'pending' | 'fetching' | 'done' | 'skipped' | error string }
   const [showExportModal, setShowExportModal] = useState(false)
@@ -1436,6 +1439,17 @@ export default function Library() {
     }
     setAuthorFilter(null)
   }, [activeCollection])
+
+  useEffect(() => {
+    if (!showStatusDropdown) return
+    const handleClickOutside = (e) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target)) {
+        setShowStatusDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showStatusDropdown])
 
   const handleStatusChange = (itemId, newStatus) => {
     setItems(prev => prev.map(p => p.id === itemId ? { ...p, status: newStatus } : p))
@@ -1546,6 +1560,31 @@ export default function Library() {
       } catch (err) {
         setFetchStatuses(prev => ({ ...prev, [item.id]: err.message || 'Failed' }))
       }
+    }
+  }
+
+  const handleBulkStatusChange = async (status) => {
+    setBulkStatusChanging(true)
+    setShowStatusDropdown(false)
+    try {
+      const toPatch = items.filter(i => selectedIds.has(i.id))
+      const updated = await Promise.all(toPatch.map(i => {
+        const api = i.itemType === 'website' ? websitesApi : i.itemType === 'github_repo' ? githubReposApi : papersApi
+        return api.update(i.id, { status })
+      }))
+      setItems(prev => prev.map(i => {
+        const u = updated.find(x => x.id === i.id)
+        return u || i
+      }))
+      if (selectedItem && selectedIds.has(selectedItem.id)) {
+        const u = updated.find(x => x.id === selectedItem.id)
+        if (u) setSelectedItem(u)
+      }
+      setSelectedIds(new Set())
+    } catch (err) {
+      console.error('Bulk status change failed:', err)
+    } finally {
+      setBulkStatusChanging(false)
     }
   }
 
@@ -1878,6 +1917,43 @@ export default function Library() {
                 <Icon name="library_add" className="text-[14px]" />
                 Add to Collection...
               </button>
+              {/* Set status dropdown */}
+              <div className="relative" ref={statusDropdownRef}>
+                <button
+                  onClick={() => setShowStatusDropdown(v => !v)}
+                  disabled={bulkStatusChanging}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Icon name="label" className="text-[14px]" />
+                  {bulkStatusChanging ? 'Updating...' : 'Set Status'}
+                  <Icon name="arrow_drop_down" className="text-[14px]" />
+                </button>
+                {showStatusDropdown && (
+                  <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[130px]">
+                    <button
+                      onClick={() => handleBulkStatusChange('inbox')}
+                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Icon name="inbox" className="text-[14px] text-slate-400" />
+                      Inbox
+                    </button>
+                    <button
+                      onClick={() => handleBulkStatusChange('to-read')}
+                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Icon name="bookmark" className="text-[14px] text-amber-400" />
+                      To Read
+                    </button>
+                    <button
+                      onClick={() => handleBulkStatusChange('read')}
+                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Icon name="check_circle" className="text-[14px] text-green-500" />
+                      Read
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleBulkFetchPdfs}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
