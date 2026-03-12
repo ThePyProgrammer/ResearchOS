@@ -12,18 +12,22 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Library management** — import papers and websites via DOI, arXiv ID, URL, OpenReview, or Zenodo; organize into nested collections with drag-and-drop
 - **Multiple libraries** — create and switch between independent libraries
 - **Websites as first-class items** — blog posts, articles, and any URL live alongside papers with their own metadata
-- **GitHub repos as first-class items** — track repositories alongside papers and websites
+- **GitHub repos as first-class items** — track repositories alongside papers and websites; full detail page with metadata, notes, and AI copilot
 - **BibTeX import/export** — bulk-import `.bib` files with a two-phase preview/confirm flow; export papers and websites as `.bib` with a tree-view editor for reviewing and editing entries before download
 - **Duplicate detection** — centralized three-tier dedup (DOI, arXiv ID, normalized title) across all import paths: identifier import, PDF upload, and BibTeX import; surfaces warnings with "Import anyway" option
 - **PDF upload with metadata extraction** — drag-and-drop PDFs; LLM-powered extraction of title, authors, date, venue, abstract, and DOI
 - **PDF storage** — stored in Supabase Storage, rendered inline; auto-downloaded from source on import
-- **Notes IDE** — per-item note filesystem with folders and files, powered by a tiptap WYSIWYG editor with LaTeX support
-- **AI Auto-Note-Taker** — generates a multi-file note structure for any paper or website; auto-runs on import and PDF upload
+- **Notes IDE** — per-item note filesystem with folders and files, powered by a tiptap WYSIWYG editor with LaTeX support and `[[wiki-link]]` syntax
+- **Library Notes IDE** — a library-level scratchpad at `/library/notes` for cross-item notes not tied to any single paper; includes a D3 force graph visualizing wiki-link connections between notes
+- **AI Auto-Note-Taker** — generates a multi-file note structure for any paper, website, or GitHub repo; auto-runs on import and PDF upload
 - **AI copilot** — context-aware research assistant that can suggest diffs to your notes
-- **Agent workflows** — multi-step research workflows (literature review, gap analysis, etc.) powered by OpenAI via pydantic-ai
+- **Semantic search** — hybrid lexical and OpenAI-embedding search across papers, websites, and GitHub repos (falls back to lexical when no API key is set)
+- **Related paper discovery** — surfaces related works for any paper via OpenAlex citation links and semantic neighbors
+- **Agent workflows** — multi-step research workflows (literature review, model research, experiment design) powered by OpenAI via pydantic-ai
 - **Human-in-the-loop proposals** — agents propose changes that you approve or reject with a diff view
 - **Authors** — first-class author entities with fuzzy name matching across papers
 - **Activity feed** — full audit trail of agent and human actions
+- **LLM configuration** — per-role model selection (chat, notes, metadata, agent, embeddings) configurable at runtime from the settings page
 
 ## Tech Stack
 
@@ -32,6 +36,7 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **AI:** OpenAI
 - **Frontend:** React 18, Vite, React Router v6, Tailwind CSS 3
 - **Editor:** tiptap v3 with KaTeX
+- **Graph:** D3.js (note graph view)
 
 ## Quick Start
 
@@ -78,6 +83,8 @@ backend/migrations/007_website_chat.sql
 backend/migrations/008_paper_published_date.sql
 backend/migrations/009_authors.sql
 backend/migrations/010_github_repos.sql
+backend/migrations/011_github_repo_notes_chat.sql
+backend/migrations/012_library_notes.sql
 ```
 
 </details>
@@ -137,9 +144,11 @@ CI (`.github/workflows/tests.yml`) runs backend tests, frontend tests/build, and
 | Path | Page |
 |------|------|
 | `/dashboard` | Activity feed + run stats |
-| `/library` | Paper + website library with collections, filters, and detail panels |
+| `/library` | Paper, website, and GitHub repo library with collections, filters, and detail panels |
+| `/library/notes` | Library-level Notes IDE with D3 wiki-link graph |
 | `/library/paper/:id` | PDF viewer + Notes IDE + AI Copilot |
 | `/library/website/:id` | Live iframe + Notes IDE + AI Copilot + Details |
+| `/library/github-repo/:id` | Repo overview + Notes IDE + AI Copilot |
 | `/library/settings` | Library settings (rename, AI Auto-Note-Taker, delete) |
 | `/agents` | Workflow catalog + active runs with live logs |
 | `/proposals` | Agent proposals — approve/reject with diff view |
@@ -158,6 +167,7 @@ All routes are prefixed `/api`. Responses are camelCase JSON. See the full API r
 | GET | `/api/libraries` | List libraries |
 | POST | `/api/libraries` | Create library |
 | GET/PATCH/DELETE | `/api/libraries/{id}` | Single library |
+| GET/POST | `/api/libraries/{id}/notes` | List / create library-level notes |
 | GET | `/api/papers` | List papers; `?library_id=&collection_id=&status=&search=` |
 | POST | `/api/papers` | Create paper |
 | GET/PATCH/DELETE | `/api/papers/{id}` | Single paper |
@@ -166,21 +176,35 @@ All routes are prefixed `/api`. Responses are camelCase JSON. See the full API r
 | POST | `/api/papers/import-bibtex/parse` | Parse `.bib` file and preview entries with duplicate detection |
 | POST | `/api/papers/import-bibtex/confirm` | Confirm BibTeX import with selected entries |
 | GET | `/api/papers/export-bibtex` | Export papers/websites as `.bib`; `?ids=&library_id=&collection_id=` |
+| GET | `/api/papers/{id}/related` | Related papers via OpenAlex (citation links + semantic neighbors) |
 | POST | `/api/papers/{id}/pdf` | Upload PDF (multipart/form-data) |
 | POST | `/api/papers/{id}/pdf/fetch` | Download PDF from external URL to Supabase Storage |
 | DELETE | `/api/papers/{id}/pdf` | Remove PDF |
+| GET/POST | `/api/papers/{id}/notes` | List / create notes for a paper |
+| POST | `/api/papers/{id}/notes/generate` | AI-generate notes for a paper |
+| GET/POST/DELETE | `/api/papers/{id}/chat` | Copilot chat for a paper |
+| GET/POST | `/api/papers/{id}/text` | Get cached / extract PDF text |
+| GET/POST | `/api/papers/{id}/authors/link` | List / link authors to a paper |
+| DELETE | `/api/papers/{id}/authors/link/{author_id}` | Unlink an author from a paper |
 | GET | `/api/websites` | List websites; `?library_id=&collection_id=&status=` |
 | POST | `/api/websites` | Create website |
 | GET/PATCH/DELETE | `/api/websites/{id}` | Single website |
 | POST | `/api/websites/import` | Fetch URL metadata and add to library |
+| GET/POST | `/api/websites/{id}/notes` | List / create notes for a website |
+| POST | `/api/websites/{id}/notes/generate` | AI-generate notes for a website |
+| GET/POST/DELETE | `/api/websites/{id}/chat` | Copilot chat for a website |
+| GET | `/api/github-repos` | List GitHub repos |
+| POST | `/api/github-repos` | Add a GitHub repo |
+| GET/PATCH/DELETE | `/api/github-repos/{id}` | Single GitHub repo |
+| GET/POST | `/api/github-repos/{id}/notes` | List / create notes for a GitHub repo |
+| POST | `/api/github-repos/{id}/notes/generate` | AI-generate notes for a GitHub repo |
+| GET/POST/DELETE | `/api/github-repos/{id}/chat` | Copilot chat for a GitHub repo |
 | GET | `/api/collections` | List collections with computed `paperCount` |
 | POST | `/api/collections` | Create collection |
 | GET/PATCH/DELETE | `/api/collections/{id}` | Single collection |
 | GET | `/api/authors` | List authors |
 | GET/PATCH/DELETE | `/api/authors/{id}` | Single author |
-| GET | `/api/github-repos` | List GitHub repos |
-| POST | `/api/github-repos` | Add a GitHub repo |
-| GET/PATCH/DELETE | `/api/github-repos/{id}` | Single GitHub repo |
+| GET | `/api/search` | Search across all item types; `?q=&mode=lexical\|semantic&library_id=&types=` |
 | GET | `/api/workflows` | Workflow catalog (read-only) |
 | GET/POST | `/api/runs` | List / start a run |
 | GET | `/api/runs/{id}` | Run with logs, trace, and cost |
@@ -190,14 +214,9 @@ All routes are prefixed `/api`. Responses are camelCase JSON. See the full API r
 | POST | `/api/proposals/batch` | Batch approve/reject |
 | GET | `/api/activity` | Activity feed; `?type=agent\|human` |
 | GET | `/api/user` | User profile |
-| GET/POST | `/api/papers/{id}/notes` | List / create notes for a paper |
-| GET/POST | `/api/websites/{id}/notes` | List / create notes for a website |
-| POST | `/api/papers/{id}/notes/generate` | AI-generate notes for a paper |
-| POST | `/api/websites/{id}/notes/generate` | AI-generate notes for a website |
-| PATCH/DELETE | `/api/notes/{id}` | Update / delete a note |
-| GET/POST/DELETE | `/api/papers/{id}/chat` | Copilot chat for a paper |
-| GET/POST/DELETE | `/api/websites/{id}/chat` | Copilot chat for a website |
-| GET/POST | `/api/papers/{id}/text` | Get cached / extract PDF text |
+| PATCH/DELETE | `/api/notes/{id}` | Update / delete a note by ID |
+| GET | `/api/settings/models` | Get current LLM model assignments and available models |
+| PATCH | `/api/settings/models` | Update model assignments for one or more roles |
 
 </details>
 
@@ -206,18 +225,19 @@ All routes are prefixed `/api`. Responses are camelCase JSON. See the full API r
 ```
 researchos/
 ├── backend/
-│   ├── app.py              # FastAPI entry point
-│   ├── models/             # Pydantic domain models
-│   ├── services/           # Business logic + DB access
-│   ├── routers/            # FastAPI route handlers
-│   ├── agents/             # pydantic-ai agent definitions
-│   └── migrations/         # SQL migrations for Supabase
+│   ├── app.py              # FastAPI entry point, CORS, seed data, exception handlers
+│   ├── agents/             # pydantic-ai agent definitions + shared LLM config
+│   ├── models/             # Pydantic domain models (CamelModel-based)
+│   ├── services/           # Business logic + all DB and external API access
+│   ├── routers/            # FastAPI route handlers (thin, transport-only)
+│   └── migrations/         # Numbered SQL migrations for Supabase
 ├── frontend/
 │   └── src/
-│       ├── services/api.js # API client
-│       ├── context/        # React context (active library)
-│       ├── components/     # Shared UI (NotesPanel, CopilotPanel, etc.)
-│       └── pages/          # Route components
+│       ├── services/api.js       # Single API client; all fetch calls go here
+│       ├── context/              # React context (active library + collections)
+│       ├── hooks/                # Reusable hooks (e.g. useDragResize)
+│       ├── components/           # Shared UI (NotesPanel, CopilotPanel, NoteGraphView, etc.)
+│       └── pages/                # Route-level components
 ├── ARCHITECTURE.md         # Codebase architecture guide
 ├── CONTRIBUTING.md         # How to contribute
 └── LICENSE                 # MIT
@@ -234,9 +254,9 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) to get
 Scoped for a single-user, local research OS (no auth, no collaboration, no multi-tenancy).
 
 1. **Library Interchange** — ~~BibTeX import and export~~, ~~duplicate detection~~, RIS/CSL-JSON import and export (planned)
-2. **Scholarly Discovery** — OpenAlex, Semantic Scholar, and Unpaywall integrations
+2. **Scholarly Discovery** — ~~Related paper discovery via OpenAlex~~, Semantic Scholar and Unpaywall integrations
 3. **Literature Review Automation** — prompt-to-collection pipeline, continuous refresh, provider-aware throttling
-4. **Search & Retrieval** — hybrid full-text + vector search, embedding pipeline
+4. **Search & Retrieval** — ~~hybrid lexical + semantic search~~, full embedding pipeline with persistent index
 5. **PDF Annotations** — in-document highlights, anchored comments, annotation export
 6. **Agent Runtime Hardening** — durable execution, ag-ui-protocol streaming, structured run artifacts
 7. **Advanced PDF Processing** — GROBID integration, citation graph from PDFs, section-aware chunking
