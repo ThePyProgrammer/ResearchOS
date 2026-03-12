@@ -1431,6 +1431,7 @@ export default function Library() {
   const [titleFilter, setTitleFilter] = useState('')
   const [venueFilter, setVenueFilter] = useState('')
   const [tagFilters, setTagFilters] = useState(new Set())
+  const [tagFilterMode, setTagFilterMode] = useState('and') // 'and' | 'or'
   const [sortKey, setSortKey] = useState('date')   // 'title' | 'date' | 'authors' | null
   const [sortDir, setSortDir] = useState('asc')  // 'asc' | 'desc'
   const location = useLocation()
@@ -1681,7 +1682,7 @@ export default function Library() {
     if (venueFilter) result = result.filter(p => itemVenue(p).toLowerCase().includes(venueFilter.toLowerCase()))
     if (yearFrom) result = result.filter(p => Number(itemYear(p)) >= Number(yearFrom))
     if (yearTo) result = result.filter(p => Number(itemYear(p)) <= Number(yearTo))
-    if (tagFilters.size > 0) result = result.filter(p => [...tagFilters].every(t => p.tags.includes(t)))
+    if (tagFilters.size > 0) result = result.filter(p => [...tagFilters][tagFilterMode === 'and' ? 'every' : 'some'](t => p.tags?.includes(t)))
     if (authorFilter) result = result.filter(p => (p.authors || []).some(a => a === authorFilter))
     if (sortKey) {
       const dir = sortDir === 'asc' ? 1 : -1
@@ -1708,7 +1709,7 @@ export default function Library() {
       })
     }
     return result
-  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters, authorFilter, sortKey, sortDir])
+  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters, tagFilterMode, authorFilter, sortKey, sortDir])
 
   // Keep nav refs current on every render (no effect needed — plain assignment is safe here)
   filteredRef.current = filtered
@@ -1927,7 +1928,18 @@ export default function Library() {
               {/* Tags */}
               {allTags.length > 0 && (
                 <div className="flex items-start gap-3">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0 pt-1">Tags</span>
+                  <div className="flex items-center gap-1.5 w-14 flex-shrink-0 pt-1">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tags</span>
+                    {tagFilters.size > 1 && (
+                      <button
+                        onClick={() => setTagFilterMode(m => m === 'and' ? 'or' : 'and')}
+                        className="text-[9px] font-bold px-1 py-0.5 rounded border border-slate-300 text-slate-400 hover:border-blue-400 hover:text-blue-600 transition-colors leading-none"
+                        title="Toggle AND / OR matching"
+                      >
+                        {tagFilterMode.toUpperCase()}
+                      </button>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
                     {allTags.map(tag => (
                       <button
