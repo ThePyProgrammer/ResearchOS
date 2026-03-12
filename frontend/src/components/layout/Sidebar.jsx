@@ -751,6 +751,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         <div className="space-y-0.5">
           <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" collapsed={collapsed} />
           <SidebarLink to="/library/notes" icon="edit_note" label="Notes" collapsed={collapsed} />
+          <SidebarLink to="/library/map" icon="scatter_plot" label="Library Map" collapsed={collapsed} />
         </div>
 
         {/* Library tree (Quick Access + Collections) */}

@@ -278,4 +278,13 @@ export const searchApi = {
     if (types?.length) params.set('types', types.join(','))
     return apiFetch(`/search?${params}`)
   },
+  /**
+   * Fetch UMAP 2D coordinates for all embedded items in a library.
+   * Returns [{id, x, y, title, itemType, collections, url}] normalised to [-1,1].
+   */
+  map: (libraryId) => {
+    const params = new URLSearchParams()
+    if (libraryId) params.set('library_id', libraryId)
+    return apiFetch(`/search/map?${params}`)
+  },
 }

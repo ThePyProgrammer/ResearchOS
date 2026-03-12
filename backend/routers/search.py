@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
@@ -58,3 +58,30 @@ async def search_library(
         {**item.model_dump(by_alias=True), "score": round(score, 4)}
         for item, score in results
     ])
+
+
+@router.get("/map")
+async def library_map(library_id: Optional[str] = None):
+    """
+    Return UMAP 2D coordinates for every item in a library that has a cached
+    embedding.  Used by the Library Map visualisation.
+
+    Each result contains: ``id``, ``x``, ``y``, ``title``, ``itemType``,
+    ``collections``, ``url``.  Coordinates are normalised to [-1, 1].
+
+    The projection is cached in ``data/map_cache.json`` and only recomputed
+    when the set of embedded items changes.
+
+    Returns 503 when ``umap-learn`` is not installed.
+    """
+    from services.map_service import build_map
+
+    try:
+        points = await build_map(library_id=library_id or None)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+        )
+
+    return JSONResponse(points)
