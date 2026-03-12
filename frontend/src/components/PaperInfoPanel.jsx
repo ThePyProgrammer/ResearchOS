@@ -32,6 +32,120 @@ export function formatAdded(raw) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// ─── Citation formatters ────────────────────────────────────────────────────
+
+function formatAuthorAPA(name) {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length < 2) return name
+  const last = parts[parts.length - 1]
+  const initials = parts.slice(0, -1).map(p => p[0].toUpperCase() + '.').join(' ')
+  return `${last}, ${initials}`
+}
+
+export function formatCitationAPA(paper) {
+  const authors = (paper.authors || [])
+  let authorStr
+  if (authors.length === 0) authorStr = 'Unknown'
+  else if (authors.length <= 6) authorStr = authors.map(formatAuthorAPA).join(', ')
+  else authorStr = authors.slice(0, 6).map(formatAuthorAPA).join(', ') + ', ...'
+  const year = paper.year ? `(${paper.year})` : '(n.d.)'
+  const title = paper.title || 'Untitled'
+  const venue = paper.venue ? ` ${paper.venue}.` : ''
+  const doi = paper.doi ? ` https://doi.org/${paper.doi}` : (paper.arxivId ? ` https://arxiv.org/abs/${paper.arxivId}` : '')
+  return `${authorStr} ${year}. ${title}.${venue}${doi}`.trim()
+}
+
+function bibtexKey(paper) {
+  const first = (paper.authors?.[0] || '').trim().split(/\s+/).pop() || 'unknown'
+  return (first + (paper.year || '')).toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+export function formatCitationBibTeX(paper) {
+  const key = bibtexKey(paper)
+  const lines = [`@article{${key},`]
+  if (paper.title)   lines.push(`  title   = {${paper.title}},`)
+  if (paper.authors?.length) lines.push(`  author  = {${paper.authors.join(' and ')}},`)
+  if (paper.year)    lines.push(`  year    = {${paper.year}},`)
+  if (paper.venue)   lines.push(`  journal = {${paper.venue}},`)
+  if (paper.doi)     lines.push(`  doi     = {${paper.doi}},`)
+  if (paper.arxivId && !paper.doi) lines.push(`  eprint  = {${paper.arxivId}},`)
+  lines.push('}')
+  return lines.join('\n')
+}
+
+export function formatCitationMarkdown(paper) {
+  const url = paper.doi
+    ? `https://doi.org/${paper.doi}`
+    : paper.arxivId
+      ? `https://arxiv.org/abs/${paper.arxivId}`
+      : null
+  const title = paper.title || 'Untitled'
+  const authors = (paper.authors || []).slice(0, 3).join(', ') + (paper.authors?.length > 3 ? ' et al.' : '')
+  const meta = [authors, paper.venue, paper.year].filter(Boolean).join(', ')
+  const link = url ? `[${title}](${url})` : title
+  return meta ? `${link} — ${meta}` : link
+}
+
+const CITE_FORMATS = [
+  { id: 'apa',      label: 'APA',    fn: formatCitationAPA },
+  { id: 'bibtex',   label: 'BibTeX', fn: formatCitationBibTeX },
+  { id: 'markdown', label: 'MD',     fn: formatCitationMarkdown },
+]
+
+function CitationPanel({ paper }) {
+  const [fmt, setFmt] = useState('apa')
+  const [copied, setCopied] = useState(false)
+  const current = CITE_FORMATS.find(f => f.id === fmt)
+  const text = current.fn(paper)
+
+  function handleCopy() {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    })
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Cite</p>
+        <div className="flex items-center gap-1">
+          {CITE_FORMATS.map(f => (
+            <button
+              key={f.id}
+              onClick={() => setFmt(f.id)}
+              className={`text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors ${
+                fmt === f.id
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="relative group">
+        <pre className="text-[11px] leading-relaxed text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2.5 whitespace-pre-wrap break-all font-mono select-all">
+          {text}
+        </pre>
+        <button
+          onClick={handleCopy}
+          title="Copy citation"
+          className={`absolute top-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-all ${
+            copied
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:border-slate-300 opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          <Icon name={copied ? 'check' : 'content_copy'} className="text-[12px]" />
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function NamedLinks({ links = [], onSave }) {
   const [adding, setAdding] = useState(false)
   const [editIdx, setEditIdx] = useState(null)
@@ -943,6 +1057,9 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate })
           />
         </div>
       </div>
+
+      {/* Citation */}
+      <CitationPanel paper={paper} />
 
       {/* Tags */}
       {paper.tags?.length > 0 && (
