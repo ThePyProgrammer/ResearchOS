@@ -44,6 +44,9 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
   const clusterRef      = useRef(0.3)    // selective: same-source pull
   const gravityRef      = useRef(0.5)    // global: all-nodes pull toward centre
   const collDropRef     = useRef(null)   // for outside-click detection on collection dropdown
+  const nodeElsRef      = useRef(null)   // D3 selection of node groups — for search highlight
+  const linkElsRef      = useRef(null)   // D3 selection of link lines  — for search highlight
+  const hullEntriesRef  = useRef([])     // hull {path, label, nodes}   — for search highlight
 
   const [hoveredNode,     setHoveredNode]     = useState(null)
   const [clusterStrength, setClusterStrength] = useState(0.3)
@@ -55,6 +58,9 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
   const [hullCollections, setHullCollections] = useState([])  // empty = all shown
   const [collSearch,      setCollSearch]      = useState('')
   const [collDropOpen,    setCollDropOpen]    = useState(false)
+
+  // Graph search
+  const [graphSearch, setGraphSearch] = useState('')
 
   // ── Close collection dropdown on outside click ──────────────────────────────
   useEffect(() => {
@@ -77,6 +83,32 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
     gravityRef.current = gravityStrength
     if (simRef.current) simRef.current.alpha(0.35).restart()
   }, [gravityStrength])
+
+  // ── Search highlight: opacity pass directly on stored D3 selections ──────────
+  useEffect(() => {
+    const nodeEls    = nodeElsRef.current
+    const linkEls    = linkElsRef.current
+    const hulls      = hullEntriesRef.current
+    if (!nodeEls) return
+
+    const q = graphSearch.trim().toLowerCase()
+    if (!q) {
+      nodeEls.attr('opacity', null)
+      linkEls?.attr('opacity', null)
+      hulls.forEach(({ path, label }) => { path.attr('opacity', null); label.attr('opacity', null) })
+      return
+    }
+
+    const DIM = 0.25
+    const matches = d => d.name.toLowerCase().includes(q) || (d.sourceName ?? '').toLowerCase().includes(q)
+    nodeEls.attr('opacity', d => matches(d) ? 1 : DIM)
+    linkEls?.attr('opacity', d => (matches(d.source) || matches(d.target)) ? 0.6 : DIM)
+    hulls.forEach(({ nodes: gNodes, path, label }) => {
+      const hit = gNodes.some(d => matches(d))
+      path.attr('opacity',  hit ? 1   : DIM)
+      label.attr('opacity', hit ? 0.7 : DIM)
+    })
+  }, [graphSearch])
 
   // ── Build graph data (filtered by visibleTypes and selected collections) ───────
   const buildGraph = useCallback(() => {
@@ -214,12 +246,14 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
 
       hullEntries.push({ sourceKey: key, nodes: groupNodes, path: hullPath, label: hullLabel })
     }
+    hullEntriesRef.current = hullEntries
 
     // ── Links ─────────────────────────────────────────────────────────────────
     const linkEls = g.append('g').attr('class', 'links')
       .selectAll('line').data(links).join('line')
       .attr('stroke', '#cbd5e1').attr('stroke-width', 1.5)
       .attr('marker-end', 'url(#wiki-arrow)')
+    linkElsRef.current = linkEls
 
     // ── Nodes ─────────────────────────────────────────────────────────────────
     const maxDegree = Math.max(1, ...nodes.map(d => d.degree))
@@ -231,6 +265,7 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
       .on('click',      (event, d) => { event.stopPropagation(); onNoteClick?.(d.id) })
       .on('mouseenter', (_, d)     => setHoveredNode(d))
       .on('mouseleave', ()         => setHoveredNode(null))
+    nodeElsRef.current = nodeEls
 
     nodeEls.call(d3.drag()
       .on('start', (event, d) => { if (!event.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y })
@@ -312,7 +347,12 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
 
     sim.on('end', fitView)
 
-    return () => sim.stop()
+    return () => {
+      sim.stop()
+      nodeElsRef.current   = null
+      linkElsRef.current   = null
+      hullEntriesRef.current = []
+    }
   }, [buildGraph, onNoteClick])
 
   // ── Derive display data (no D3 side-effects) ─────────────────────────────────
@@ -347,6 +387,27 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
           <span className="text-[11px] text-slate-400">
             {nodes.length} notes · {links.length} links
           </span>
+        </div>
+
+        {/* Graph search */}
+        <div className="relative flex items-center flex-1 max-w-[220px]">
+          <Icon name="search" className="absolute left-2 text-[13px] text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={graphSearch}
+            onChange={e => setGraphSearch(e.target.value)}
+            onKeyDown={e => e.key === 'Escape' && setGraphSearch('')}
+            placeholder="Search nodes…"
+            className="w-full pl-6 pr-5 py-1 text-[11px] bg-slate-100 border border-transparent rounded-lg focus:outline-none focus:border-indigo-300 focus:bg-white transition-colors placeholder-slate-400 text-slate-700"
+          />
+          {graphSearch && (
+            <button
+              onClick={() => setGraphSearch('')}
+              className="absolute right-1.5 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <Icon name="close" className="text-[12px]" />
+            </button>
+          )}
         </div>
 
         {/* Legend + tip */}
