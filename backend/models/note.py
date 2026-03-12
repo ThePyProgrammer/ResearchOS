@@ -27,3 +27,8 @@ class NoteUpdate(CamelModel):
     name: Optional[str] = None
     parent_id: Optional[str] = None
     content: Optional[str] = None
+    # Source reassignment — for moving notes between papers / websites / repos / library
+    paper_id: Optional[str] = None
+    website_id: Optional[str] = None
+    github_repo_id: Optional[str] = None
+    library_id: Optional[str] = None

@@ -74,11 +74,21 @@ def create_note(
     return note
 
 
+_SOURCE_FIELDS = {"paper_id", "website_id", "github_repo_id", "library_id"}
+
+
 def update_note(note_id: str, data: NoteUpdate) -> Optional[Note]:
     existing = get_note(note_id)
     if existing is None:
         return None
-    updates = data.model_dump(exclude_none=True)
+    # exclude_unset (not exclude_none) so callers can explicitly set fields to null
+    updates = data.model_dump(exclude_unset=True)
+    # When reassigning to a different source, null out all other source fields so
+    # a note always belongs to exactly one source at a time.
+    if any(f in updates for f in _SOURCE_FIELDS):
+        for f in _SOURCE_FIELDS:
+            if f not in updates:
+                updates[f] = None
     if not updates:
         return existing
     updates["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="milliseconds")

@@ -150,20 +150,48 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick 
 }
 
 // ─── Recursive note tree node ─────────────────────────────────────────────────
-function NoteTreeNode({ note, allNotes, selectedNoteId, expandedNotes, onSelect, onToggle, onContextMenu, depth = 0 }) {
+function NoteTreeNode({
+  note, allNotes, selectedNoteId, expandedNotes, onSelect, onToggle, onContextMenu, depth = 0,
+  sourceKey, draggingNoteId, dropHighlight, onDragStart, onDragEnd, onDrop, onDropHighlightChange,
+}) {
   const children = allNotes.filter(n => n.parentId === note.id)
   const isFolder = note.type === 'folder'
   const isOpen = expandedNotes[note.id]
   const isSelected = selectedNoteId === note.id
+  const isDragging = draggingNoteId === note.id
+  const dropKey = `folder:${note.id}`
+  const isDropTarget = isFolder && dropHighlight === dropKey
+
+  const dragProps = !isFolder ? {
+    draggable: true,
+    onDragStart: e => {
+      e.stopPropagation()
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/plain', note.id)
+      onDragStart?.(note.id, sourceKey)
+    },
+    onDragEnd: () => onDragEnd?.(),
+  } : {}
+
+  const dropProps = isFolder ? {
+    onDragEnter: e => { e.preventDefault(); onDropHighlightChange?.(dropKey) },
+    onDragOver: e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' },
+    onDragLeave: e => { if (!e.currentTarget.contains(e.relatedTarget)) onDropHighlightChange?.(null) },
+    onDrop: e => { e.preventDefault(); e.stopPropagation(); onDrop?.(sourceKey, note.id) },
+  } : {}
 
   return (
     <div>
       <button
+        {...dragProps}
+        {...dropProps}
         onClick={() => isFolder ? onToggle(note.id) : onSelect(note.id)}
         onContextMenu={e => { e.preventDefault(); onContextMenu(e, note) }}
-        className={`w-full flex items-center gap-1 py-[3px] text-[12px] rounded transition-colors text-left ${
-          isSelected ? 'bg-blue-100 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
-        }`}
+        className={`group w-full flex items-center gap-1 py-[3px] text-[12px] rounded transition-colors text-left ${
+          isDropTarget    ? 'bg-blue-50 ring-1 ring-inset ring-blue-300 text-blue-700' :
+          isSelected      ? 'bg-blue-100 text-blue-700' :
+                            'text-slate-600 hover:bg-slate-100'
+        } ${isDragging ? 'opacity-40' : ''}`}
         style={{ paddingLeft: `${depth * 14 + 8}px`, paddingRight: 6 }}
       >
         {isFolder ? (
@@ -176,6 +204,12 @@ function NoteTreeNode({ note, allNotes, selectedNoteId, expandedNotes, onSelect,
           className={`text-[13px] flex-shrink-0 ${isFolder ? 'text-amber-500' : 'text-slate-400'}`}
         />
         <span className="truncate flex-1">{note.name}</span>
+        {!isFolder && (
+          <Icon
+            name="drag_indicator"
+            className="text-[12px] text-slate-300 flex-shrink-0 opacity-0 group-hover:opacity-100 cursor-grab"
+          />
+        )}
       </button>
       {isFolder && isOpen && children
         .sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'folder' ? -1 : 1)
@@ -190,6 +224,13 @@ function NoteTreeNode({ note, allNotes, selectedNoteId, expandedNotes, onSelect,
             onToggle={onToggle}
             onContextMenu={onContextMenu}
             depth={depth + 1}
+            sourceKey={sourceKey}
+            draggingNoteId={draggingNoteId}
+            dropHighlight={dropHighlight}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onDrop={onDrop}
+            onDropHighlightChange={onDropHighlightChange}
           />
         ))}
     </div>
@@ -220,6 +261,8 @@ function ItemFolder({
   onToggle, onSelectNote, onToggleNote, onNoteContextMenu, onItemContextMenu,
   onOpenResource,
   creating, newName, setNewName, onCreateSubmit, onCancelCreate,
+  // drag-and-drop
+  draggingNoteId, dropHighlight, onDragStart, onDragEnd, onDrop, onDropHighlightChange,
 }) {
   const s = ITEM_STYLES[itemType]
   const title =
@@ -251,13 +294,22 @@ function ItemFolder({
     return null
   })()
 
+  const rootDropKey = `root:${sourceKey}`
+  const isRootDropTarget = dropHighlight === rootDropKey
+
   return (
     <div>
       <div
         onClick={onToggle}
         onContextMenu={e => { e.preventDefault(); onItemContextMenu(e) }}
+        onDragEnter={e => { e.preventDefault(); onDropHighlightChange?.(rootDropKey) }}
+        onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) onDropHighlightChange?.(null) }}
+        onDrop={e => { e.preventDefault(); e.stopPropagation(); onDrop?.(sourceKey, null) }}
         title={title}
-        className={`group flex items-center gap-1.5 py-[3px] px-1.5 rounded cursor-pointer text-[12px] transition-colors ${s.bg} ${isActiveSource ? s.activeBg : ''}`}
+        className={`group flex items-center gap-1.5 py-[3px] px-1.5 rounded cursor-pointer text-[12px] transition-colors ${
+          isRootDropTarget ? `ring-1 ring-inset ring-blue-300 bg-blue-50` : `${s.bg} ${isActiveSource ? s.activeBg : ''}`
+        }`}
       >
         <Icon
           name={isOpen ? 'expand_more' : 'chevron_right'}
@@ -266,7 +318,7 @@ function ItemFolder({
         <span className={`inline-flex items-center justify-center w-4 h-4 rounded flex-shrink-0 ${s.badge}`}>
           <Icon name={s.icon} className="text-[11px]" />
         </span>
-        <span className={`flex-1 truncate font-medium ${s.text} min-w-0`}>{title}</span>
+        <span className={`flex-1 truncate font-medium ${isRootDropTarget ? 'text-blue-700' : s.text} min-w-0`}>{title}</span>
         {/* Resource quick-open button — always visible on hover */}
         {resourceEntry && (
           <button
@@ -324,6 +376,13 @@ function ItemFolder({
               onToggle={onToggleNote}
               onContextMenu={onNoteContextMenu}
               depth={1}
+              sourceKey={sourceKey}
+              draggingNoteId={draggingNoteId}
+              dropHighlight={dropHighlight}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onDrop={onDrop}
+              onDropHighlightChange={onDropHighlightChange}
             />
           ))}
           {loaded && rootNotes.length === 0 && !creating && !resourceEntry && (
@@ -561,6 +620,11 @@ export default function LibraryNotes() {
   // ── Content search ─────────────────────────────────────────────────────────
   const [noteSearch, setNoteSearch] = useState('')
 
+  // ── Drag-and-drop ─────────────────────────────────────────────────────────
+  const dragRef = useRef(null)            // { noteId, sourceKey } while dragging
+  const [draggingNoteId, setDraggingNoteId] = useState(null)
+  const [dropHighlight, setDropHighlight] = useState(null) // unique key of hovered target
+
   // ── Creation / rename / context menu ──────────────────────────────────────
   const [creating, setCreating] = useState(null)
   const [newName, setNewName] = useState('')
@@ -742,6 +806,77 @@ export default function LibraryNotes() {
     })
     setActiveTabId(tabId)
     setGraphView(false)
+  }
+
+  // ── Drag-and-drop handlers ─────────────────────────────────────────────────
+  function handleDragStart(noteId, sourceKey) {
+    dragRef.current = { noteId, sourceKey }
+    setDraggingNoteId(noteId)
+  }
+
+  function handleDragEnd() {
+    dragRef.current = null
+    setDraggingNoteId(null)
+    setDropHighlight(null)
+  }
+
+  async function handleDrop(targetSourceKey, targetParentId) {
+    const drag = dragRef.current
+    if (!drag) return
+    dragRef.current = null
+    setDraggingNoteId(null)
+    setDropHighlight(null)
+
+    const { noteId, sourceKey } = drag
+    const note = getSourceNotes(sourceKey).find(n => n.id === noteId)
+    if (!note) return
+
+    // No-op: same location
+    const sameSource = targetSourceKey === sourceKey
+    const sameParent = (targetParentId ?? null) === (note.parentId ?? null)
+    if (sameSource && sameParent) return
+
+    // Build API payload
+    const updates = { parentId: targetParentId ?? null }
+    if (!sameSource) {
+      if (targetSourceKey === 'library') {
+        updates.libraryId = activeLibraryId
+        updates.paperId = null
+        updates.websiteId = null
+        updates.githubRepoId = null
+      } else {
+        const [type, id] = targetSourceKey.split(':')
+        updates.paperId = type === 'paper' ? id : null
+        updates.websiteId = type === 'website' ? id : null
+        updates.githubRepoId = type === 'github' ? id : null
+        updates.libraryId = null
+      }
+    }
+
+    // Optimistic update
+    const movedNote = { ...note, parentId: targetParentId ?? null }
+    setSourceNotes(sourceKey, prev => prev.filter(n => n.id !== noteId))
+    setSourceNotes(targetSourceKey, prev => [...prev, movedNote])
+
+    // Update open tab source if necessary
+    if (!sameSource) {
+      setOpenTabs(prev => prev.map(t => t.noteId === noteId ? { ...t, source: targetSourceKey } : t))
+    }
+
+    try {
+      const result = await notesApi.update(noteId, updates)
+      if (result) {
+        setSourceNotes(targetSourceKey, prev => prev.map(n => n.id === noteId ? result : n))
+      }
+    } catch (err) {
+      console.error('Failed to move note:', err)
+      // Rollback
+      setSourceNotes(targetSourceKey, prev => prev.filter(n => n.id !== noteId))
+      setSourceNotes(sourceKey, prev => [...prev, note])
+      if (!sameSource) {
+        setOpenTabs(prev => prev.map(t => t.noteId === noteId ? { ...t, source: sourceKey } : t))
+      }
+    }
   }
 
   // ── Handle wiki link click: resolve by ID first, fall back to name ────────
@@ -1135,7 +1270,15 @@ export default function LibraryNotes() {
               {/* ── Library notes ── */}
               {(libRootNotes.length > 0 || (creating?.source === 'library' && !creating.parentId)) && (
                 <div className="mb-1">
-                  <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">
+                  <p
+                    onDragEnter={e => { e.preventDefault(); setDropHighlight('root:library') }}
+                    onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+                    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDropHighlight(null) }}
+                    onDrop={e => { e.preventDefault(); handleDrop('library', null) }}
+                    className={`px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest rounded transition-colors ${
+                      dropHighlight === 'root:library' ? 'bg-blue-50 text-blue-500 ring-1 ring-inset ring-blue-300' : 'text-slate-400'
+                    }`}
+                  >
                     Library
                   </p>
                   {libRootNotes.map(note => (
@@ -1149,6 +1292,13 @@ export default function LibraryNotes() {
                       onToggle={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
                       onContextMenu={(e, n) => openNoteCtxMenu(e, n, 'library')}
                       depth={0}
+                      sourceKey="library"
+                      draggingNoteId={draggingNoteId}
+                      dropHighlight={dropHighlight}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      onDrop={handleDrop}
+                      onDropHighlightChange={setDropHighlight}
                     />
                   ))}
                   {creating?.source === 'library' && !creating.parentId && (
@@ -1196,6 +1346,9 @@ export default function LibraryNotes() {
                         creating={creating?.source === sourceKey ? creating : null}
                         newName={newName} setNewName={setNewName}
                         onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
+                        draggingNoteId={draggingNoteId} dropHighlight={dropHighlight}
+                        onDragStart={handleDragStart} onDragEnd={handleDragEnd}
+                        onDrop={handleDrop} onDropHighlightChange={setDropHighlight}
                       />
                     )
                   })}
@@ -1226,6 +1379,9 @@ export default function LibraryNotes() {
                         creating={creating?.source === sourceKey ? creating : null}
                         newName={newName} setNewName={setNewName}
                         onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
+                        draggingNoteId={draggingNoteId} dropHighlight={dropHighlight}
+                        onDragStart={handleDragStart} onDragEnd={handleDragEnd}
+                        onDrop={handleDrop} onDropHighlightChange={setDropHighlight}
                       />
                     )
                   })}
@@ -1256,6 +1412,9 @@ export default function LibraryNotes() {
                         creating={creating?.source === sourceKey ? creating : null}
                         newName={newName} setNewName={setNewName}
                         onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
+                        draggingNoteId={draggingNoteId} dropHighlight={dropHighlight}
+                        onDragStart={handleDragStart} onDragEnd={handleDragEnd}
+                        onDrop={handleDrop} onDropHighlightChange={setDropHighlight}
                       />
                     )
                   })}
