@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { activityApi, runsApi, papersApi, collectionsApi } from '../services/api'
@@ -117,6 +117,7 @@ function LoadingSkeleton() {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const { activeLibrary } = useLibrary()
   const [tab, setTab] = useState('all')
   const [chartMode, setChartMode] = useState('cumulative')
@@ -209,15 +210,19 @@ export default function Dashboard() {
             <h2 className="text-base font-semibold text-slate-800 mb-4">Triage Health</h2>
             <div className="grid grid-cols-3 gap-4 mb-4">
               {[
-                { label: 'Inbox',   value: inbox,  pct: pct(inbox),  color: 'text-blue-600',   bg: 'bg-blue-50',   bar: 'bg-blue-400'  },
-                { label: 'To Read', value: toRead, pct: pct(toRead), color: 'text-amber-600',  bg: 'bg-amber-50',  bar: 'bg-amber-400' },
-                { label: 'Read',    value: read,   pct: pct(read),   color: 'text-emerald-600', bg: 'bg-emerald-50', bar: 'bg-emerald-400' },
-              ].map(({ label, value, pct: p, color, bg }) => (
-                <div key={label} className={`${bg} rounded-lg p-3 text-center`}>
+                { label: 'Inbox',   value: inbox,  pct: pct(inbox),  color: 'text-blue-600',    bg: 'bg-blue-50',    bar: 'bg-blue-400',   status: 'inbox'   },
+                { label: 'To Read', value: toRead, pct: pct(toRead), color: 'text-amber-600',   bg: 'bg-amber-50',   bar: 'bg-amber-400',  status: 'to-read' },
+                { label: 'Read',    value: read,   pct: pct(read),   color: 'text-emerald-600', bg: 'bg-emerald-50', bar: 'bg-emerald-400', status: 'read'    },
+              ].map(({ label, value, pct: p, color, bg, status }) => (
+                <button
+                  key={label}
+                  onClick={() => navigate(`/library?status=${status}`)}
+                  className={`${bg} rounded-lg p-3 text-center transition-opacity hover:opacity-80 cursor-pointer`}
+                >
                   <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString()}</p>
                   <p className="text-xs text-slate-500 mt-0.5">{label}</p>
                   <p className="text-xs text-slate-400">{p}%</p>
-                </div>
+                </button>
               ))}
             </div>
             <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
