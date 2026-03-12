@@ -259,7 +259,14 @@ export const settingsApi = {
 }
 
 export const searchApi = {
-  /** Quick search — returns papers with a `score` field appended. */
-  query: (q, { mode = 'lexical', limit = 10 } = {}) =>
-    apiFetch(`/search?q=${encodeURIComponent(q)}&mode=${mode}&limit=${limit}`),
+  /**
+   * Search across papers, websites, and GitHub repos.
+   * Results include a `score` field and an `itemType` field for routing.
+   */
+  query: (q, { mode = 'lexical', limit = 10, libraryId, types } = {}) => {
+    const params = new URLSearchParams({ q, mode, limit: String(limit) })
+    if (libraryId) params.set('library_id', libraryId)
+    if (types?.length) params.set('types', types.join(','))
+    return apiFetch(`/search?${params}`)
+  },
 }

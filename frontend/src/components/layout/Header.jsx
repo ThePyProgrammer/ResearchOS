@@ -997,7 +997,7 @@ export default function Header() {
     const timer = setTimeout(async () => {
       setSearching(true)
       try {
-        const data = await searchApi.query(query, { mode: 'lexical', limit: 5 })
+        const data = await searchApi.query(query, { mode: 'lexical', limit: 5, libraryId: activeLibraryId })
         setResults(data)
         setDropdownOpen(true)
       } catch (_) {
@@ -1007,7 +1007,7 @@ export default function Header() {
       }
     }, 300)
     return () => clearTimeout(timer)
-  }, [query])
+  }, [query, activeLibraryId])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -1033,10 +1033,17 @@ export default function Header() {
     if (e.key === 'Enter') commitSearch()
   }
 
-  const handleSelectPaper = (paper) => {
+  const handleSelectItem = (item) => {
     setDropdownOpen(false)
     setQuery('')
-    navigate(`/library/paper/${paper.id}`)
+    if (item.itemType === 'website') {
+      navigate(`/library/website/${item.id}`)
+    } else if (item.itemType === 'github_repo') {
+      // No dedicated repo detail page yet — surface in library view
+      navigate(`/library?q=${encodeURIComponent(item.title)}&mode=lexical`)
+    } else {
+      navigate(`/library/paper/${item.id}`)
+    }
   }
 
   const openQuickAddWindow = () => {
@@ -1100,28 +1107,48 @@ export default function Header() {
                 </div>
               )}
 
-              {!searching && results.map((paper, i) => (
+              {!searching && results.map((item, i) => (
                 <button
-                  key={paper.id}
-                  onClick={() => handleSelectPaper(paper)}
+                  key={item.id}
+                  onClick={() => handleSelectItem(item)}
                   className={`w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors ${
                     i < results.length - 1 ? 'border-b border-slate-100' : ''
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm font-medium text-slate-800 truncate flex-1">
-                      {paper.title}
+                      {item.title}
                     </span>
-                    {paper.source === 'agent' && paper.agentRun && (
+                    {item.itemType === 'website' && (
+                      <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
+                        Website
+                      </span>
+                    )}
+                    {item.itemType === 'github_repo' && (
+                      <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
+                        GitHub
+                      </span>
+                    )}
+                    {item.itemType === 'paper' && item.source === 'agent' && item.agentRun && (
                       <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
-                        Run #{paper.agentRun.runNumber}
+                        Run #{item.agentRun.runNumber}
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5 truncate">
-                    {paper.authors?.slice(0, 2).join(', ')}
-                    {paper.authors?.length > 2 ? ' et al.' : ''}
-                    {' · '}{paper.venue} {paper.year}
+                    {item.itemType === 'website' && (
+                      item.url
+                    )}
+                    {item.itemType === 'github_repo' && (
+                      `${item.owner}/${item.repoName}${item.language ? ` · ${item.language}` : ''}${item.stars != null ? ` · ★${item.stars}` : ''}`
+                    )}
+                    {(!item.itemType || item.itemType === 'paper') && (
+                      <>
+                        {item.authors?.slice(0, 2).join(', ')}
+                        {item.authors?.length > 2 ? ' et al.' : ''}
+                        {' · '}{item.venue} {item.year}
+                      </>
+                    )}
                   </p>
                 </button>
               ))}
