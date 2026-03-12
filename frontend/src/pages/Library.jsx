@@ -1395,6 +1395,8 @@ export default function Library() {
   const [fetchStatuses, setFetchStatuses] = useState({}) // { paperId: 'pending' | 'fetching' | 'done' | 'skipped' | error string }
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportEntries, setExportEntries] = useState([]) // [{ type, key, fields: [{key, value}], collapsed }]
+  const [showShortcuts, setShowShortcuts] = useState(false)
+  const showShortcutsRef = useRef(false)
   const [exportLoading, setExportLoading] = useState(false)
   const [topAuthors, setTopAuthors] = useState([])
   const [topAuthorsOpen, setTopAuthorsOpen] = useState(true)
@@ -1419,6 +1421,11 @@ export default function Library() {
       const f = filteredRef.current
       const sel = selectedItemRef.current
 
+      if (e.key === '?') {
+        setShowShortcuts(s => !s)
+        return
+      }
+
       if (e.key === 'j' || e.key === 'ArrowDown') {
         if (f.length === 0) return
         e.preventDefault()
@@ -1437,9 +1444,16 @@ export default function Library() {
         requestAnimationFrame(() => {
           document.querySelector(`tr[data-item-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest' })
         })
-      } else if (e.key === 'Escape' && sel) {
-        e.preventDefault()
-        setSelectedItem(null)
+      } else if (e.key === 'Escape') {
+        if (showShortcutsRef.current) {
+          e.preventDefault()
+          setShowShortcuts(false)
+          return
+        }
+        if (sel) {
+          e.preventDefault()
+          setSelectedItem(null)
+        }
       } else if (e.key === 'Enter' && sel) {
         e.preventDefault()
         const url = sel.itemType === 'website' ? `/library/website/${sel.id}`
@@ -1745,6 +1759,7 @@ export default function Library() {
   // Keep nav refs current on every render (no effect needed — plain assignment is safe here)
   filteredRef.current = filtered
   selectedItemRef.current = selectedItem
+  showShortcutsRef.current = showShortcuts
 
   // Tags visible in the current view, sorted by frequency descending — drives the filter bar.
   // Uses preTagFiltered so all tags stay visible while selecting in OR mode.
@@ -2683,6 +2698,36 @@ export default function Library() {
               <Icon name="download" className="text-[16px]" />
               Download .bib
             </button>
+          </div>
+        </WindowModal>
+      )}
+      {/* Keyboard shortcuts overlay */}
+      {showShortcuts && (
+        <WindowModal
+          open={showShortcuts}
+          onClose={() => setShowShortcuts(false)}
+          title="Keyboard Shortcuts"
+          iconName="keyboard"
+          iconWrapClassName="bg-slate-100"
+          iconClassName="text-[16px] text-slate-600"
+          normalPanelClassName="w-full max-w-[340px] rounded-xl"
+        >
+          <div className="px-5 py-4 space-y-1">
+            {[
+              ['j / ↓', 'Select next item'],
+              ['k / ↑', 'Select previous item'],
+              ['Enter', 'Open selected item in new tab'],
+              ['Escape', 'Close detail panel / this dialog'],
+              ['?', 'Show / hide this help overlay'],
+            ].map(([key, desc]) => (
+              <div key={key} className="flex items-center gap-3 py-1.5 border-b border-slate-100 last:border-0">
+                <kbd className="flex-shrink-0 min-w-[72px] text-center px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-[11px] font-mono font-semibold text-slate-700">
+                  {key}
+                </kbd>
+                <span className="text-xs text-slate-500">{desc}</span>
+              </div>
+            ))}
+            <p className="pt-2 text-[10px] text-slate-400">Shortcuts are inactive while an input field is focused.</p>
           </div>
         </WindowModal>
       )}
