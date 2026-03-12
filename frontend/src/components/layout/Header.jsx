@@ -951,6 +951,7 @@ export default function Header() {
   const [quickAddWindows, setQuickAddWindows] = useState([])
   const quickAddCounterRef = useRef(0)
   const containerRef = useRef(null)
+  const searchInputRef = useRef(null)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const activeCollectionId = searchParams.get('col') || null
@@ -1020,6 +1021,18 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', onMouseDown)
   }, [])
 
+  // ⌘K / Ctrl+K focuses the search box
+  useEffect(() => {
+    function onKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   const commitSearch = (q = query, mode = 'lexical') => {
     const trimmed = q.trim()
     if (!trimmed) return
@@ -1069,8 +1082,8 @@ export default function Header() {
         <div ref={containerRef} className="flex-1 max-w-xl relative">
           <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] pointer-events-none" />
           <input
+            ref={searchInputRef}
             type="text"
-            placeholder="Search library lexically or semantically…"
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
