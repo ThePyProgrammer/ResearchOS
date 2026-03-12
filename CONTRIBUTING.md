@@ -83,24 +83,9 @@ cp backend/.env.example backend/.env
 
 ### 3. Run database migrations
 
-Open the Supabase SQL editor and run the migration files in order:
+Open the Supabase SQL editor and run **`backend/migrations/schema.sql`** — this single file creates the complete schema in one shot.
 
-```
-backend/migrations/001_init.sql
-backend/migrations/002_add_paper_urls.sql
-backend/migrations/002_library_id.sql
-backend/migrations/003_notes.sql
-backend/migrations/003_add_links.sql
-backend/migrations/003_auto_notes.sql
-backend/migrations/004_chat_messages.sql
-backend/migrations/004_website_notes.sql
-backend/migrations/005_paper_texts.sql
-backend/migrations/006_chat_suggestions.sql
-backend/migrations/007_website_chat.sql
-backend/migrations/008_paper_published_date.sql
-backend/migrations/009_authors.sql
-backend/migrations/010_github_repos.sql
-```
+If you prefer to apply migrations incrementally (e.g. against an existing database), the numbered files in `backend/migrations/` can be run in order instead.
 
 ### 4. Start the backend
 

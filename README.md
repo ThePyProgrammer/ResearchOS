@@ -56,7 +56,12 @@ SUPABASE_KEY=sb_publishable_...
 
 ### Database
 
-Run the migration files in order in the Supabase SQL editor:
+Open the Supabase SQL editor and run **`backend/migrations/schema.sql`** — this single file creates the complete schema in one shot.
+
+<details>
+<summary>Running incremental migrations instead (existing installs)</summary>
+
+If you have an existing database and need to apply changes incrementally, run the numbered files in order:
 
 ```
 backend/migrations/001_init.sql
@@ -74,6 +79,8 @@ backend/migrations/008_paper_published_date.sql
 backend/migrations/009_authors.sql
 backend/migrations/010_github_repos.sql
 ```
+
+</details>
 
 ### Running
 
