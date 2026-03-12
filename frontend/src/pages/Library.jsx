@@ -1391,6 +1391,7 @@ export default function Library() {
   const [exportLoading, setExportLoading] = useState(false)
   const [topAuthors, setTopAuthors] = useState([])
   const [topAuthorsOpen, setTopAuthorsOpen] = useState(true)
+  const [tagsOpen, setTagsOpen] = useState(true)
   const [authorFilter, setAuthorFilter] = useState(null) // filter items by author name
 
   // Listen for item changes from sidebar drag-drop
@@ -1663,8 +1664,9 @@ export default function Library() {
     + (titleFilter ? 1 : 0)
     + (venueFilter ? 1 : 0)
     + tagFilters.size
+    + (authorFilter ? 1 : 0)
 
-  const filtered = useMemo(() => {
+  const preTagFiltered = useMemo(() => {
     let result = urlQuery ? items : items.filter(p => filterTab === 'all' || p.status === filterTab)
     if (activeCollection === 'inbox') result = result.filter(p => p.status === 'inbox')
     else if (activeCollection === 'unfiled') result = result.filter(p => p.collections.length === 0)
@@ -1699,8 +1701,13 @@ export default function Library() {
     if (venueFilter) result = result.filter(p => itemVenue(p).toLowerCase().includes(venueFilter.toLowerCase()))
     if (yearFrom) result = result.filter(p => Number(itemYear(p)) >= Number(yearFrom))
     if (yearTo) result = result.filter(p => Number(itemYear(p)) <= Number(yearTo))
-    if (tagFilters.size > 0) result = result.filter(p => [...tagFilters][tagFilterMode === 'and' ? 'every' : 'some'](t => p.tags?.includes(t)))
     if (authorFilter) result = result.filter(p => (p.authors || []).some(a => a === authorFilter))
+    return result
+  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, authorFilter])
+
+  const filtered = useMemo(() => {
+    let result = preTagFiltered
+    if (tagFilters.size > 0) result = result.filter(p => [...tagFilters][tagFilterMode === 'and' ? 'every' : 'some'](t => p.tags?.includes(t)))
     if (sortKey) {
       const dir = sortDir === 'asc' ? 1 : -1
       result = [...result].sort((a, b) => {
@@ -1726,18 +1733,19 @@ export default function Library() {
       })
     }
     return result
-  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, tagFilters, tagFilterMode, authorFilter, sortKey, sortDir])
+  }, [preTagFiltered, tagFilters, tagFilterMode, sortKey, sortDir])
 
   // Keep nav refs current on every render (no effect needed — plain assignment is safe here)
   filteredRef.current = filtered
   selectedItemRef.current = selectedItem
 
-  // Tags visible in the current view, sorted by frequency descending — drives the filter bar
+  // Tags visible in the current view, sorted by frequency descending — drives the filter bar.
+  // Uses preTagFiltered so all tags stay visible while selecting in OR mode.
   const visibleTagCounts = useMemo(() => {
     const counts = new Map()
-    filtered.forEach(p => (p.tags || []).forEach(t => counts.set(t, (counts.get(t) || 0) + 1)))
+    preTagFiltered.forEach(p => (p.tags || []).forEach(t => counts.set(t, (counts.get(t) || 0) + 1)))
     return [...counts.entries()].sort((a, b) => b[1] - a[1]) // [[tag, count], ...]
-  }, [filtered])
+  }, [preTagFiltered])
 
   function toggleSort(key) {
     if (sortKey === key) {
@@ -1757,6 +1765,7 @@ export default function Library() {
     setTitleFilter('')
     setVenueFilter('')
     setTagFilters(new Set())
+    setAuthorFilter(null)
   }
 
   function toggleTag(tag) {
@@ -1949,39 +1958,6 @@ export default function Library() {
                 </div>
               </div>
 
-              {/* Tags */}
-              {visibleTagCounts.length > 0 && (
-                <div className="flex items-start gap-3">
-                  <div className="flex items-center gap-1.5 w-14 flex-shrink-0 pt-1">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tags</span>
-                    {tagFilters.size > 1 && (
-                      <button
-                        onClick={() => setTagFilterMode(m => m === 'and' ? 'or' : 'and')}
-                        className="text-[9px] font-bold px-1 py-0.5 rounded border border-slate-300 text-slate-400 hover:border-blue-400 hover:text-blue-600 transition-colors leading-none"
-                        title="Toggle AND / OR matching"
-                      >
-                        {tagFilterMode.toUpperCase()}
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {visibleTagCounts.map(([tag, count]) => (
-                      <button
-                        key={tag}
-                        onClick={() => toggleTag(tag)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                          tagFilters.has(tag)
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        {tag} ({count})
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
             </div>
 
             {activeFilterCount > 0 && (
@@ -1990,6 +1966,89 @@ export default function Library() {
               </button>
             )}
           </div>
+
+        {/* Tags bar */}
+        {visibleTagCounts.length > 0 && (
+          <div className="border-b border-slate-200 bg-slate-50/50 px-4 py-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTagsOpen(o => !o)}
+                className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest hover:text-slate-700 transition-colors"
+              >
+                <Icon name={tagsOpen ? 'expand_more' : 'chevron_right'} className="text-[14px]" />
+                Tags
+              </button>
+              {visibleTagCounts.length > 1 && (
+                <button
+                  onClick={() => setTagFilterMode(m => m === 'and' ? 'or' : 'and')}
+                  className="text-[9px] font-bold px-1 py-0.5 rounded border border-slate-300 text-slate-400 hover:border-blue-400 hover:text-blue-600 transition-colors leading-none"
+                  title="Toggle AND / OR matching"
+                >
+                  {tagFilterMode.toUpperCase()}
+                </button>
+              )}
+              {tagFilters.size > 0 && (
+                <button onClick={() => setTagFilters(new Set())} className="text-[10px] text-blue-600 hover:text-blue-700 font-medium">
+                  Clear filter
+                </button>
+              )}
+            </div>
+            {tagsOpen && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {visibleTagCounts.map(([tag, count]) => (
+                  <button
+                    key={tag}
+                    onClick={() => toggleTag(tag)}
+                    className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
+                      tagFilters.has(tag)
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {tag} ({count})
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Authors bar */}
+        {topAuthors.length > 0 && (
+          <div className="border-b border-slate-200 bg-slate-50/50 px-4 py-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTopAuthorsOpen(o => !o)}
+                className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest hover:text-slate-700 transition-colors"
+              >
+                <Icon name={topAuthorsOpen ? 'expand_more' : 'chevron_right'} className="text-[14px]" />
+                Authors
+              </button>
+              {authorFilter && (
+                <button onClick={() => setAuthorFilter(null)} className="text-[10px] text-blue-600 hover:text-blue-700 font-medium">
+                  Clear filter
+                </button>
+              )}
+            </div>
+            {topAuthorsOpen && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {topAuthors.map((ta, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setAuthorFilter(authorFilter === ta.name ? null : ta.name)}
+                    className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
+                      authorFilter === ta.name
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700'
+                    }`}
+                  >
+                    {ta.name} ({ta.count})
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="px-4 py-2 text-sm text-red-600 bg-red-50 border-b border-red-100">
@@ -2092,46 +2151,6 @@ export default function Library() {
                 <Icon name="close" className="text-[16px]" />
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Top Authors bar */}
-        {topAuthors.length > 0 && (
-          <div className="border-b border-slate-200 bg-slate-50/50 px-4 py-2">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setTopAuthorsOpen(o => !o)}
-                className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest hover:text-slate-700 transition-colors"
-              >
-                <Icon name={topAuthorsOpen ? 'expand_more' : 'chevron_right'} className="text-[14px]" />
-                Top Authors
-              </button>
-              {authorFilter && (
-                <button
-                  onClick={() => setAuthorFilter(null)}
-                  className="text-[10px] text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  Clear filter
-                </button>
-              )}
-            </div>
-            {topAuthorsOpen && (
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {topAuthors.map((ta, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setAuthorFilter(authorFilter === ta.name ? null : ta.name)}
-                    className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
-                      authorFilter === ta.name
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700'
-                    }`}
-                  >
-                    {ta.name} ({ta.count})
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
