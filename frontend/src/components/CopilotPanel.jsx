@@ -339,9 +339,10 @@ function ChatBubble({ message, currentNotes, onSuggestionAccept, onSuggestionRej
 }
 
 /* ─── Main CopilotPanel ─── */
-export default function CopilotPanel({ paperId, websiteId, open, onToggle, notes, onNotesChanged, width }) {
+export default function CopilotPanel({ paperId, websiteId, githubRepoId, open, onToggle, notes, onNotesChanged, width }) {
   const isWebsite = Boolean(websiteId)
-  const itemId = paperId || websiteId
+  const isGitHubRepo = Boolean(githubRepoId)
+  const itemId = paperId || websiteId || githubRepoId
 
   const [messages, setMessages] = useState([])
   const [sending, setSending] = useState(false)
@@ -354,8 +355,14 @@ export default function CopilotPanel({ paperId, websiteId, open, onToggle, notes
   useEffect(() => {
     if (!itemId) return
     setLoading(true)
-    const listPromise = isWebsite ? chatApi.listForWebsite(websiteId) : chatApi.list(paperId)
-    const statusPromise = isWebsite ? Promise.resolve(null) : chatApi.getTextStatus(paperId).catch(() => null)
+    const listPromise = isGitHubRepo
+      ? chatApi.listForGitHubRepo(githubRepoId)
+      : isWebsite
+        ? chatApi.listForWebsite(websiteId)
+        : chatApi.list(paperId)
+    const statusPromise = (!isWebsite && !isGitHubRepo)
+      ? chatApi.getTextStatus(paperId).catch(() => null)
+      : Promise.resolve(null)
     Promise.all([listPromise, statusPromise])
       .then(([msgs, status]) => {
         setMessages(msgs)
@@ -366,7 +373,7 @@ export default function CopilotPanel({ paperId, websiteId, open, onToggle, notes
   }, [itemId])
 
   async function handleExtract() {
-    if (isWebsite) return
+    if (isWebsite || isGitHubRepo) return
     setExtracting(true)
     try {
       const status = await chatApi.extractText(paperId)
@@ -408,7 +415,11 @@ export default function CopilotPanel({ paperId, websiteId, open, onToggle, notes
 
       const payload = { content, notesContext: notesCtx.length > 0 ? notesCtx : undefined }
 
-      if (isWebsite) {
+      if (isGitHubRepo) {
+        await chatApi.sendForGitHubRepo(githubRepoId, payload)
+        const updated = await chatApi.listForGitHubRepo(githubRepoId)
+        setMessages(updated)
+      } else if (isWebsite) {
         await chatApi.sendForWebsite(websiteId, payload)
         const updated = await chatApi.listForWebsite(websiteId)
         setMessages(updated)
@@ -438,9 +449,11 @@ export default function CopilotPanel({ paperId, websiteId, open, onToggle, notes
 
   async function handleSuggestionAccept(suggestion) {
     const createNote = (data) =>
-      isWebsite
-        ? notesApi.createForWebsite(websiteId, data)
-        : notesApi.create(paperId, data)
+      isGitHubRepo
+        ? notesApi.createForGitHubRepo(githubRepoId, data)
+        : isWebsite
+          ? notesApi.createForWebsite(websiteId, data)
+          : notesApi.create(paperId, data)
 
     try {
       if (suggestion.type === 'create') {
@@ -495,10 +508,12 @@ export default function CopilotPanel({ paperId, websiteId, open, onToggle, notes
   }
 
   async function handleClear() {
-    const label = isWebsite ? 'website' : 'paper'
+    const label = isGitHubRepo ? 'repository' : isWebsite ? 'website' : 'paper'
     if (!window.confirm(`Clear all chat history for this ${label}?`)) return
     try {
-      if (isWebsite) {
+      if (isGitHubRepo) {
+        await chatApi.clearForGitHubRepo(githubRepoId)
+      } else if (isWebsite) {
         await chatApi.clearForWebsite(websiteId)
       } else {
         await chatApi.clear(paperId)

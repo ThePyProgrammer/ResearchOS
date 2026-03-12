@@ -21,12 +21,18 @@ _AUTO_FOLDER_NAME = "AI Notes"
 # Core CRUD
 # ---------------------------------------------------------------------------
 
-def list_notes(paper_id: Optional[str] = None, website_id: Optional[str] = None) -> list[Note]:
+def list_notes(
+    paper_id: Optional[str] = None,
+    website_id: Optional[str] = None,
+    github_repo_id: Optional[str] = None,
+) -> list[Note]:
     query = get_client().table(_TABLE).select("*")
     if paper_id:
         query = query.eq("paper_id", paper_id)
     elif website_id:
         query = query.eq("website_id", website_id)
+    elif github_repo_id:
+        query = query.eq("github_repo_id", github_repo_id)
     result = query.execute()
     return [Note.model_validate(r) for r in result.data]
 
@@ -42,12 +48,14 @@ def create_note(
     data: NoteCreate,
     paper_id: Optional[str] = None,
     website_id: Optional[str] = None,
+    github_repo_id: Optional[str] = None,
 ) -> Note:
     now = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     note = Note(
         id=f"note_{uuid.uuid4().hex[:8]}",
         paper_id=paper_id,
         website_id=website_id,
+        github_repo_id=github_repo_id,
         name=data.name,
         parent_id=data.parent_id,
         type=data.type,
@@ -57,7 +65,7 @@ def create_note(
     )
     row = {k: v for k, v in note.model_dump(by_alias=False).items() if v is not None}
     get_client().table(_TABLE).insert(row).execute()
-    logger.info("Created note '%s' (paper=%s website=%s)", data.name, paper_id, website_id)
+    logger.info("Created note '%s' (paper=%s website=%s repo=%s)", data.name, paper_id, website_id, github_repo_id)
     return note
 
 
@@ -172,13 +180,19 @@ def _call_openai_json(system: str, user_msg: str) -> dict:
         return {"notes": [{"name": "AI Overview", "type": "file", "content": raw}]}
 
 
-def _delete_auto_folder(paper_id: Optional[str], website_id: Optional[str]) -> None:
+def _delete_auto_folder(
+    paper_id: Optional[str],
+    website_id: Optional[str],
+    github_repo_id: Optional[str] = None,
+) -> None:
     """Delete the existing 'AI Notes' folder (and all children) for this item."""
     query = get_client().table(_TABLE).select("id").eq("name", _AUTO_FOLDER_NAME).eq("type", "folder")
     if paper_id:
         query = query.eq("paper_id", paper_id)
     elif website_id:
         query = query.eq("website_id", website_id)
+    elif github_repo_id:
+        query = query.eq("github_repo_id", github_repo_id)
     for row in query.execute().data:
         delete_note(row["id"])
 
@@ -188,6 +202,8 @@ def _delete_auto_folder(paper_id: Optional[str], website_id: Optional[str]) -> N
         query2 = query2.eq("paper_id", paper_id)
     elif website_id:
         query2 = query2.eq("website_id", website_id)
+    elif github_repo_id:
+        query2 = query2.eq("github_repo_id", github_repo_id)
     for row in query2.execute().data:
         delete_note(row["id"])
 
@@ -196,6 +212,7 @@ def _create_notes_from_tree(
     notes_tree: list[dict],
     paper_id: Optional[str],
     website_id: Optional[str],
+    github_repo_id: Optional[str] = None,
     parent_id: Optional[str] = None,
 ) -> list[Note]:
     """Recursively create notes/folders from the LLM's JSON tree structure."""
@@ -209,13 +226,14 @@ def _create_notes_from_tree(
             NoteCreate(name=name, type=note_type, content=content, parent_id=parent_id),
             paper_id=paper_id,
             website_id=website_id,
+            github_repo_id=github_repo_id,
         )
         created.append(note)
 
         # Recurse into children for folders
         if note_type == "folder" and item.get("children"):
             children = _create_notes_from_tree(
-                item["children"], paper_id, website_id, parent_id=note.id,
+                item["children"], paper_id, website_id, github_repo_id=github_repo_id, parent_id=note.id,
             )
             created.extend(children)
 
@@ -227,6 +245,7 @@ def _generate_multi_notes(
     website_id: Optional[str],
     library_id: Optional[str],
     user_msg: str,
+    github_repo_id: Optional[str] = None,
 ) -> list[Note]:
     """Core generation: call LLM, parse JSON tree, create folder structure."""
     custom_prompt = _get_custom_prompt(library_id)
@@ -242,21 +261,24 @@ def _generate_multi_notes(
         notes_tree = [{"name": "Summary", "type": "file", "content": "<p>No content generated.</p>"}]
 
     # Delete previous auto-generated notes
-    _delete_auto_folder(paper_id, website_id)
+    _delete_auto_folder(paper_id, website_id, github_repo_id=github_repo_id)
 
     # Create the "AI Notes" root folder
     root_folder = create_note(
         NoteCreate(name=_AUTO_FOLDER_NAME, type="folder"),
         paper_id=paper_id,
         website_id=website_id,
+        github_repo_id=github_repo_id,
     )
 
     # Create all notes inside the folder
-    created = _create_notes_from_tree(notes_tree, paper_id, website_id, parent_id=root_folder.id)
+    created = _create_notes_from_tree(
+        notes_tree, paper_id, website_id, github_repo_id=github_repo_id, parent_id=root_folder.id,
+    )
 
     logger.info(
-        "Generated %d AI notes in folder %s (paper=%s website=%s)",
-        len(created), root_folder.id, paper_id, website_id,
+        "Generated %d AI notes in folder %s (paper=%s website=%s repo=%s)",
+        len(created), root_folder.id, paper_id, website_id, github_repo_id,
     )
     return [root_folder] + created
 
@@ -318,3 +340,34 @@ def generate_notes_for_website(website_id: str, library_id: Optional[str] = None
         user_msg += f"\nDescription:\n{site['description']}"
 
     return _generate_multi_notes(paper_id=None, website_id=website_id, library_id=library_id, user_msg=user_msg)
+
+
+def generate_notes_for_github_repo(github_repo_id: str, library_id: Optional[str] = None) -> list[Note]:
+    """Generate AI notes for a GitHub repo as a multi-file structure."""
+    repo_row = get_client().table("github_repos").select("*").eq("id", github_repo_id).execute()
+    if not repo_row.data:
+        raise ValueError(f"GitHub repo {github_repo_id} not found")
+    repo = repo_row.data[0]
+
+    user_msg = f"Repository: {repo.get('owner', '')}/{repo.get('repo_name', '')}\n"
+    user_msg += f"Title: {repo.get('title', 'Unknown')}\n"
+    if repo.get("language"):
+        user_msg += f"Language: {repo['language']}\n"
+    topics = repo.get("topics") or []
+    if topics:
+        user_msg += f"Topics: {', '.join(topics)}\n"
+    if repo.get("stars") is not None:
+        user_msg += f"Stars: {repo['stars']}\n"
+    user_msg += f"URL: {repo.get('url', '')}\n"
+    if repo.get("abstract"):
+        user_msg += f"\nAbstract:\n{repo['abstract']}"
+    elif repo.get("description"):
+        user_msg += f"\nDescription:\n{repo['description']}"
+
+    return _generate_multi_notes(
+        paper_id=None,
+        website_id=None,
+        github_repo_id=github_repo_id,
+        library_id=library_id,
+        user_msg=user_msg,
+    )

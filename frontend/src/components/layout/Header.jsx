@@ -1039,8 +1039,7 @@ export default function Header() {
     if (item.itemType === 'website') {
       navigate(`/library/website/${item.id}`)
     } else if (item.itemType === 'github_repo') {
-      // No dedicated repo detail page yet — surface in library view
-      navigate(`/library?q=${encodeURIComponent(item.title)}&mode=lexical`)
+      navigate(`/library/github-repo/${item.id}`)
     } else {
       navigate(`/library/paper/${item.id}`)
     }

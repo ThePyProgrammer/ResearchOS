@@ -18,6 +18,7 @@ class ChatMessage(CamelModel):
     id: str
     paper_id: Optional[str] = None
     website_id: Optional[str] = None
+    github_repo_id: Optional[str] = None
     role: str  # 'user' | 'assistant'
     content: str
     suggestions: Optional[list[dict]] = None

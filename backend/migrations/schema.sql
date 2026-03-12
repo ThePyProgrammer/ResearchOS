@@ -1,7 +1,7 @@
 -- =============================================================================
 -- ResearchOS — full schema (merged)
 -- =============================================================================
--- This single file replaces running migrations 001–010 individually.
+-- This single file replaces running migrations 001–011 individually.
 -- New users: paste this into the Supabase SQL Editor and run it once.
 --
 -- All statements use IF NOT EXISTS / IF NOT EXISTS so the script is safe to
@@ -268,36 +268,38 @@ ALTER TABLE activity DISABLE ROW LEVEL SECURITY;
 
 
 -- =============================================================================
--- NOTES  (per-paper and per-website file tree)
+-- NOTES  (per-paper, per-website, and per-GitHub-repo file tree)
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS notes (
-    id         TEXT PRIMARY KEY,
-    paper_id   TEXT,                               -- NULL for website notes
-    website_id TEXT,                               -- NULL for paper notes
-    name       TEXT NOT NULL,
-    parent_id  TEXT,
-    type       TEXT NOT NULL DEFAULT 'file',       -- file | folder
-    content    TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    id             TEXT PRIMARY KEY,
+    paper_id       TEXT,                               -- NULL for website/repo notes
+    website_id     TEXT,                               -- NULL for paper/repo notes
+    github_repo_id TEXT,                               -- NULL for paper/website notes
+    name           TEXT NOT NULL,
+    parent_id      TEXT,
+    type           TEXT NOT NULL DEFAULT 'file',       -- file | folder
+    content        TEXT NOT NULL DEFAULT '',
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
 );
 
 ALTER TABLE notes DISABLE ROW LEVEL SECURITY;
 
 
 -- =============================================================================
--- CHAT MESSAGES  (copilot history per paper and per website)
+-- CHAT MESSAGES  (copilot history per paper, per website, and per GitHub repo)
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS chat_messages (
-    id          TEXT PRIMARY KEY,
-    paper_id    TEXT,                              -- NULL for website chat
-    website_id  TEXT,                              -- NULL for paper chat
-    role        TEXT NOT NULL DEFAULT 'user',
-    content     TEXT NOT NULL DEFAULT '',
-    suggestions JSONB,
-    created_at  TEXT NOT NULL
+    id             TEXT PRIMARY KEY,
+    paper_id       TEXT,                              -- NULL for website/repo chat
+    website_id     TEXT,                              -- NULL for paper/repo chat
+    github_repo_id TEXT,                              -- NULL for paper/website chat
+    role           TEXT NOT NULL DEFAULT 'user',
+    content        TEXT NOT NULL DEFAULT '',
+    suggestions    JSONB,
+    created_at     TEXT NOT NULL
 );
 
 ALTER TABLE chat_messages DISABLE ROW LEVEL SECURITY;

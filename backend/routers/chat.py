@@ -75,6 +75,45 @@ async def clear_chat(paper_id: str):
     chat_service.clear_history(paper_id)
 
 
+# ─── GitHub Repo chat ─────────────────────────────────────────────────────────
+
+@router.get("/github-repos/{repo_id}/chat")
+async def list_github_repo_chat(repo_id: str):
+    messages = chat_service.list_messages_for_github_repo(repo_id)
+    return JSONResponse([m.model_dump(by_alias=True) for m in messages])
+
+
+@router.post("/github-repos/{repo_id}/chat", status_code=201)
+async def send_github_repo_chat(repo_id: str, data: ChatMessageCreate):
+    result = get_client().table("github_repos").select(
+        "title,url,owner,repo_name,description,abstract,language,topics,stars"
+    ).eq("id", repo_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="GitHub repo not found")
+
+    repo = result.data[0]
+    assistant_msg = chat_service.generate_response_for_github_repo(
+        github_repo_id=repo_id,
+        user_content=data.content,
+        repo_title=repo.get("title", ""),
+        repo_url=repo.get("url", ""),
+        repo_owner=repo.get("owner", ""),
+        repo_name=repo.get("repo_name", ""),
+        repo_description=repo.get("description"),
+        repo_abstract=repo.get("abstract"),
+        repo_language=repo.get("language"),
+        repo_topics=repo.get("topics") or [],
+        repo_stars=repo.get("stars"),
+        notes_context=data.notes_context,
+    )
+    return JSONResponse(assistant_msg.model_dump(by_alias=True), status_code=201)
+
+
+@router.delete("/github-repos/{repo_id}/chat", status_code=204)
+async def clear_github_repo_chat(repo_id: str):
+    chat_service.clear_history_for_github_repo(repo_id)
+
+
 @router.get("/papers/{paper_id}/text")
 async def get_paper_text(paper_id: str):
     """Return extracted text for a paper, or null if not yet extracted."""

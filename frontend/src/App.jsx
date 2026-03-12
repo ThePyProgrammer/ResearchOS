@@ -7,6 +7,7 @@ import Agents from './pages/Agents'
 import Proposals from './pages/Proposals'
 import LibrarySettings from './pages/LibrarySettings'
 import Website from './pages/Website'
+import GitHubRepo from './pages/GitHubRepo'
 import Authors from './pages/Authors'
 import AuthorDetail from './pages/AuthorDetail'
 import { LibraryProvider } from './context/LibraryContext'
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/" element={<LayoutBare />}>
             <Route path="library/paper/:id" element={<Paper />} />
             <Route path="library/website/:id" element={<Website />} />
+            <Route path="library/github-repo/:id" element={<GitHubRepo />} />
             <Route path="proposals" element={<Proposals />} />
           </Route>
         </Routes>

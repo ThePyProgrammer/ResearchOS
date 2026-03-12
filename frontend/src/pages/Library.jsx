@@ -1127,11 +1127,20 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete, w
             </p>
           )}
           <div className="flex gap-2">
-            <a href={item.url} target="_blank" rel="noreferrer"
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium rounded-lg transition-colors">
+            <button
+              onClick={() => window.open(`/library/github-repo/${item.id}`, '_blank')}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium rounded-lg transition-colors"
+            >
               <Icon name="code" className="text-[14px]" />
-              Open on GitHub
-            </a>
+              Open Repo
+            </button>
+            {item.url && (
+              <a href={item.url} target="_blank" rel="noreferrer"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                title={item.url}>
+                <Icon name="open_in_new" className="text-[14px]" />
+              </a>
+            )}
             {item.doi && (
               <a href={`https://doi.org/${item.doi}`} target="_blank" rel="noreferrer"
                 className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors">

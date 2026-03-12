@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from agents.llm import get_model, get_openai_client, completion_params
-from agents.prompts import PAPER_CHAT, WEBSITE_CHAT
+from agents.prompts import PAPER_CHAT, WEBSITE_CHAT, GITHUB_REPO_CHAT
 
 from models.chat import ChatMessage
 from services.db import get_client
@@ -372,6 +372,132 @@ def generate_response_for_website(
 
     return create_message_for_website(
         website_id,
+        "assistant",
+        assistant_content,
+        suggestions=suggestions if suggestions else None,
+    )
+
+
+# ─── GitHub Repo chat ─────────────────────────────────────────────────────────
+
+def list_messages_for_github_repo(github_repo_id: str) -> list[ChatMessage]:
+    result = (
+        get_client()
+        .table(_TABLE)
+        .select("*")
+        .eq("github_repo_id", github_repo_id)
+        .order("created_at")
+        .execute()
+    )
+    return [ChatMessage.model_validate(r) for r in result.data]
+
+
+def create_message_for_github_repo(
+    github_repo_id: str,
+    role: str,
+    content: str,
+    suggestions: Optional[list[dict]] = None,
+) -> ChatMessage:
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    msg = ChatMessage(
+        id=f"msg_{uuid.uuid4().hex[:10]}",
+        github_repo_id=github_repo_id,
+        role=role,
+        content=content,
+        suggestions=suggestions,
+        created_at=now,
+    )
+    row = msg.model_dump(by_alias=False)
+    row.pop("paper_id", None)
+    row.pop("website_id", None)
+    if row.get("suggestions") is None:
+        row.pop("suggestions", None)
+    get_client().table(_TABLE).insert(row).execute()
+    return msg
+
+
+def clear_history_for_github_repo(github_repo_id: str) -> int:
+    result = (
+        get_client()
+        .table(_TABLE)
+        .select("id", count="exact")
+        .eq("github_repo_id", github_repo_id)
+        .execute()
+    )
+    count = result.count or 0
+    if count > 0:
+        get_client().table(_TABLE).delete().eq("github_repo_id", github_repo_id).execute()
+    logger.info("Cleared %d chat messages for github_repo %s", count, github_repo_id)
+    return count
+
+
+def generate_response_for_github_repo(
+    github_repo_id: str,
+    user_content: str,
+    repo_title: str = "",
+    repo_url: str = "",
+    repo_owner: str = "",
+    repo_name: str = "",
+    repo_description: Optional[str] = None,
+    repo_abstract: Optional[str] = None,
+    repo_language: Optional[str] = None,
+    repo_topics: Optional[list[str]] = None,
+    repo_stars: Optional[int] = None,
+    notes_context: Optional[list[dict]] = None,
+) -> ChatMessage:
+    """Send user message to OpenAI with GitHub repo + notes context."""
+    create_message_for_github_repo(github_repo_id, "user", user_content)
+
+    history = list_messages_for_github_repo(github_repo_id)
+    messages = [{"role": "system", "content": GITHUB_REPO_CHAT}]
+
+    repo_ctx = f"Repository: {repo_owner}/{repo_name}\nTitle: {repo_title}\nURL: {repo_url}"
+    if repo_language:
+        repo_ctx += f"\nLanguage: {repo_language}"
+    if repo_topics:
+        repo_ctx += f"\nTopics: {', '.join(repo_topics)}"
+    if repo_stars is not None:
+        repo_ctx += f"\nStars: {repo_stars}"
+    if repo_abstract:
+        repo_ctx += f"\n\nAbstract: {repo_abstract}"
+    elif repo_description:
+        repo_ctx += f"\n\nDescription: {repo_description}"
+
+    messages.append({"role": "system", "content": f"Repository context:\n{repo_ctx}"})
+
+    if notes_context:
+        notes_desc = "User's notes filesystem:\n"
+        for n in notes_context:
+            prefix = "[folder]" if n.get("type") == "folder" else "[file]"
+            notes_desc += f"  {prefix} id={n['id']} name={n['name']}"
+            if n.get("parentId"):
+                notes_desc += f" parent={n['parentId']}"
+            if n.get("content") and n.get("type") != "folder":
+                c = n["content"][:2000]
+                notes_desc += f"\n    content: {c}"
+            notes_desc += "\n"
+        messages.append({"role": "system", "content": notes_desc})
+
+    for msg in history[-20:]:
+        messages.append({"role": msg.role, "content": msg.content})
+
+    try:
+        client = _get_openai()
+        model_id = get_model("chat")
+        response = client.chat.completions.create(
+            model=model_id,
+            messages=messages,
+            tools=TOOLS,
+            **completion_params(model_id, max_tokens=4096, temperature=0.7),
+        )
+        assistant_content, suggestions = _process_tool_calls(response.choices[0])
+    except Exception as e:
+        logger.exception("OpenAI API call failed for github_repo %s", github_repo_id)
+        assistant_content = f"<p><em>Error generating response: {e}</em></p>"
+        suggestions = []
+
+    return create_message_for_github_repo(
+        github_repo_id,
         "assistant",
         assistant_content,
         suggestions=suggestions if suggestions else None,

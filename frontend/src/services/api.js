@@ -209,6 +209,10 @@ export const notesApi = {
   createForWebsite: (websiteId, data) => apiFetch(`/websites/${websiteId}/notes`, { method: 'POST', body: data }),
   generateForWebsite: (websiteId, libraryId) =>
     apiFetch(`/websites/${websiteId}/notes/generate`, { method: 'POST', body: { library_id: libraryId || null } }),
+  listForGitHubRepo: (repoId) => apiFetch(`/github-repos/${repoId}/notes`),
+  createForGitHubRepo: (repoId, data) => apiFetch(`/github-repos/${repoId}/notes`, { method: 'POST', body: data }),
+  generateForGitHubRepo: (repoId, libraryId) =>
+    apiFetch(`/github-repos/${repoId}/notes/generate`, { method: 'POST', body: { library_id: libraryId || null } }),
 }
 
 export const chatApi = {
@@ -222,6 +226,9 @@ export const chatApi = {
   listForWebsite: (websiteId) => apiFetch(`/websites/${websiteId}/chat`),
   sendForWebsite: (websiteId, data) => apiFetch(`/websites/${websiteId}/chat`, { method: 'POST', body: data }),
   clearForWebsite: (websiteId) => apiFetch(`/websites/${websiteId}/chat`, { method: 'DELETE' }),
+  listForGitHubRepo: (repoId) => apiFetch(`/github-repos/${repoId}/chat`),
+  sendForGitHubRepo: (repoId, data) => apiFetch(`/github-repos/${repoId}/chat`, { method: 'POST', body: data }),
+  clearForGitHubRepo: (repoId) => apiFetch(`/github-repos/${repoId}/chat`, { method: 'DELETE' }),
 }
 
 export const authorsApi = {
