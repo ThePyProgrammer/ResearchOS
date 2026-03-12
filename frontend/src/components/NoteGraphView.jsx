@@ -41,15 +41,22 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
   const svgRef       = useRef(null)
   const containerRef = useRef(null)
   const simRef       = useRef(null)
-  const clusterRef   = useRef(0.3)
+  const clusterRef   = useRef(0.3)   // selective: same-source pull
+  const gravityRef   = useRef(0.5)   // global: all-nodes pull toward centre
 
-  const [hoveredNode,     setHoveredNode]     = useState(null)
-  const [clusterStrength, setClusterStrength] = useState(0.3)
+  const [hoveredNode,       setHoveredNode]       = useState(null)
+  const [clusterStrength,   setClusterStrength]   = useState(0.3)
+  const [gravityStrength,   setGravityStrength]   = useState(0.5)
 
   useEffect(() => {
     clusterRef.current = clusterStrength
     if (simRef.current) simRef.current.alpha(0.35).restart()
   }, [clusterStrength])
+
+  useEffect(() => {
+    gravityRef.current = gravityStrength
+    if (simRef.current) simRef.current.alpha(0.35).restart()
+  }, [gravityStrength])
 
   // ── Build graph data ───────────────────────────────────────────────────────
   const buildGraph = useCallback(() => {
@@ -153,7 +160,7 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
 
       const hullLabel = hullLayer.append('text')
         .text(displayLabel)
-        .attr('font-size', '10px')
+        .attr('font-size', '13px')
         .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
         .attr('font-weight', '500')
         .attr('fill', color)
@@ -189,11 +196,14 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
       .attr('fill',   d => SOURCE_COLOR[d.source] || SOURCE_COLOR.library)
       .attr('stroke', '#fff').attr('stroke-width', 2.5)
     nodeEls.append('text').text(d => d.name)
-      .attr('x', 13).attr('y', 4).attr('font-size', '11px')
+      .attr('x', 0).attr('y', 22)
+      .attr('font-size', '11px')
       .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
-      .attr('fill', '#334155').attr('pointer-events', 'none')
+      .attr('fill', '#334155')
+      .attr('text-anchor', 'middle')
+      .attr('pointer-events', 'none')
 
-    // ── Clustering force ──────────────────────────────────────────────────
+    // ── Selective clustering force (pulls same-source nodes together) ────
     function clusterForce(alpha) {
       const strength = clusterRef.current
       if (!strength) return
@@ -213,13 +223,26 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
       })
     }
 
+    // ── Global gravity force (pulls every node toward canvas centre) ──────
+    // Keeps groups from flying apart when selective clustering is high.
+    const cx = width / 2, cy = height / 2
+    function gravityForce(alpha) {
+      const g = gravityRef.current
+      if (!g) return
+      nodes.forEach(d => {
+        d.vx = (d.vx || 0) + (cx - d.x) * g * alpha * 0.08
+        d.vy = (d.vy || 0) + (cy - d.y) * g * alpha * 0.08
+      })
+    }
+
     // ── Simulation ────────────────────────────────────────────────────────
     const sim = d3.forceSimulation(nodes)
       .force('link',      d3.forceLink(links).id(d => d.id).distance(100).strength(0.6))
       .force('charge',    d3.forceManyBody().strength(-250))
       .force('center',    d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide(22))
+      .force('collision', d3.forceCollide(d => Math.max(32, d.name.length * 3.8)))
       .force('cluster',   clusterForce)
+      .force('gravity',   gravityForce)
 
     simRef.current = sim
 
@@ -270,20 +293,39 @@ export default function NoteGraphView({ allNotes, onNoteClick }) {
           </span>
         </div>
 
-        {/* Clustering slider */}
-        <div className="flex items-center gap-2 flex-1 max-w-xs">
-          <Icon name="grain" className="text-[14px] text-slate-400 flex-shrink-0" />
-          <span className="text-[11px] text-slate-500 flex-shrink-0 whitespace-nowrap">Clustering</span>
-          <input
-            type="range" min="0" max="1" step="0.05"
-            value={clusterStrength}
-            onChange={e => setClusterStrength(parseFloat(e.target.value))}
-            className="flex-1 accent-indigo-500 cursor-pointer"
-            title={`Clustering strength: ${Math.round(clusterStrength * 100)}%`}
-          />
-          <span className="text-[11px] text-slate-400 w-7 text-right flex-shrink-0 tabular-nums">
-            {Math.round(clusterStrength * 100)}%
-          </span>
+        {/* Sliders */}
+        <div className="flex items-center gap-4 flex-1">
+          {/* Selective clustering */}
+          <div className="flex items-center gap-2 flex-1 max-w-[220px]">
+            <Icon name="grain" className="text-[14px] text-slate-400 flex-shrink-0" />
+            <span className="text-[11px] text-slate-500 flex-shrink-0 whitespace-nowrap">Selective</span>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={clusterStrength}
+              onChange={e => setClusterStrength(parseFloat(e.target.value))}
+              className="flex-1 accent-indigo-500 cursor-pointer"
+              title={`Selective clustering: ${Math.round(clusterStrength * 100)}%`}
+            />
+            <span className="text-[11px] text-slate-400 w-7 text-right flex-shrink-0 tabular-nums">
+              {Math.round(clusterStrength * 100)}%
+            </span>
+          </div>
+
+          {/* Global gravity */}
+          <div className="flex items-center gap-2 flex-1 max-w-[220px]">
+            <Icon name="filter_center_focus" className="text-[14px] text-slate-400 flex-shrink-0" />
+            <span className="text-[11px] text-slate-500 flex-shrink-0 whitespace-nowrap">Gravity</span>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={gravityStrength}
+              onChange={e => setGravityStrength(parseFloat(e.target.value))}
+              className="flex-1 accent-indigo-500 cursor-pointer"
+              title={`Global gravity: ${Math.round(gravityStrength * 100)}%`}
+            />
+            <span className="text-[11px] text-slate-400 w-7 text-right flex-shrink-0 tabular-nums">
+              {Math.round(gravityStrength * 100)}%
+            </span>
+          </div>
         </div>
 
         {/* Legend + tip */}
