@@ -9,6 +9,7 @@ import TaskItem from '@tiptap/extension-task-item'
 import Highlight from '@tiptap/extension-highlight'
 import Typography from '@tiptap/extension-typography'
 import Mathematics from '@tiptap/extension-mathematics'
+import { TableKit } from '@tiptap/extension-table'
 import 'katex/dist/katex.min.css'
 import { notesApi, papersApi, websitesApi, githubReposApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
@@ -88,6 +89,21 @@ function _nodeToMd(node) {
       if (node.dataset.wikiName) return `[[${node.dataset.wikiName}]]`
       if (node.dataset.latex)    return `$${node.dataset.latex}$`
       return inner()
+    // ── Tables ──────────────────────────────────────────────────────────────
+    case 'table': {
+      const rows = Array.from(node.querySelectorAll('tr'))
+      if (!rows.length) return ''
+      const mdRows = rows.map(tr => {
+        const cells = Array.from(tr.querySelectorAll('th, td'))
+        return '| ' + cells.map(c => _nodeToMd(c).trim().replace(/\n+/g, ' ')).join(' | ') + ' |'
+      })
+      // Insert a separator after the first row (header)
+      mdRows.splice(1, 0, '| ' + Array.from(rows[0].querySelectorAll('th, td')).map(() => '---').join(' | ') + ' |')
+      return mdRows.join('\n') + '\n\n'
+    }
+    case 'thead': case 'tbody': case 'tfoot': return inner()
+    case 'tr': return inner()
+    case 'th': case 'td': return inner()
     default: return inner()
   }
 }
@@ -172,6 +188,109 @@ function exportPDF(html, name) {
   win.document.close()
 }
 
+// ─── Table toolbar menu ───────────────────────────────────────────────────────
+function TableMenu({ editor }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const inTable = editor.isActive('table')
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  function run(cmd) { cmd(); setOpen(false) }
+
+  const sep = <div className="my-1 border-t border-slate-100" />
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="Table"
+        className={`p-1 rounded transition-colors ${
+          inTable || open ? 'bg-slate-100 text-slate-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+        }`}
+      >
+        <Icon name="table" className="text-[16px]" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
+          {/* Insert */}
+          <p className="px-3 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Insert</p>
+          <button
+            onClick={() => run(() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
+          >
+            <Icon name="table" className="text-[14px] text-slate-400" />
+            Insert table (3×3)
+          </button>
+
+          {inTable && (<>
+            {sep}
+            <p className="px-3 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Columns</p>
+            <button onClick={() => run(() => editor.chain().focus().addColumnBefore().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
+              <Icon name="add" className="text-[14px] text-slate-400" /> Add column before
+            </button>
+            <button onClick={() => run(() => editor.chain().focus().addColumnAfter().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
+              <Icon name="add" className="text-[14px] text-slate-400" /> Add column after
+            </button>
+            <button onClick={() => run(() => editor.chain().focus().deleteColumn().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50">
+              <Icon name="remove" className="text-[14px]" /> Delete column
+            </button>
+
+            {sep}
+            <p className="px-3 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Rows</p>
+            <button onClick={() => run(() => editor.chain().focus().addRowBefore().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
+              <Icon name="add" className="text-[14px] text-slate-400" /> Add row before
+            </button>
+            <button onClick={() => run(() => editor.chain().focus().addRowAfter().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
+              <Icon name="add" className="text-[14px] text-slate-400" /> Add row after
+            </button>
+            <button onClick={() => run(() => editor.chain().focus().deleteRow().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50">
+              <Icon name="remove" className="text-[14px]" /> Delete row
+            </button>
+
+            {sep}
+            <p className="px-3 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Cells</p>
+            <button onClick={() => run(() => editor.chain().focus().mergeCells().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
+              <Icon name="merge" className="text-[14px] text-slate-400" /> Merge cells
+            </button>
+            <button onClick={() => run(() => editor.chain().focus().splitCell().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
+              <Icon name="call_split" className="text-[14px] text-slate-400" /> Split cell
+            </button>
+            <button onClick={() => run(() => editor.chain().focus().toggleHeaderRow().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
+              <Icon name="view_agenda" className="text-[14px] text-slate-400" /> Toggle header row
+            </button>
+            <button onClick={() => run(() => editor.chain().focus().toggleHeaderColumn().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
+              <Icon name="view_week" className="text-[14px] text-slate-400" /> Toggle header column
+            </button>
+
+            {sep}
+            <button onClick={() => run(() => editor.chain().focus().deleteTable().run())}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50">
+              <Icon name="delete" className="text-[14px]" /> Delete table
+            </button>
+          </>)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Export dropdown menu ─────────────────────────────────────────────────────
 function ExportMenu({ onMarkdown, onPDF }) {
   const [open, setOpen] = useState(false)
@@ -248,6 +367,7 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick,
       Typography,
       Mathematics,
       wikiLinkExtension,
+      TableKit.configure({ resizable: true }),
     ],
     content: content || '',
     editorProps: { attributes: { class: 'tiptap-editor focus:outline-none' } },
@@ -323,6 +443,7 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick,
             const latex = window.prompt('LaTeX expression', 'E = mc^2')
             if (latex) editor.chain().focus().setInlineMath(latex).run()
           }} />
+        <TableMenu editor={editor} />
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
         <ToolBtn icon="undo" label="Undo (Ctrl+Z)" onClick={() => editor.chain().focus().undo().run()} />
         <ToolBtn icon="redo" label="Redo (Ctrl+Shift+Z)" onClick={() => editor.chain().focus().redo().run()} />
