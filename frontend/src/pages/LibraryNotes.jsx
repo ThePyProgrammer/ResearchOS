@@ -1775,6 +1775,7 @@ export default function LibraryNotes() {
               allNotes={allLoadedNotes}
               onNotesChanged={handleCopilotNotesChanged}
               onOpenSuggestionTab={openSuggestionTab}
+              onWikiLinkClick={handleWikiLinkClick}
             />
           </div>
         )}

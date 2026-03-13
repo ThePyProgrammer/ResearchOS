@@ -22,15 +22,16 @@ function renderLatexInHtml(html) {
 }
 
 /**
- * Convert [[Note Name]] patterns in chat HTML into styled inline spans.
- * The spans are purely decorative here (chat is not a tiptap editor), but
- * they match the wiki-link visual style so references look consistent.
+ * Convert [[Note Name]] patterns in chat HTML into clickable styled inline spans.
+ * The data-wiki-name attribute is picked up by a delegated click handler on the
+ * bubble container to navigate to the linked note.
  */
 function renderWikiLinksInHtml(html) {
   if (!html) return html
-  return html.replace(/\[\[([^\]]+)\]\]/g, (_, name) =>
-    `<span class="wiki-link-chat" style="color:#6366f1;font-weight:500;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px;">[[${name}]]</span>`
-  )
+  return html.replace(/\[\[([^\]]+)\]\]/g, (_, name) => {
+    const safe = name.replace(/"/g, '&quot;')
+    return `<span data-wiki-name="${safe}" title="Open note: ${safe}" class="wiki-link-chat" style="color:#6366f1;font-weight:500;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px;cursor:pointer;text-decoration:underline dotted #a5b4fc;">${name}</span>`
+  })
 }
 
 /** Combined renderer: latex then wiki-links. */
@@ -298,10 +299,18 @@ function ChatInput({ onSend, sending, placeholder = 'Ask about this item...' }) 
 }
 
 /* ─── Chat message bubble ─── */
-function ChatBubble({ message, currentNotes, onSuggestionAccept, onSuggestionReject }) {
+function ChatBubble({ message, currentNotes, onSuggestionAccept, onSuggestionReject, onWikiLinkClick }) {
   const isUser = message.role === 'user'
   const renderedContent = useMemo(() => renderChatHtml(message.content), [message.content])
   const suggestions = message.suggestions || []
+
+  function handleContentClick(e) {
+    const el = e.target.closest('[data-wiki-name]')
+    if (el && onWikiLinkClick) {
+      e.preventDefault()
+      onWikiLinkClick(el.dataset.wikiName)
+    }
+  }
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
@@ -332,6 +341,7 @@ function ChatBubble({ message, currentNotes, onSuggestionAccept, onSuggestionRej
             <div
               className="copilot-message-content"
               dangerouslySetInnerHTML={{ __html: renderedContent }}
+              onClick={handleContentClick}
             />
           </div>
         )}
@@ -356,7 +366,7 @@ function ChatBubble({ message, currentNotes, onSuggestionAccept, onSuggestionRej
 }
 
 /* ─── Main CopilotPanel ─── */
-export default function CopilotPanel({ paperId, websiteId, githubRepoId, open, onToggle, notes, onNotesChanged, width }) {
+export default function CopilotPanel({ paperId, websiteId, githubRepoId, open, onToggle, notes, onNotesChanged, onWikiLinkClick, width }) {
   const isWebsite = Boolean(websiteId)
   const isGitHubRepo = Boolean(githubRepoId)
   const itemId = paperId || websiteId || githubRepoId
@@ -674,6 +684,7 @@ export default function CopilotPanel({ paperId, websiteId, githubRepoId, open, o
               currentNotes={notes || []}
               onSuggestionAccept={handleSuggestionAccept}
               onSuggestionReject={handleSuggestionReject}
+              onWikiLinkClick={onWikiLinkClick}
             />
           ))
         )}

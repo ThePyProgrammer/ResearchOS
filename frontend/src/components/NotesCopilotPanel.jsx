@@ -37,14 +37,16 @@ function renderLatexInHtml(html) {
 }
 
 /**
- * Convert [[Note Name]] patterns in chat HTML into styled inline spans.
- * Matches the wiki-link visual style without requiring a tiptap editor.
+ * Convert [[Note Name]] patterns in chat HTML into clickable styled inline spans.
+ * The data-wiki-name attribute is picked up by a delegated click handler on the
+ * bubble container to navigate to the linked note in the IDE.
  */
 function renderWikiLinksInHtml(html) {
   if (!html) return html
-  return html.replace(/\[\[([^\]]+)\]\]/g, (_, name) =>
-    `<span style="color:#6366f1;font-weight:500;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px;">[[${name}]]</span>`
-  )
+  return html.replace(/\[\[([^\]]+)\]\]/g, (_, name) => {
+    const safe = name.replace(/"/g, '&quot;')
+    return `<span data-wiki-name="${safe}" title="Open note: ${safe}" style="color:#6366f1;font-weight:500;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px;cursor:pointer;text-decoration:underline dotted #a5b4fc;">${name}</span>`
+  })
 }
 
 function renderChatHtml(html) {
@@ -302,10 +304,18 @@ function SuggestionCard({ suggestion, allNotes, onAccept, onReject }) {
 }
 
 /* ─── Chat bubble ────────────────────────────────────────────────────────────── */
-function ChatBubble({ message, onAccept, onReject }) {
+function ChatBubble({ message, onAccept, onReject, onWikiLinkClick }) {
   const isUser = message.role === 'user'
   const rendered = useMemo(() => renderChatHtml(message.content), [message.content])
   const suggestions = message.suggestions || []
+
+  function handleContentClick(e) {
+    const el = e.target.closest('[data-wiki-name]')
+    if (el && onWikiLinkClick) {
+      e.preventDefault()
+      onWikiLinkClick(el.dataset.wikiName)
+    }
+  }
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
@@ -326,7 +336,7 @@ function ChatBubble({ message, onAccept, onReject }) {
           <div className={`text-[13px] leading-relaxed rounded-xl px-3.5 py-2.5 ${
             isUser ? 'bg-blue-600 text-white rounded-br-md' : 'bg-slate-100 text-slate-700 rounded-bl-md'
           }`}>
-            <div className="copilot-message-content" dangerouslySetInnerHTML={{ __html: rendered }} />
+            <div className="copilot-message-content" dangerouslySetInnerHTML={{ __html: rendered }} onClick={handleContentClick} />
           </div>
         )}
 
@@ -650,6 +660,7 @@ export default function NotesCopilotPanel({
   allNotes = [],          // flat list of all loaded notes for diff lookup
   onNotesChanged,         // callback when a suggestion is accepted
   onOpenSuggestionTab,    // callback(suggestion, onAccept, onReject) → opens tab in IDE
+  onWikiLinkClick,        // callback(noteName) → navigate to note in IDE
   width = 340,
 }) {
   const [messages, setMessages] = useState([])      // local history
@@ -975,6 +986,7 @@ export default function NotesCopilotPanel({
             <ChatBubble
               key={msg.id}
               message={msg}
+              onWikiLinkClick={onWikiLinkClick}
             />
           ))
         )}
