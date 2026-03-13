@@ -12,6 +12,7 @@ class Note(CamelModel):
     parent_id: Optional[str] = None
     type: str = "file"  # file | folder
     content: str = ""
+    is_pinned: bool = False
     created_at: str
     updated_at: str
 
@@ -27,6 +28,7 @@ class NoteUpdate(CamelModel):
     name: Optional[str] = None
     parent_id: Optional[str] = None
     content: Optional[str] = None
+    is_pinned: Optional[bool] = None
     # Source reassignment — for moving notes between papers / websites / repos / library
     paper_id: Optional[str] = None
     website_id: Optional[str] = None

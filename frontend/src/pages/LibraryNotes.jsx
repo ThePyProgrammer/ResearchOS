@@ -154,6 +154,7 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick 
 function NoteTreeNode({
   note, allNotes, selectedNoteId, expandedNotes, onSelect, onToggle, onContextMenu, depth = 0,
   sourceKey, draggingNoteId, dropHighlight, onDragStart, onDragEnd, onDrop, onDropHighlightChange,
+  onPin,
 }) {
   const children = allNotes.filter(n => n.parentId === note.id)
   const isFolder = note.type === 'folder'
@@ -205,6 +206,20 @@ function NoteTreeNode({
           className={`text-[13px] flex-shrink-0 ${isFolder ? 'text-amber-500' : 'text-slate-400'}`}
         />
         <span className="truncate flex-1">{note.name}</span>
+        {/* Pin / unpin star — always visible when pinned, hover-only otherwise */}
+        <span
+          role="button"
+          tabIndex={-1}
+          onClick={e => { e.stopPropagation(); onPin?.(note.id) }}
+          title={note.isPinned ? 'Unpin' : 'Pin to top'}
+          className={`flex-shrink-0 p-0.5 rounded transition-all ${
+            note.isPinned
+              ? 'text-amber-400'
+              : 'text-slate-300 opacity-0 group-hover:opacity-100 hover:text-amber-400'
+          }`}
+        >
+          <Icon name="star" className="text-[11px]" />
+        </span>
         {!isFolder && (
           <Icon
             name="drag_indicator"
@@ -213,7 +228,11 @@ function NoteTreeNode({
         )}
       </button>
       {isFolder && isOpen && children
-        .sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'folder' ? -1 : 1)
+        .sort((a, b) => {
+          if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
+          if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+          return a.name.localeCompare(b.name)
+        })
         .map(child => (
           <NoteTreeNode
             key={child.id}
@@ -232,6 +251,7 @@ function NoteTreeNode({
             onDragEnd={onDragEnd}
             onDrop={onDrop}
             onDropHighlightChange={onDropHighlightChange}
+            onPin={onPin}
           />
         ))}
     </div>
@@ -263,6 +283,7 @@ function ItemFolder({
   onToggle, onSelectNote, onToggleNote, onNoteContextMenu, onItemContextMenu,
   onOpenResource,
   creating, newName, setNewName, onCreateSubmit, onCancelCreate,
+  onPin,
   // drag-and-drop
   draggingNoteId, dropHighlight, onDragStart, onDragEnd, onDrop, onDropHighlightChange,
 }) {
@@ -274,7 +295,11 @@ function ItemFolder({
 
   const rootNotes = (notes || [])
     .filter(n => !n.parentId)
-    .sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'folder' ? -1 : 1)
+    .sort((a, b) => {
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
 
   const noteCount = (notes || []).length
 
@@ -385,6 +410,7 @@ function ItemFolder({
               onDragEnd={onDragEnd}
               onDrop={onDrop}
               onDropHighlightChange={onDropHighlightChange}
+              onPin={onPin}
             />
           ))}
           {loaded && rootNotes.length === 0 && !creating && !resourceEntry && (
@@ -1092,6 +1118,19 @@ export default function LibraryNotes() {
     }
   }
 
+  // ── Pin / unpin note ───────────────────────────────────────────────────────
+  async function handlePin(noteId, source) {
+    const sourceNotes = getSourceNotes(source)
+    const note = sourceNotes.find(n => n.id === noteId)
+    if (!note) return
+    try {
+      const updated = await notesApi.update(noteId, { is_pinned: !note.isPinned })
+      if (updated) setSourceNotes(source, prev => prev.map(n => n.id === updated.id ? updated : n))
+    } catch (err) {
+      console.error('Failed to pin note:', err)
+    }
+  }
+
   // ── Delete note ────────────────────────────────────────────────────────────
   async function handleDelete(noteId, source) {
     try {
@@ -1226,7 +1265,11 @@ export default function LibraryNotes() {
   // ── Tree data ──────────────────────────────────────────────────────────────
   const libRootNotes = libraryNotes
     .filter(n => !n.parentId)
-    .sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'folder' ? -1 : 1)
+    .sort((a, b) => {
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
 
   const sortedPapers = [...papers].sort((a, b) => (a.title || '').localeCompare(b.title || ''))
   const sortedWebsites = [...websites].sort((a, b) => (a.title || a.url || '').localeCompare(b.title || b.url || ''))
@@ -1375,6 +1418,43 @@ export default function LibraryNotes() {
             )
           ) : (
             <>
+              {/* ── Pinned notes ── */}
+              {(() => {
+                const pinnedNotes = allLoadedNotes.filter(n => n.isPinned && n.type === 'file')
+                if (!pinnedNotes.length) return null
+                return (
+                  <div className="mb-2">
+                    <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-amber-500">
+                      Pinned
+                    </p>
+                    {pinnedNotes.map(note => (
+                      <button
+                        key={note.id}
+                        onClick={() => openNoteInTab(note.id, note.sourceKey)}
+                        className={`group w-full flex items-center gap-1.5 py-[3px] px-2 rounded text-left text-[12px] transition-colors ${
+                          selected?.noteId === note.id
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span
+                          role="button"
+                          tabIndex={-1}
+                          title="Unpin"
+                          onClick={e => { e.stopPropagation(); handlePin(note.id, note.sourceKey) }}
+                          className="flex-shrink-0 p-0.5 rounded text-amber-400 hover:text-amber-600 transition-colors"
+                        >
+                          <Icon name="star" className="text-[11px]" />
+                        </span>
+                        <span className="truncate flex-1">{note.name}</span>
+                        <span className="text-[9px] text-slate-400 flex-shrink-0 truncate max-w-[60px]">{note.sourceName || 'Library'}</span>
+                      </button>
+                    ))}
+                    <div className="mx-2 mt-1.5 mb-0.5 border-t border-slate-100" />
+                  </div>
+                )
+              })()}
+
               {/* ── Recently opened ── */}
               {recentNoteIds.length > 0 && (() => {
                 const recentNotes = recentNoteIds
@@ -1438,6 +1518,7 @@ export default function LibraryNotes() {
                       onDragEnd={handleDragEnd}
                       onDrop={handleDrop}
                       onDropHighlightChange={setDropHighlight}
+                      onPin={noteId => handlePin(noteId, 'library')}
                     />
                   ))}
                   {creating?.source === 'library' && !creating.parentId && (
@@ -1485,80 +1566,83 @@ export default function LibraryNotes() {
                         creating={creating?.source === sourceKey ? creating : null}
                         newName={newName} setNewName={setNewName}
                         onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
-                        draggingNoteId={draggingNoteId} dropHighlight={dropHighlight}
-                        onDragStart={handleDragStart} onDragEnd={handleDragEnd}
-                        onDrop={handleDrop} onDropHighlightChange={setDropHighlight}
-                      />
-                    )
-                  })}
-                </div>
-              )}
+                         draggingNoteId={draggingNoteId} dropHighlight={dropHighlight}
+                         onDragStart={handleDragStart} onDragEnd={handleDragEnd}
+                         onDrop={handleDrop} onDropHighlightChange={setDropHighlight}
+                         onPin={noteId => handlePin(noteId, sourceKey)}
+                       />
+                     )
+                   })}
+                 </div>
+               )}
 
               {/* ── Websites ── */}
               {sortedWebsites.length > 0 && (
-                <div className="mb-1">
-                  <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Websites</p>
-                  {sortedWebsites.map(site => {
-                    const sourceKey = `website:${site.id}`
-                    return (
-                      <ItemFolder
-                        key={site.id}
-                        item={site} itemType="website" sourceKey={sourceKey}
-                        notes={itemNotes[sourceKey]} loaded={!!loadedItems[sourceKey]}
-                        isOpen={!!expandedItems[sourceKey]}
-                        selectedNoteId={selected?.noteId} isActiveSource={selected?.source === sourceKey}
-                        activeResourceTabId={activeTabId}
-                        expandedNotes={expandedNotes}
-                        onToggle={() => toggleItem(sourceKey)}
-                        onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
-                        onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
-                        onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
-                        onItemContextMenu={e => openItemCtxMenu(e, site, 'website', sourceKey)}
-                        onOpenResource={openResourceInTab}
-                        creating={creating?.source === sourceKey ? creating : null}
-                        newName={newName} setNewName={setNewName}
-                        onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
-                        draggingNoteId={draggingNoteId} dropHighlight={dropHighlight}
-                        onDragStart={handleDragStart} onDragEnd={handleDragEnd}
-                        onDrop={handleDrop} onDropHighlightChange={setDropHighlight}
-                      />
-                    )
-                  })}
-                </div>
-              )}
+                 <div className="mb-1">
+                   <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Websites</p>
+                   {sortedWebsites.map(site => {
+                     const sourceKey = `website:${site.id}`
+                     return (
+                       <ItemFolder
+                         key={site.id}
+                         item={site} itemType="website" sourceKey={sourceKey}
+                         notes={itemNotes[sourceKey]} loaded={!!loadedItems[sourceKey]}
+                         isOpen={!!expandedItems[sourceKey]}
+                         selectedNoteId={selected?.noteId} isActiveSource={selected?.source === sourceKey}
+                         activeResourceTabId={activeTabId}
+                         expandedNotes={expandedNotes}
+                         onToggle={() => toggleItem(sourceKey)}
+                         onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
+                         onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
+                         onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
+                         onItemContextMenu={e => openItemCtxMenu(e, site, 'website', sourceKey)}
+                         onOpenResource={openResourceInTab}
+                         creating={creating?.source === sourceKey ? creating : null}
+                         newName={newName} setNewName={setNewName}
+                         onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
+                         draggingNoteId={draggingNoteId} dropHighlight={dropHighlight}
+                         onDragStart={handleDragStart} onDragEnd={handleDragEnd}
+                         onDrop={handleDrop} onDropHighlightChange={setDropHighlight}
+                         onPin={noteId => handlePin(noteId, sourceKey)}
+                       />
+                     )
+                   })}
+                 </div>
+               )}
 
               {/* ── GitHub Repos ── */}
               {sortedRepos.length > 0 && (
-                <div className="mb-1">
-                  <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">GitHub Repos</p>
-                  {sortedRepos.map(repo => {
-                    const sourceKey = `github:${repo.id}`
-                    return (
-                      <ItemFolder
-                        key={repo.id}
-                        item={repo} itemType="github" sourceKey={sourceKey}
-                        notes={itemNotes[sourceKey]} loaded={!!loadedItems[sourceKey]}
-                        isOpen={!!expandedItems[sourceKey]}
-                        selectedNoteId={selected?.noteId} isActiveSource={selected?.source === sourceKey}
-                        activeResourceTabId={activeTabId}
-                        expandedNotes={expandedNotes}
-                        onToggle={() => toggleItem(sourceKey)}
-                        onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
-                        onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
-                        onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
-                        onItemContextMenu={e => openItemCtxMenu(e, repo, 'github', sourceKey)}
-                        onOpenResource={openResourceInTab}
-                        creating={creating?.source === sourceKey ? creating : null}
-                        newName={newName} setNewName={setNewName}
-                        onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
-                        draggingNoteId={draggingNoteId} dropHighlight={dropHighlight}
-                        onDragStart={handleDragStart} onDragEnd={handleDragEnd}
-                        onDrop={handleDrop} onDropHighlightChange={setDropHighlight}
-                      />
-                    )
-                  })}
-                </div>
-              )}
+                 <div className="mb-1">
+                   <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">GitHub Repos</p>
+                   {sortedRepos.map(repo => {
+                     const sourceKey = `github:${repo.id}`
+                     return (
+                       <ItemFolder
+                         key={repo.id}
+                         item={repo} itemType="github" sourceKey={sourceKey}
+                         notes={itemNotes[sourceKey]} loaded={!!loadedItems[sourceKey]}
+                         isOpen={!!expandedItems[sourceKey]}
+                         selectedNoteId={selected?.noteId} isActiveSource={selected?.source === sourceKey}
+                         activeResourceTabId={activeTabId}
+                         expandedNotes={expandedNotes}
+                         onToggle={() => toggleItem(sourceKey)}
+                         onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
+                         onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
+                         onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
+                         onItemContextMenu={e => openItemCtxMenu(e, repo, 'github', sourceKey)}
+                         onOpenResource={openResourceInTab}
+                         creating={creating?.source === sourceKey ? creating : null}
+                         newName={newName} setNewName={setNewName}
+                         onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
+                         draggingNoteId={draggingNoteId} dropHighlight={dropHighlight}
+                         onDragStart={handleDragStart} onDragEnd={handleDragEnd}
+                         onDrop={handleDrop} onDropHighlightChange={setDropHighlight}
+                         onPin={noteId => handlePin(noteId, sourceKey)}
+                       />
+                     )
+                   })}
+                 </div>
+               )}
 
               {/* Empty state */}
               {!loading && papers.length === 0 && websites.length === 0 && githubRepos.length === 0 && libraryNotes.length === 0 && (
@@ -1886,8 +1970,7 @@ export default function LibraryNotes() {
                   </button>
                 </>
               )}
-              {renaming?.noteId === ctxMenu.note?.id ? (
-                <form onSubmit={handleRename} className="px-3 py-1.5">
+              {renaming?.noteId === ctxMenu.note?.id ? (                <form onSubmit={handleRename} className="px-3 py-1.5">
                   <input
                     autoFocus
                     value={renameDraft}
@@ -1908,6 +1991,13 @@ export default function LibraryNotes() {
                   Rename
                 </button>
               )}
+              <button
+                onClick={() => { handlePin(ctxMenu.note.id, ctxMenu.source); setCtxMenu(null) }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
+              >
+                <Icon name="star" className={`text-[14px] ${ctxMenu.note?.isPinned ? 'text-amber-400' : 'text-slate-400'}`} />
+                {ctxMenu.note?.isPinned ? 'Unpin' : 'Pin to top'}
+              </button>
               <div className="my-1 border-t border-slate-100" />
               <button
                 onClick={() => handleDelete(ctxMenu.note.id, ctxMenu.source)}

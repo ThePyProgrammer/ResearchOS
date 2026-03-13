@@ -281,6 +281,7 @@ CREATE TABLE IF NOT EXISTS notes (
     parent_id      TEXT,
     type           TEXT NOT NULL DEFAULT 'file',       -- file | folder
     content        TEXT NOT NULL DEFAULT '',
+    is_pinned      BOOLEAN NOT NULL DEFAULT FALSE,
     created_at     TEXT NOT NULL,
     updated_at     TEXT NOT NULL
 );

@@ -37,7 +37,11 @@ def list_notes(
     elif library_id:
         query = query.eq("library_id", library_id)
     result = query.execute()
-    return [Note.model_validate(r) for r in result.data]
+    notes = [Note.model_validate(r) for r in result.data]
+    # Pinned notes float to the top; within each pin tier keep folders before
+    # files, then sort alphabetically.
+    notes.sort(key=lambda n: (not n.is_pinned, n.type != "folder", n.name.lower()))
+    return notes
 
 
 def get_note(note_id: str) -> Optional[Note]:
