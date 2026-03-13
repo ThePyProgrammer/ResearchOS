@@ -1,7 +1,7 @@
 -- =============================================================================
 -- ResearchOS — full schema (merged)
 -- =============================================================================
--- This single file replaces running migrations 001–012 individually.
+-- This single file replaces running migrations 001–013 individually.
 -- New users: paste this into the Supabase SQL Editor and run it once.
 --
 -- All statements use IF NOT EXISTS / IF NOT EXISTS so the script is safe to
@@ -291,19 +291,25 @@ ALTER TABLE notes DISABLE ROW LEVEL SECURITY;
 
 
 -- =============================================================================
--- CHAT MESSAGES  (copilot history per paper, per website, and per GitHub repo)
+-- CHAT MESSAGES  (copilot history per paper, per website, per GitHub repo,
+--                 and per library — Notes Copilot)
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS chat_messages (
     id             TEXT PRIMARY KEY,
-    paper_id       TEXT,                              -- NULL for website/repo chat
-    website_id     TEXT,                              -- NULL for paper/repo chat
-    github_repo_id TEXT,                              -- NULL for paper/website chat
+    paper_id       TEXT,                              -- NULL for website/repo/library chat
+    website_id     TEXT,                              -- NULL for paper/repo/library chat
+    github_repo_id TEXT,                              -- NULL for paper/website/library chat
+    library_id     TEXT                               -- NULL for paper/website/repo chat; set for Notes Copilot
+                       REFERENCES libraries(id) ON DELETE CASCADE,
     role           TEXT NOT NULL DEFAULT 'user',
     content        TEXT NOT NULL DEFAULT '',
     suggestions    JSONB,
     created_at     TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_library_id
+  ON chat_messages (library_id);
 
 ALTER TABLE chat_messages DISABLE ROW LEVEL SECURITY;
 
