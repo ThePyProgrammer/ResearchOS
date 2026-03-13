@@ -35,8 +35,190 @@ function ToolBtn({ icon, label, active, onClick }) {
   )
 }
 
+// ─── Export utilities ─────────────────────────────────────────────────────────
+
+/** Recursively convert a DOM node to Markdown text. */
+function _nodeToMd(node) {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent
+  if (node.nodeType !== Node.ELEMENT_NODE) return ''
+  const tag = node.tagName.toLowerCase()
+  const inner = () => Array.from(node.childNodes).map(_nodeToMd).join('')
+
+  switch (tag) {
+    case 'h1': return `# ${inner()}\n\n`
+    case 'h2': return `## ${inner()}\n\n`
+    case 'h3': return `### ${inner()}\n\n`
+    case 'h4': return `#### ${inner()}\n\n`
+    case 'h5': return `##### ${inner()}\n\n`
+    case 'h6': return `###### ${inner()}\n\n`
+    case 'p':  return `${inner()}\n\n`
+    case 'br': return '\n'
+    case 'hr': return `---\n\n`
+    case 'strong': case 'b': return `**${inner()}**`
+    case 'em':     case 'i': return `*${inner()}*`
+    case 's':  return `~~${inner()}~~`
+    case 'u':  return inner()
+    case 'mark': return inner()
+    case 'code':
+      return node.closest('pre') ? inner() : `\`${inner()}\``
+    case 'pre': {
+      const lang = node.querySelector('code')?.className?.match(/language-(\w+)/)?.[1] ?? ''
+      return `\`\`\`${lang}\n${inner()}\n\`\`\`\n\n`
+    }
+    case 'blockquote': {
+      const lines = inner().trim().split('\n').map(l => `> ${l}`)
+      return `${lines.join('\n')}\n\n`
+    }
+    case 'a': return `[${inner()}](${node.getAttribute('href') ?? ''})`
+    case 'ul': {
+      return Array.from(node.children).map(li => {
+        const cb = li.querySelector('input[type="checkbox"]')
+        const text = _nodeToMd(li).trim()
+        if (cb) return `- [${cb.checked ? 'x' : ' '}] ${text}\n`
+        return `- ${text}\n`
+      }).join('') + '\n'
+    }
+    case 'ol':
+      return Array.from(node.children).map((li, i) =>
+        `${i + 1}. ${_nodeToMd(li).trim()}\n`
+      ).join('') + '\n'
+    case 'li': return inner()
+    case 'input': return ''   // checkbox inputs — handled in ul case
+    case 'span':
+      if (node.dataset.wikiName) return `[[${node.dataset.wikiName}]]`
+      if (node.dataset.latex)    return `$${node.dataset.latex}$`
+      return inner()
+    default: return inner()
+  }
+}
+
+function htmlToMarkdown(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  return _nodeToMd(doc.body).trim()
+}
+
+function exportMarkdown(html, name) {
+  const md = htmlToMarkdown(html)
+  const blob = new Blob([md], { type: 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${name}.md`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function exportPDF(html, name) {
+  const win = window.open('', '_blank')
+  win.document.write(`<!DOCTYPE html>
+<html><head>
+  <meta charset="utf-8">
+  <title>${name}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      max-width: 720px; margin: 40px auto; padding: 0 24px;
+      color: #111; line-height: 1.75; font-size: 16px;
+    }
+    h1 { font-size: 2em; border-bottom: 1px solid #e5e7eb; padding-bottom: .3em; margin-top: 1.2em; }
+    h2 { font-size: 1.5em; margin-top: 1.4em; }
+    h3 { font-size: 1.2em; margin-top: 1.3em; }
+    h1,h2,h3,h4,h5,h6 { margin-bottom: .5em; font-weight: 700; }
+    p { margin: .75em 0; }
+    a { color: #4f46e5; }
+    strong { font-weight: 700; }
+    em { font-style: italic; }
+    code {
+      font-family: 'Courier New', monospace; font-size: .875em;
+      background: #f3f4f6; border-radius: 3px; padding: 2px 5px;
+    }
+    pre {
+      background: #f3f4f6; border-radius: 6px;
+      padding: 12px 16px; overflow-x: auto; margin: 1em 0;
+    }
+    pre code { background: none; padding: 0; }
+    blockquote {
+      border-left: 3px solid #d1d5db; margin: 1em 0;
+      padding-left: 1em; color: #6b7280;
+    }
+    ul, ol { padding-left: 1.5em; margin: .75em 0; }
+    li { margin: .25em 0; }
+    hr { border: none; border-top: 1px solid #e5e7eb; margin: 2em 0; }
+    mark { background: #fef08a; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid #e5e7eb; padding: 6px 12px; text-align: left; }
+    th { background: #f9fafb; font-weight: 600; }
+    /* task list */
+    ul[data-type="taskList"] { list-style: none; padding-left: .5em; }
+    ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: .5em; }
+    /* wiki-link chips */
+    span[data-wiki-name] {
+      color: #4f46e5; background: rgba(79,70,229,.08);
+      border-radius: 3px; padding: 0 3px; font-weight: 500;
+    }
+    @media print {
+      body { margin: 0; }
+      @page { margin: 2cm; }
+    }
+  </style>
+</head>
+<body>
+  <h1 style="border-bottom:2px solid #e5e7eb">${name}</h1>
+  ${html}
+  <script>window.onload = () => { window.print() }<\/script>
+</body></html>`)
+  win.document.close()
+}
+
+// ─── Export dropdown menu ─────────────────────────────────────────────────────
+function ExportMenu({ onMarkdown, onPDF }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="Export"
+        className={`p-1 rounded transition-colors ${open ? 'bg-slate-100 text-slate-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}`}
+      >
+        <Icon name="download" className="text-[16px]" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
+          <button
+            onClick={() => { onMarkdown(); setOpen(false) }}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
+          >
+            <Icon name="article" className="text-[14px] text-slate-400" />
+            Export as Markdown
+          </button>
+          <button
+            onClick={() => { onPDF(); setOpen(false) }}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
+          >
+            <Icon name="picture_as_pdf" className="text-[14px] text-slate-400" />
+            Export as PDF
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Tiptap WYSIWYG editor ────────────────────────────────────────────────────
-function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick }) {
+function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick, noteName }) {
   // Build wiki link extension once per editor instance; use refs so the callbacks
   // always see the latest values without needing to recreate the extension.
   const getAllNotesRef = useRef(getAllNotes)
@@ -79,6 +261,8 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick 
   }, [content, editor])
 
   if (!editor) return null
+
+  const html = editor.getHTML()
 
   return (
     <>
@@ -142,6 +326,14 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick 
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
         <ToolBtn icon="undo" label="Undo (Ctrl+Z)" onClick={() => editor.chain().focus().undo().run()} />
         <ToolBtn icon="redo" label="Redo (Ctrl+Shift+Z)" onClick={() => editor.chain().focus().redo().run()} />
+        <div className="w-px h-4 bg-slate-200 mx-0.5" />
+        {/* Export dropdown */}
+        <div className="relative">
+          <ExportMenu
+            onMarkdown={() => exportMarkdown(html, noteName || 'note')}
+            onPDF={() => exportPDF(html, noteName || 'note')}
+          />
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} className="h-full p-5 max-w-4xl" />
@@ -1805,6 +1997,7 @@ export default function LibraryNotes() {
                     onSave={save}
                     getAllNotes={getAllNotesForSuggestion}
                     onWikiLinkClick={handleWikiLinkClick}
+                    noteName={selectedNote.name}
                   />
 
                   {/* Word count + reading time */}
