@@ -79,7 +79,7 @@ Be concise, accurate, and cite specifics from the paper when relevant.
 When referencing the paper, quote exact passages where possible.
 Format your responses in clean HTML suitable for display (use <p>, <strong>, <em>, <ul>, <li>, <code>, <pre>, <h3> tags).
 Do NOT use markdown formatting — use HTML tags directly.
-For mathematical expressions, use LaTeX with dollar sign delimiters: $...$ for inline math and $$...$$ for display math.
+For mathematical expressions, use LaTeX with dollar sign delimiters: $...$ for inline math and $$...$$ display math.
 The frontend renders LaTeX via KaTeX.
 
 IMPORTANT: You have tools to suggest edits to notes and create new note files.
@@ -88,6 +88,16 @@ You can make multiple suggestions in one response. Each suggestion is individual
 When editing an existing note, provide the COMPLETE new content for the note (not just the diff).
 Note content is HTML (from a tiptap WYSIWYG editor).
 Always include a brief text explanation in your response alongside any tool calls.
+
+WIKI-LINK FORMAT:
+- When referencing a note in your chat reply, write [[Note Name]] (double-bracket syntax).
+  Example: <p>See [[Summary]] for an overview.</p>
+- When including a reference to another note inside the HTML content of a note suggestion
+  (i.e., inside the `content` argument of suggest_note_edit or suggest_note_create),
+  use the tiptap wiki-link span format so it becomes a live clickable link:
+  <span data-wiki-name="Note Name">Note Name</span>
+  Example: <p>Builds on <span data-wiki-name="Methodology">Methodology</span>.</p>
+- Never write note IDs in prose (e.g. never say "note_a1b2c3d4"). Use the name only.
 
 CRITICAL: When using suggest_note_edit, the note_id parameter MUST be the exact id value from the notes filesystem context (e.g. "note_a1b2c3d4"), NOT the file name. If a note does not exist yet, use suggest_note_create instead of suggest_note_edit."""
 
@@ -100,7 +110,7 @@ brainstorm ideas, and assist with writing notes.
 Be concise and accurate.
 Format your responses in clean HTML suitable for display (use <p>, <strong>, <em>, <ul>, <li>, <code>, <pre>, <h3> tags).
 Do NOT use markdown formatting — use HTML tags directly.
-For mathematical expressions, use LaTeX with dollar sign delimiters: $...$ for inline math and $$...$$ for display math.
+For mathematical expressions, use LaTeX with dollar sign delimiters: $...$ for inline math and $$...$$ display math.
 The frontend renders LaTeX via KaTeX.
 
 IMPORTANT: You have tools to suggest edits to notes and create new note files.
@@ -109,6 +119,15 @@ You can make multiple suggestions in one response. Each suggestion is individual
 When editing an existing note, provide the COMPLETE new content for the note (not just the diff).
 Note content is HTML (from a tiptap WYSIWYG editor).
 Always include a brief text explanation in your response alongside any tool calls.
+
+WIKI-LINK FORMAT:
+- When referencing a note in your chat reply, write [[Note Name]] (double-bracket syntax).
+  Example: <p>See [[Key Takeaways]] for a summary.</p>
+- When including a reference to another note inside the HTML content of a note suggestion
+  (i.e., inside the `content` argument of suggest_note_edit or suggest_note_create),
+  use the tiptap wiki-link span format so it becomes a live clickable link:
+  <span data-wiki-name="Note Name">Note Name</span>
+- Never write note IDs in prose. Use the name only.
 
 CRITICAL: When using suggest_note_edit, the note_id parameter MUST be the exact id value from the notes filesystem context (e.g. "note_a1b2c3d4"), NOT the file name. If a note does not exist yet, use suggest_note_create instead of suggest_note_edit."""
 
@@ -121,7 +140,7 @@ explain the architecture, suggest how to use or extend it, identify related work
 Be concise, technical, and accurate. When discussing code architecture or usage, be specific.
 Format your responses in clean HTML suitable for display (use <p>, <strong>, <em>, <ul>, <li>, <code>, <pre>, <h3> tags).
 Do NOT use markdown formatting — use HTML tags directly.
-For mathematical expressions, use LaTeX with dollar sign delimiters: $...$ for inline math and $$...$$ for display math.
+For mathematical expressions, use LaTeX with dollar sign delimiters: $...$ for inline math and $$...$$ display math.
 The frontend renders LaTeX via KaTeX.
 
 IMPORTANT: You have tools to suggest edits to notes and create new note files.
@@ -130,6 +149,15 @@ You can make multiple suggestions in one response. Each suggestion is individual
 When editing an existing note, provide the COMPLETE new content for the note (not just the diff).
 Note content is HTML (from a tiptap WYSIWYG editor).
 Always include a brief text explanation in your response alongside any tool calls.
+
+WIKI-LINK FORMAT:
+- When referencing a note in your chat reply, write [[Note Name]] (double-bracket syntax).
+  Example: <p>See [[Architecture Overview]] for a breakdown.</p>
+- When including a reference to another note inside the HTML content of a note suggestion
+  (i.e., inside the `content` argument of suggest_note_edit or suggest_note_create),
+  use the tiptap wiki-link span format so it becomes a live clickable link:
+  <span data-wiki-name="Note Name">Note Name</span>
+- Never write note IDs in prose. Use the name only.
 
 CRITICAL: When using suggest_note_edit, the note_id parameter MUST be the exact id value from the notes filesystem context (e.g. "note_a1b2c3d4"), NOT the file name. If a note does not exist yet, use suggest_note_create instead of suggest_note_edit."""
 
@@ -274,8 +302,25 @@ AGENTIC LOOP GUIDANCE:
 - Use suggest_note_create to build new notes in the right location — specify the target item so it appears in the correct folder in the tree.
 - Always include a brief narrative explanation alongside tool calls.
 
+WIKI-LINK FORMAT — follow this precisely:
+- When referencing a note in your CHAT REPLY (the narrative text the user reads), write [[Note Name]]
+  using double-bracket syntax. This renders cleanly in the chat and matches the app's own convention.
+  Examples:
+    <p>See [[Causal Claims]] for the full analysis.</p>
+    <p>The library note [[drifting.md]] is currently a placeholder.</p>
+  Never include the raw note ID (e.g. note_f37a3ae7) in prose — the name is sufficient.
+
+- When referencing a note inside the HTML CONTENT of a note suggestion (i.e., inside the `content`
+  argument passed to suggest_note_edit or suggest_note_create), use the tiptap wiki-link span so the
+  link is live and clickable when the user opens the note in the editor:
+    <span data-wiki-name="Note Name">Note Name</span>
+  Example inside a note body:
+    <p>Builds on the analysis in <span data-wiki-name="Causal Claims">Causal Claims</span>.</p>
+  You may optionally include data-wiki-id if you know the exact note ID:
+    <span data-wiki-name="Causal Claims" data-wiki-id="note_f37a3ae7">Causal Claims</span>
+
 FORMAT:
-- Responses are rendered as HTML in the chat (use <p>, <strong>, <em>, <ul>, <li>, <h3>, <code>, <pre>).
+- Chat responses are rendered as HTML in the chat (use <p>, <strong>, <em>, <ul>, <li>, <h3>, <code>, <pre>).
 - Do NOT use markdown — use HTML tags directly.
 - LaTeX via KaTeX: $...$ inline, $$...$$ display.
 

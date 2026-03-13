@@ -21,6 +21,23 @@ function renderLatexInHtml(html) {
   return html
 }
 
+/**
+ * Convert [[Note Name]] patterns in chat HTML into styled inline spans.
+ * The spans are purely decorative here (chat is not a tiptap editor), but
+ * they match the wiki-link visual style so references look consistent.
+ */
+function renderWikiLinksInHtml(html) {
+  if (!html) return html
+  return html.replace(/\[\[([^\]]+)\]\]/g, (_, name) =>
+    `<span class="wiki-link-chat" style="color:#6366f1;font-weight:500;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px;">[[${name}]]</span>`
+  )
+}
+
+/** Combined renderer: latex then wiki-links. */
+function renderChatHtml(html) {
+  return renderWikiLinksInHtml(renderLatexInHtml(html))
+}
+
 /** Strip HTML tags to get plain text for diffing. */
 function stripHtml(html) {
   if (!html) return ''
@@ -283,7 +300,7 @@ function ChatInput({ onSend, sending, placeholder = 'Ask about this item...' }) 
 /* ─── Chat message bubble ─── */
 function ChatBubble({ message, currentNotes, onSuggestionAccept, onSuggestionReject }) {
   const isUser = message.role === 'user'
-  const renderedContent = useMemo(() => renderLatexInHtml(message.content), [message.content])
+  const renderedContent = useMemo(() => renderChatHtml(message.content), [message.content])
   const suggestions = message.suggestions || []
 
   return (

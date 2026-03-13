@@ -36,6 +36,21 @@ function renderLatexInHtml(html) {
   return html
 }
 
+/**
+ * Convert [[Note Name]] patterns in chat HTML into styled inline spans.
+ * Matches the wiki-link visual style without requiring a tiptap editor.
+ */
+function renderWikiLinksInHtml(html) {
+  if (!html) return html
+  return html.replace(/\[\[([^\]]+)\]\]/g, (_, name) =>
+    `<span style="color:#6366f1;font-weight:500;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px;">[[${name}]]</span>`
+  )
+}
+
+function renderChatHtml(html) {
+  return renderWikiLinksInHtml(renderLatexInHtml(html))
+}
+
 function stripHtml(html) {
   if (!html) return ''
   const el = document.createElement('div')
@@ -203,7 +218,7 @@ function SuggestionCard({ suggestion, allNotes, onAccept, onReject }) {
 /* ─── Chat bubble ────────────────────────────────────────────────────────────── */
 function ChatBubble({ message, allNotes, onAccept, onReject }) {
   const isUser = message.role === 'user'
-  const rendered = useMemo(() => renderLatexInHtml(message.content), [message.content])
+  const rendered = useMemo(() => renderChatHtml(message.content), [message.content])
   const suggestions = message.suggestions || []
 
   return (
