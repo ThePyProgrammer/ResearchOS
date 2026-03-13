@@ -96,16 +96,20 @@ const ITEM_STYLE = {
 }
 
 /* ─── Diff viewer ────────────────────────────────────────────────────────────── */
-function DiffView({ oldContent, newContent, type }) {
+// className overrides the root container style; defaults to a compact capped height
+// suitable for inline chat cards. Pass className="" (empty) or a custom class for
+// the full-page tab view where the parent already handles scrolling.
+function DiffView({ oldContent, newContent, type, className }) {
   const [expanded, setExpanded] = useState(false)
   const oldText = stripHtml(oldContent || '')
   const newText = stripHtml(newContent || '')
+  const rootCls = className !== undefined ? className : 'max-h-60 overflow-y-auto'
 
   if (type === 'create') {
     const lines = newText.split('\n')
     const display = expanded ? lines : lines.slice(0, 12)
     return (
-      <div className="text-[11px] font-mono leading-relaxed max-h-60 overflow-y-auto">
+      <div className={`text-[11px] font-mono leading-relaxed ${rootCls}`}>
         {display.map((line, i) => (
           <div key={i} className="px-2 py-px bg-emerald-50 text-emerald-800 flex">
             <span className="text-emerald-400 w-5 text-right mr-2 select-none flex-shrink-0">+</span>
@@ -127,7 +131,7 @@ function DiffView({ oldContent, newContent, type }) {
   }
   const display = expanded ? diff : diff.slice(0, 20)
   return (
-    <div className="text-[11px] font-mono leading-relaxed max-h-60 overflow-y-auto">
+    <div className={`text-[11px] font-mono leading-relaxed ${rootCls}`}>
       {display.map((d, i) => (
         <div key={i} className={`px-2 py-px flex ${
           d.type === 'add' ? 'bg-emerald-50 text-emerald-800'
@@ -145,6 +149,88 @@ function DiffView({ oldContent, newContent, type }) {
           Show {diff.length - 20} more lines
         </button>
       )}
+    </div>
+  )
+}
+
+/* ─── Suggestion tab view (exported for use in LibraryNotes tab area) ─────── */
+/**
+ * Full-page diff view rendered inside a Notes IDE tab.
+ * Receives the suggestion object, the list of all loaded notes (for diff baseline),
+ * and accept / reject callbacks wired up by LibraryNotes.
+ */
+export function SuggestionTabView({ suggestion, allNotes, onAccept, onReject }) {
+  const isCreate   = suggestion.type === 'create'
+  const isPending  = suggestion.status === 'pending'
+  const isAccepted = suggestion.status === 'accepted'
+  const isRejected = suggestion.status === 'rejected'
+
+  const currentNote    = !isCreate ? allNotes.find(n => n.id === suggestion.noteId) : null
+  const currentContent = currentNote?.content || ''
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden bg-white">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200 bg-white flex-shrink-0">
+        <Icon
+          name={isCreate ? 'note_add' : 'edit_note'}
+          className={`text-[22px] ${isCreate ? 'text-emerald-500' : 'text-blue-500'}`}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[15px] font-semibold text-slate-800 truncate">
+              {suggestion.noteName}
+            </span>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+              isCreate ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+            }`}>
+              {isCreate ? 'NEW NOTE' : 'EDIT'}
+            </span>
+            {isAccepted && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                ACCEPTED
+              </span>
+            )}
+            {isRejected && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">
+                REJECTED
+              </span>
+            )}
+          </div>
+          {suggestion.description && (
+            <p className="text-[11px] text-slate-400 mt-0.5">{suggestion.description}</p>
+          )}
+        </div>
+
+        {isPending && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => onAccept(suggestion)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-[12px] font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+            >
+              <Icon name="check" className="text-[16px]" />
+              Accept
+            </button>
+            <button
+              onClick={() => onReject(suggestion)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-600 text-[12px] font-medium rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+            >
+              <Icon name="close" className="text-[16px]" />
+              Reject
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Diff / new content ──────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto">
+        <DiffView
+          oldContent={currentContent}
+          newContent={suggestion.content}
+          type={suggestion.type}
+          className=""
+        />
+      </div>
     </div>
   )
 }
@@ -216,7 +302,7 @@ function SuggestionCard({ suggestion, allNotes, onAccept, onReject }) {
 }
 
 /* ─── Chat bubble ────────────────────────────────────────────────────────────── */
-function ChatBubble({ message, allNotes, onAccept, onReject }) {
+function ChatBubble({ message, onAccept, onReject }) {
   const isUser = message.role === 'user'
   const rendered = useMemo(() => renderChatHtml(message.content), [message.content])
   const suggestions = message.suggestions || []
@@ -244,11 +330,32 @@ function ChatBubble({ message, allNotes, onAccept, onReject }) {
           </div>
         )}
 
+        {/* Compact suggestion pills — shown instead of full diff cards now that
+            each suggestion opens as its own tab in the IDE tab bar */}
         {suggestions.length > 0 && (
-          <div className="mt-2 space-y-2">
-            {suggestions.map(sug => (
-              <SuggestionCard key={sug.id} suggestion={sug} allNotes={allNotes} onAccept={onAccept} onReject={onReject} />
-            ))}
+          <div className="mt-1.5 flex flex-col gap-1">
+            <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider px-0.5">
+              {suggestions.length} suggestion{suggestions.length > 1 ? 's' : ''} — open in tab{suggestions.length > 1 ? 's' : ''}
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {suggestions.map(sug => (
+                <div key={sug.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                  sug.status === 'accepted'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : sug.status === 'rejected'
+                    ? 'bg-slate-50 text-slate-400 border-slate-200 line-through'
+                    : 'bg-purple-50 text-purple-700 border-purple-200'
+                }`}>
+                  <Icon
+                    name={sug.type === 'create' ? 'note_add' : 'edit_note'}
+                    className="text-[11px]"
+                  />
+                  <span className="max-w-[120px] truncate">{sug.noteName}</span>
+                  {sug.status === 'accepted' && <Icon name="check_circle" className="text-[11px] text-emerald-500" />}
+                  {sug.status === 'rejected' && <Icon name="cancel" className="text-[11px] text-slate-400" />}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -542,6 +649,7 @@ export default function NotesCopilotPanel({
   collections = [],
   allNotes = [],          // flat list of all loaded notes for diff lookup
   onNotesChanged,         // callback when a suggestion is accepted
+  onOpenSuggestionTab,    // callback(suggestion, onAccept, onReject) → opens tab in IDE
   width = 340,
 }) {
   const [messages, setMessages] = useState([])      // local history
@@ -657,6 +765,15 @@ export default function NotesCopilotPanel({
       }
 
       const assistantMsg = await notesCopilotApi.send(libraryId, payload)
+
+      // Open each suggestion as its own IDE tab instead of embedding diff cards
+      // in the chat. The chat will show compact status pills for reference.
+      if (assistantMsg.suggestions?.length && onOpenSuggestionTab) {
+        for (const sug of assistantMsg.suggestions) {
+          onOpenSuggestionTab(sug, handleAccept, handleReject)
+        }
+      }
+
       // Replace temp message with real user entry, then add assistant response
       setMessages(prev => [
         ...prev.filter(m => m.id !== userMsg.id),
@@ -858,9 +975,6 @@ export default function NotesCopilotPanel({
             <ChatBubble
               key={msg.id}
               message={msg}
-              allNotes={allNotes}
-              onAccept={handleAccept}
-              onReject={handleReject}
             />
           ))
         )}

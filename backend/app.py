@@ -453,4 +453,35 @@ def seed_data() -> None:
 @app.on_event("startup")
 async def on_startup() -> None:
     seed_data()
+    _check_migrations()
     logger.info("ResearchOS API ready")
+
+
+def _check_migrations() -> None:
+    """
+    Probe for optional DB columns added after the initial schema and log
+    actionable migration SQL when they are missing.  We never auto-apply DDL
+    here — just surface the issue early so the developer can run it once in
+    the Supabase SQL editor.
+    """
+    db = get_client()
+
+    # library_id on chat_messages — required for Notes Copilot history
+    try:
+        db.table("chat_messages").select("library_id").limit(1).execute()
+    except Exception:
+        logger.warning(
+            "\n"
+            "┌─ MIGRATION REQUIRED ──────────────────────────────────────────────────────┐\n"
+            "│ chat_messages is missing the library_id column.                           │\n"
+            "│ Notes Copilot chat history will NOT persist across page reloads until     │\n"
+            "│ you run the following SQL once in the Supabase SQL editor:                │\n"
+            "│                                                                           │\n"
+            "│   ALTER TABLE chat_messages                                               │\n"
+            "│     ADD COLUMN IF NOT EXISTS library_id text                             │\n"
+            "│     REFERENCES libraries(id) ON DELETE CASCADE;                          │\n"
+            "│                                                                           │\n"
+            "│   CREATE INDEX IF NOT EXISTS idx_chat_messages_library_id                │\n"
+            "│     ON chat_messages (library_id);                                        │\n"
+            "└───────────────────────────────────────────────────────────────────────────┘"
+        )

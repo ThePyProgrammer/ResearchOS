@@ -38,6 +38,17 @@ logger = logging.getLogger(__name__)
 _TABLE = "chat_messages"
 _MAX_ITERATIONS = 6        # agentic loop cap
 _NOTE_CONTENT_LIMIT = 3000 # chars per note in context
+_PDF_CONTENT_LIMIT = 15000 # chars of PDF text injected into context per paper
+
+# Phrases that indicate the model described an intent but didn't call a tool.
+# When detected after a text-only response, the loop does one follow-up pass.
+_INTENT_PHRASES = (
+    "i'll create", "i'll propose", "i'll now", "i'll suggest", "i'll draft",
+    "i will create", "i will propose", "i will suggest", "i will draft",
+    "let me create", "let me propose", "let me suggest", "let me draft",
+    "will now propose", "will now create", "will now suggest",
+    "i'll add", "i will add",
+)
 
 
 # ── Tool definitions ──────────────────────────────────────────────────────────
@@ -257,8 +268,11 @@ def _build_context_block(context_items: list[NotesCopilotContextItem]) -> str:
                     pdf_data = pdf_text_service.extract_and_cache(item.id, pdf_url)
                     if pdf_data and pdf_data.get("markdown"):
                         pages = pdf_data.get("page_count", "?")
+                        pdf_text = pdf_data["markdown"][:_PDF_CONTENT_LIMIT]
+                        truncated = len(pdf_data["markdown"]) > _PDF_CONTENT_LIMIT
+                        suffix = f"\n[... truncated at {_PDF_CONTENT_LIMIT} chars ...]" if truncated else ""
                         meta_lines.append(
-                            f"\n--- FULL PAPER TEXT ({pages} pages) ---\n{pdf_data['markdown']}"
+                            f"\n--- FULL PAPER TEXT ({pages} pages) ---\n{pdf_text}{suffix}"
                         )
                     else:
                         meta_lines.append("\n(PDF is available but no text could be extracted)")
@@ -495,11 +509,26 @@ def generate_response(
             choice = response.choices[0]
             msg_content = choice.message.content or ""
 
+            # Handle explicit model refusal (newer OpenAI models set .refusal)
+            refusal = getattr(choice.message, "refusal", None)
+            if refusal:
+                logger.warning("Notes copilot: model refusal for library %s: %s", library_id, refusal)
+                final_content = (
+                    "<p><em>The AI declined to respond to this request. "
+                    "Try rephrasing, or remove the PDF context if it is very large.</em></p>"
+                )
+                break
+
             if msg_content:
                 final_content = msg_content
 
-            # No tool calls → we're done
-            if not choice.message.tool_calls or choice.finish_reason == "stop":
+            # No tool calls → text-only response, we're done.
+            # Do NOT also check finish_reason == "stop" here: some model/adapter
+            # combinations (including certain gpt-4o-mini versions) emit
+            # finish_reason="stop" even when tool calls ARE present in the same
+            # response. Breaking early in that case silently drops all suggestions
+            # and produces an empty final_content → "No response generated."
+            if not choice.message.tool_calls:
                 break
 
             # Build the assistant turn with tool_calls
@@ -532,7 +561,70 @@ def generate_response(
 
     except Exception as e:
         logger.exception("Notes copilot LLM call failed for library %s", library_id)
-        final_content = f"<p><em>Error generating response: {e}</em></p>"
+        # Surface a friendlier message for common network failures so the user
+        # knows to check connectivity rather than assuming a bug.
+        err_str = str(e)
+        if "connection error" in err_str.lower() or "getaddrinfo" in err_str.lower() or "connecterror" in err_str.lower():
+            final_content = (
+                "<p><em>Could not reach the AI service — please check your internet "
+                "connection and try again.</em></p>"
+            )
+        else:
+            final_content = f"<p><em>Error generating response: {e}</em></p>"
+
+    # Intent follow-up pass: if the model produced only text that describes
+    # what it intends to do (e.g. "I'll create a note…") but called no tools,
+    # give it one more chance to actually execute the action.
+    if final_content and not all_suggestions:
+        content_lower = final_content.lower()
+        if any(phrase in content_lower for phrase in _INTENT_PHRASES):
+            logger.info(
+                "Notes copilot: model described intent without tool call — prompting execution for library %s",
+                library_id,
+            )
+            try:
+                messages.append({"role": "assistant", "content": final_content})
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "You described what you would do but didn't call any tool. "
+                        "Please call suggest_note_create or suggest_note_edit now to actually create/edit the note."
+                    ),
+                })
+                exec_response = client.chat.completions.create(
+                    model=model_id,
+                    messages=messages,
+                    tools=TOOLS,
+                    **completion_params(model_id, max_tokens=4096, temperature=0.7),
+                )
+                exec_choice = exec_response.choices[0]
+                if exec_choice.message.content:
+                    final_content = exec_choice.message.content
+                if exec_choice.message.tool_calls:
+                    for tc in exec_choice.message.tool_calls:
+                        suggestion, _ = _process_tool_call(tc)
+                        if suggestion:
+                            all_suggestions.append(suggestion)
+            except Exception as e:
+                logger.warning("Notes copilot intent follow-up failed: %s", e)
+
+    # Plain-text recovery pass: if the loop produced neither content nor
+    # suggestions (e.g. the model returned an empty first response), re-ask
+    # without tools so the model is forced to reply with text.
+    if not final_content and not all_suggestions:
+        logger.warning(
+            "Notes copilot: empty first pass for library %s — attempting plain-text recovery",
+            library_id,
+        )
+        try:
+            recovery = client.chat.completions.create(
+                model=model_id,
+                messages=messages,
+                **completion_params(model_id, max_tokens=2048, temperature=0.7),
+            )
+            final_content = recovery.choices[0].message.content or ""
+        except Exception as e:
+            logger.warning("Notes copilot plain-text recovery failed: %s", e)
 
     # Fallback summary when the model only used output tools
     if not final_content:
@@ -550,7 +642,7 @@ def generate_response(
                 f"{' and '.join(parts)}. Review each one below.</p>"
             )
         else:
-            final_content = "<p><em>No response generated.</em></p>"
+            final_content = "<p><em>Sorry, I wasn't able to generate a response. Try rephrasing your question or adding context via @.</em></p>"
 
     assistant_msg = _make_message(
         library_id,

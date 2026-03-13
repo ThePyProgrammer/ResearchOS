@@ -14,7 +14,7 @@ import { notesApi, papersApi, websitesApi, githubReposApi } from '../services/ap
 import { useLibrary } from '../context/LibraryContext'
 import { createWikiLinkExtension, extractWikiLinks } from '../components/WikiLinkExtension'
 import NoteGraphView from '../components/NoteGraphView'
-import NotesCopilotPanel from '../components/NotesCopilotPanel'
+import NotesCopilotPanel, { SuggestionTabView } from '../components/NotesCopilotPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -247,10 +247,11 @@ const ITEM_STYLES = {
 
 // ─── Tab type icons (used in TabBar and resource viewer header) ───────────────
 const TAB_ICONS = {
-  note:    { name: 'description',    cls: 'text-slate-400' },
-  pdf:     { name: 'picture_as_pdf', cls: 'text-red-400' },
-  website: { name: 'language',       cls: 'text-teal-500' },
-  github:  { name: 'code',           cls: 'text-violet-500' },
+  note:       { name: 'description',    cls: 'text-slate-400' },
+  pdf:        { name: 'picture_as_pdf', cls: 'text-red-400' },
+  website:    { name: 'language',       cls: 'text-teal-500' },
+  github:     { name: 'code',           cls: 'text-violet-500' },
+  suggestion: { name: 'difference',     cls: 'text-purple-400' },
 }
 
 // ─── Item folder ──────────────────────────────────────────────────────────────
@@ -799,11 +800,18 @@ export default function LibraryNotes() {
 
   // Resource tab (PDF / website / GitHub) currently active in the editor area
   const activeResourceTab = useMemo(
-    () => openTabs.find(t => t.noteId === activeTabId && t.tabType && t.tabType !== 'note') ?? null,
+    () => openTabs.find(t => t.noteId === activeTabId && t.tabType && t.tabType !== 'note' && t.tabType !== 'suggestion') ?? null,
+    [openTabs, activeTabId]
+  )
+
+  // Suggestion tab (copilot diff view) currently active in the editor area
+  const activeSuggestionTab = useMemo(
+    () => openTabs.find(t => t.noteId === activeTabId && t.tabType === 'suggestion') ?? null,
     [openTabs, activeTabId]
   )
 
   function sourceLabel(source) {
+    if (!source) return null
     if (source === 'library') return activeLibraryId ? 'Library' : null
     const [type, id] = source.split(':')
     if (type === 'paper') { const p = papers.find(p => p.id === id); return p?.title || 'Paper' }
@@ -1126,8 +1134,7 @@ export default function LibraryNotes() {
   }
 
   // ── Copilot notes-changed: refresh the affected source after accept ─────────
-  async function handleCopilotNotesChanged() {
-    if (!activeLibraryId) return
+  async function handleCopilotNotesChanged() {    if (!activeLibraryId) return
     // Re-fetch library notes
     try {
       const libNotes = await notesApi.listForLibrary(activeLibraryId)
@@ -1151,7 +1158,53 @@ export default function LibraryNotes() {
     })
   }
 
-  // ── Close a tab ────────────────────────────────────────────────────────────
+  // ── Suggestion tabs (opened by Notes Copilot) ──────────────────────────────
+  // Stores accept / reject handlers keyed by suggestion id so the tab renderer
+  // can call back into NotesCopilotPanel without stale-closure issues on state.
+  const suggestionActionsRef = useRef({})
+
+  function handleSuggestionStatusChange(suggestionId, status) {
+    const tabId = `__suggestion__${suggestionId}`
+    setOpenTabs(prev =>
+      prev.map(t =>
+        t.noteId === tabId
+          ? { ...t, suggestion: { ...t.suggestion, status } }
+          : t
+      )
+    )
+  }
+
+  function openSuggestionTab(suggestion, onAccept, onReject) {
+    const tabId = `__suggestion__${suggestion.id}`
+
+    // Wrap handlers so status is synced back to the tab after action
+    suggestionActionsRef.current[suggestion.id] = {
+      onAccept: async (sug) => {
+        await onAccept(sug)
+        handleSuggestionStatusChange(sug.id, 'accepted')
+      },
+      onReject: (sug) => {
+        onReject(sug)
+        handleSuggestionStatusChange(sug.id, 'rejected')
+      },
+    }
+
+    const tabName = (suggestion.type === 'create' ? '+ ' : '~ ') + suggestion.noteName
+
+    setOpenTabs(prev => {
+      if (prev.some(t => t.noteId === tabId)) return prev   // already open
+      return [...prev, {
+        noteId: tabId,
+        tabType: 'suggestion',
+        name: tabName,
+        suggestion: { ...suggestion },
+      }]
+    })
+    setActiveTabId(tabId)
+    setGraphView(false)
+  }
+
+
   function closeTab(noteId) {
     setOpenTabs(prev => {
       const idx = prev.findIndex(t => t.noteId === noteId)
@@ -1559,7 +1612,15 @@ export default function LibraryNotes() {
           <div className="flex flex-1 min-h-0 overflow-hidden">
             {/* Editor column */}
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-              {activeResourceTab ? (
+              {activeSuggestionTab ? (
+                /* ── Copilot suggestion diff view ─────────────────────── */
+                <SuggestionTabView
+                  suggestion={activeSuggestionTab.suggestion}
+                  allNotes={allLoadedNotes}
+                  onAccept={sug => suggestionActionsRef.current[sug.id]?.onAccept(sug)}
+                  onReject={sug => suggestionActionsRef.current[sug.id]?.onReject(sug)}
+                />
+              ) : activeResourceTab ? (
                 /* ── Resource viewer (PDF / website / GitHub) ─────────── */
                 <>
                   <div className="px-4 py-2 border-b border-slate-100 bg-white flex items-center justify-between flex-shrink-0">
@@ -1713,6 +1774,7 @@ export default function LibraryNotes() {
               collections={collections}
               allNotes={allLoadedNotes}
               onNotesChanged={handleCopilotNotesChanged}
+              onOpenSuggestionTab={openSuggestionTab}
             />
           </div>
         )}
