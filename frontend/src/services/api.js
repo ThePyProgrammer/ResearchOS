@@ -267,6 +267,21 @@ export const settingsApi = {
   updateModels: (updates) => apiFetch('/settings/models', { method: 'PATCH', body: updates }),
 }
 
+export const notesCopilotApi = {
+  /** List all copilot messages for a library. */
+  list: (libraryId) => apiFetch(`/libraries/${libraryId}/notes-copilot`),
+  /**
+   * Send a message to the Notes-page AI copilot.
+   * @param {string} libraryId
+   * @param {{ content: string, contextItems: object[], history: object[] }} data
+   */
+  send: (libraryId, data) =>
+    apiFetch(`/libraries/${libraryId}/notes-copilot`, { method: 'POST', body: data }),
+  /** Clear all copilot chat history for a library. */
+  clear: (libraryId) =>
+    apiFetch(`/libraries/${libraryId}/notes-copilot`, { method: 'DELETE' }),
+}
+
 export const searchApi = {
   /**
    * Search across papers, websites, and GitHub repos.

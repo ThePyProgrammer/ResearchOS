@@ -63,6 +63,7 @@ The backend is a standard FastAPI application. Three directories mirror the laye
 - `pdf_service.py` / `pdf_text_service.py` / `pdf_metadata_service.py` — PDF lifecycle: storage in Supabase, text extraction via pymupdf4llm, and LLM-powered metadata extraction from uploaded PDFs.
 - `note_service.py` — CRUD for the per-item note filesystem, plus AI note generation (OpenAI JSON mode producing a structured tree of files/folders). Supports papers, websites, GitHub repos, and library-level notes.
 - `chat_service.py` — AI copilot: OpenAI chat with tool calling that can suggest diffs to notes. Works across papers, websites, and GitHub repos.
+- `notes_copilot_service.py` — Library-scoped AI copilot for the Notes IDE page. Runs an **agentic loop** (up to 6 LLM turns per request): the model may call `read_note` and `list_item_notes` as internal tools to inspect the notes tree before calling `suggest_note_edit` or `suggest_note_create` as output tools. Context is assembled from the frontend-supplied `context_items` list (papers/websites/repos/library notes, with optional per-item note content). Persists messages to `chat_messages.library_id`; degrades gracefully if the column does not exist.
 - `search_service.py` — Unified search across papers, websites, and GitHub repos. Supports two modes: **lexical** (weighted keyword scoring per field, no API key needed) and **semantic** (OpenAI `text-embedding-3-small` cosine similarity, falls back to lexical when the API key is absent). Embeddings are cached in `backend/data/embeddings.json`.
 - `map_service.py` — UMAP 2D projection of cached item embeddings for the library map visualisation. Fetches all items in a library, filters to those with a cached embedding, and runs UMAP (`cosine` metric, `n_neighbors=min(15,n−1)`, `random_state=42`) inside a thread-pool executor so the async event loop is never blocked. The projection is cached in `backend/data/map_cache.json` keyed by a SHA-256 signature over the sorted set of embedding cache keys; the cache is invalidated automatically when the item set changes. `invalidate_map_cache()` can also be called explicitly after indexing new items.
 - `related_paper_service.py` — OpenAlex-powered related paper discovery for a seed paper. Combines semantic similarity links, citation references, and cited-by lookups from OpenAlex; falls back to title-neighbor search when direct links are sparse. Results are ranked by reason type and citation count and annotated with duplicate detection against the user's library.
@@ -73,6 +74,7 @@ The backend is a standard FastAPI application. Three directories mirror the laye
 
 - `search.py` — `GET /api/search` with `?q=&mode=lexical|semantic&library_id=&types=` query parameters. Also `GET /api/search/map?library_id=` which delegates to `map_service.build_map()` and returns the UMAP projection as a JSON array.
 - `settings.py` — `GET/PATCH /api/settings/models` for runtime LLM model selection.
+- `notes_copilot.py` — `GET/POST/DELETE /api/libraries/{id}/notes-copilot` for the Notes-page AI copilot. The `POST` endpoint is the primary path: it accepts `{ content, context_items, history }`, runs `notes_copilot_service.generate_response()`, and returns a `ChatMessage` with optional `suggestions`. The `GET` endpoint returns persisted message history; `DELETE` clears it.
 
 **`backend/migrations/`** — SQL files run in order in the Supabase SQL editor. These are the schema source of truth.
 
@@ -94,6 +96,7 @@ The backend is a standard FastAPI application. Three directories mirror the laye
 | `010_github_repos.sql` | GitHub repositories table |
 | `011_github_repo_notes_chat.sql` | Add `github_repo_id` column to notes and chat_messages |
 | `012_library_notes.sql` | Add `library_id` column to notes (library-level notes) |
+| `013_notes_copilot.sql` | Add `library_id` column to `chat_messages` (Notes-page copilot history) |
 
 **`backend/app.py`** — Entry point. Mounts CORS middleware, includes all routers, and seeds empty Supabase tables on startup from a built-in `SEED` dict.
 
@@ -124,6 +127,7 @@ The frontend is a React SPA with React Router v6 and Tailwind CSS.
 - `WikiLinkExtension.js` — Custom tiptap extension that renders `[[note-name]]` syntax as clickable blue links. Provides autocomplete suggestions from existing notes and fires a callback on click so the notes panel can navigate to the linked file.
 - `NoteGraphView.jsx` — D3 force-directed graph of all notes in the library, with edges representing `[[wiki-link]]` connections between notes. Nodes are color-coded by source type (library, paper, website, GitHub). Used in the Library Notes IDE (`/library/notes`).
 - `CopilotPanel.jsx` — AI chat panel that suggests diffs to notes. Generic across papers, websites, and GitHub repos.
+- `NotesCopilotPanel.jsx` — Library-scoped AI copilot panel for the Notes IDE. Implements `@` mention context selection (papers, websites, GitHub repos, collections, "all items", and library notes), per-item note-inclusion toggles, the agentic-loop spinner during multi-turn requests, and the same diff-view suggestion cards as `CopilotPanel`. Context is resolved from the frontend's in-memory data (`allLoadedNotes`, `papers`, `websites`, `githubRepos`, `collections`) before being sent to the backend, so no extra API calls are required to build the payload. Conversation history is kept in React state and sent with each request (stateless API); the backend persists it to the database when the schema migration has been applied.
 - `PaperInfoPanel.jsx` — Paper metadata editor with author chips (drag-reorder, inline edit, comma-paste split) and a collections picker. Exports reusable `EditableField`, `EditableTextArea`, `NamedLinks`, `TagChips`, and `statusConfig` used by other detail pages; `CollectionsPicker` and `AuthorChips` are also exported and shared across paper, website, and GitHub repo detail panels.
 - `WindowModal.jsx` — Reusable windowed modal shell with minimize/fullscreen/close and docked minimization. Used by Quick Add, collection creation, bulk-action modals, and agent config.
 
@@ -133,7 +137,7 @@ The frontend is a React SPA with React Router v6 and Tailwind CSS.
 - `Paper.jsx` — Three-pane layout: PDF viewer + Notes IDE + AI Copilot.
 - `Website.jsx` — Three-pane layout: live iframe + Notes IDE + AI Copilot + Details panel.
 - `GitHubRepo.jsx` — Two-pane layout: repo overview (metadata, topics, description/abstract, links) + tabbed panel with Details and Notes IDE + AI Copilot.
-- `LibraryNotes.jsx` — Library-level Notes IDE with a file tree covering all notes across the library, a full-featured tiptap editor, and an optional D3 `NoteGraphView` sidebar for visualizing wiki-link connections.
+- `LibraryNotes.jsx` — Library-level Notes IDE with a file tree covering all notes across the library, a full-featured tiptap editor, an optional D3 `NoteGraphView` sidebar for visualizing wiki-link connections, and the `NotesCopilotPanel` as a collapsible right sidebar. When the copilot panel accepts a suggestion, `handleCopilotNotesChanged()` re-fetches all item notes in the background to keep the tree and open editor tabs in sync.
 - `LibraryMap.jsx` — Semantic library map at `/library/map`. Fetches UMAP coordinates from `GET /api/search/map`, renders a D3 scatter plot on a dark dot-grid canvas, and supports zoom/pan (**Explore** mode) and brush-select (**Select** mode). Brush selection correctly inverts the current zoom transform when mapping pixel coordinates back to data space. Clicking a point navigates to the item's detail page. Color-coding toggles between first-collection and item-type. A collapsible legend panel mirrors the active colour scheme. Brush-selected items can be saved as a new collection via a `WindowModal` form that bulk-patches all selected items' `collections` field.
 - `Dashboard.jsx` — Activity feed, run stats, papers-over-time chart (Recharts). Triage health stat cards (Inbox / To Read / Read) are clickable and navigate to the corresponding filtered library view.
 - `Agents.jsx` — Workflow catalog and active runs with live log viewer.
@@ -153,7 +157,7 @@ All AI calls are routed through `agents/llm.py`, which maps **roles** to OpenAI 
 
 | Role | Default model | Purpose |
 |---|---|---|
-| `chat` | `gpt-4o-mini` | AI Copilot chat |
+| `chat` | `gpt-4o-mini` | AI Copilot chat (per-item and Notes-page agentic loop) |
 | `notes` | `gpt-4o-mini` | AI note generation |
 | `metadata` | `gpt-4o-mini` | PDF metadata extraction |
 | `enrichment` | `gpt-4o-mini` | Author profile enrichment |
@@ -175,6 +179,27 @@ PDFs flow through three stages: storage (`pdf_service.py` uploads to the Supabas
 ### AI Features
 
 All AI features use OpenAI and share a pattern: extract context (PDF text, metadata, existing notes), build a prompt, call OpenAI (either JSON mode for structured output or tool calling for copilot suggestions), and write results back through the service layer. The three AI features — auto-note generation, copilot chat, and PDF metadata extraction — are independent services that don't depend on each other.
+
+### Notes-Page AI Copilot and Agentic Loop
+
+`notes_copilot_service.py` implements a multi-turn agentic loop distinct from the single-turn pattern used by `chat_service.py`.
+
+**Context assembly** — the frontend resolves context before the request: it expands `@all_papers`, `@collection`, `@library` specials into concrete item lists, optionally attaches each item's notes (already loaded in the page's React state), and sends the fully assembled payload as `context_items`. The backend turns this into a system message via `_build_context_block()`, which formats metadata and note content per item type.
+
+**Four tools** — the model has access to:
+
+| Tool | Kind | Behavior |
+|---|---|---|
+| `suggest_note_edit` | output | Proposes a full-content replacement for an existing note; creates a pending `NoteSuggestion` |
+| `suggest_note_create` | output | Proposes a new note at a specified destination (`target_type` / `target_id`); creates a pending `NoteSuggestion` |
+| `read_note` | internal | Fetches and returns the current HTML content of any note by ID via `note_service.get_note()` |
+| `list_item_notes` | internal | Returns the notes tree for any item via `note_service.list_notes()`, formatted as an indented `[file]`/`[folder]` list |
+
+**Loop mechanics** — after each LLM response the service inspects the tool calls. If any internal tool was called, tool results are appended to the message list and the loop continues (up to `_MAX_ITERATIONS = 6`). If only output tools were called, the loop runs one more iteration to collect a textual summary alongside the suggestions, then exits. On `finish_reason == "stop"` or no tool calls, the loop exits immediately. All suggestions accumulated across iterations are attached to the single assistant `ChatMessage` returned to the caller.
+
+**Persistence** — messages are stored in `chat_messages` using the `library_id` column (migration `013`). The service catches any exception from the Supabase insert (e.g. when the column does not yet exist) and logs a warning rather than raising, so the agentic response is always returned to the frontend even without persistence.
+
+**Frontend accept flow** — `NotesCopilotPanel` handles `suggest_note_create` suggestions differently from `CopilotPanel`: the `targetType` / `targetId` fields on the suggestion drive which `notesApi` method is called (`.create`, `.createForWebsite`, `.createForGitHubRepo`, or `.createForLibrary`). After any accept, `onNotesChanged()` fires `handleCopilotNotesChanged()` in `LibraryNotes.jsx`, which re-fetches all item notes in a `Promise.allSettled` background sweep so the file tree reflects the new note without a full page reload.
 
 ### Search and Semantic Indexing
 

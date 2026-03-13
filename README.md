@@ -21,6 +21,7 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Library Notes IDE** — a library-level scratchpad at `/library/notes` for cross-item notes not tied to any single paper; includes a D3 force graph visualizing wiki-link connections between notes
 - **AI Auto-Note-Taker** — generates a multi-file note structure for any paper, website, or GitHub repo; auto-runs on import and PDF upload
 - **AI copilot** — context-aware research assistant that can suggest diffs to your notes
+- **Notes-page AI copilot** — library-scoped AI copilot on the Notes IDE that runs in an agentic loop (up to 6 LLM turns per request). Type `@` in the chat input to select any combination of papers, websites, GitHub repos, collections, or "all items" as context; toggle per-item note inclusion. The model can call `read_note` and `list_item_notes` internally before producing `suggest_note_edit` and `suggest_note_create` proposals targeting any item in the library or the library-level notes tree
 - **Semantic search** — hybrid lexical and OpenAI-embedding search across papers, websites, and GitHub repos (falls back to lexical when no API key is set)
 - **Related paper discovery** — surfaces related works for any paper via OpenAlex citation links and semantic neighbors
 - **Agent workflows** — multi-step research workflows (literature review, model research, experiment design) powered by OpenAI via pydantic-ai
@@ -92,6 +93,7 @@ backend/migrations/009_authors.sql
 backend/migrations/010_github_repos.sql
 backend/migrations/011_github_repo_notes_chat.sql
 backend/migrations/012_library_notes.sql
+backend/migrations/013_notes_copilot.sql
 ```
 
 </details>
@@ -176,6 +178,7 @@ All routes are prefixed `/api`. Responses are camelCase JSON. See the full API r
 | POST | `/api/libraries` | Create library |
 | GET/PATCH/DELETE | `/api/libraries/{id}` | Single library |
 | GET/POST | `/api/libraries/{id}/notes` | List / create library-level notes |
+| GET/POST/DELETE | `/api/libraries/{id}/notes-copilot` | Notes-page AI copilot — list history, send message (agentic), clear history |
 | GET | `/api/papers` | List papers; `?library_id=&collection_id=&status=&search=` |
 | POST | `/api/papers` | Create paper |
 | GET/PATCH/DELETE | `/api/papers/{id}` | Single paper |
@@ -245,7 +248,7 @@ researchos/
 │       ├── services/api.js       # Single API client; all fetch calls go here
 │       ├── context/              # React context (active library + collections)
 │       ├── hooks/                # Reusable hooks (e.g. useDragResize)
-│       ├── components/           # Shared UI (NotesPanel, CopilotPanel, NoteGraphView, etc.)
+│       ├── components/           # Shared UI (NotesPanel, CopilotPanel, NotesCopilotPanel, NoteGraphView, etc.)
 │       └── pages/                # Route-level components
 ├── ARCHITECTURE.md         # Codebase architecture guide
 ├── CONTRIBUTING.md         # How to contribute

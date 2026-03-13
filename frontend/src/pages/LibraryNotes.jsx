@@ -14,6 +14,7 @@ import { notesApi, papersApi, websitesApi, githubReposApi } from '../services/ap
 import { useLibrary } from '../context/LibraryContext'
 import { createWikiLinkExtension, extractWikiLinks } from '../components/WikiLinkExtension'
 import NoteGraphView from '../components/NoteGraphView'
+import NotesCopilotPanel from '../components/NotesCopilotPanel'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -630,6 +631,9 @@ export default function LibraryNotes() {
   // ── Backlinks panel toggle ─────────────────────────────────────────────────
   const [showBacklinks, setShowBacklinks] = useState(false)
 
+  // ── Notes Copilot panel toggle ─────────────────────────────────────────────
+  const [showCopilot, setShowCopilot] = useState(false)
+
   // ── Template picker: stores pending file-creation data while modal is open ─
   const [templatePickerFor, setTemplatePickerFor] = useState(null)
 
@@ -1119,6 +1123,32 @@ export default function LibraryNotes() {
       console.error('Failed to rename note:', err)
     }
     setRenaming(null)
+  }
+
+  // ── Copilot notes-changed: refresh the affected source after accept ─────────
+  async function handleCopilotNotesChanged() {
+    if (!activeLibraryId) return
+    // Re-fetch library notes
+    try {
+      const libNotes = await notesApi.listForLibrary(activeLibraryId)
+      setLibraryNotes(libNotes || [])
+    } catch { /* ignore */ }
+    // Re-fetch all item notes
+    const paperKeys   = papers.map(p   => ({ key: `paper:${p.id}`,   fetch: () => notesApi.list(p.id) }))
+    const websiteKeys = websites.map(w => ({ key: `website:${w.id}`, fetch: () => notesApi.listForWebsite(w.id) }))
+    const repoKeys    = githubRepos.map(r => ({ key: `github:${r.id}`, fetch: () => notesApi.listForGitHubRepo(r.id) }))
+    const allItems    = [...paperKeys, ...websiteKeys, ...repoKeys]
+    Promise.allSettled(allItems.map(({ fetch }) => fetch())).then(results => {
+      const notesMap = {}
+      const loadedMap = {}
+      results.forEach((result, i) => {
+        const key = allItems[i].key
+        notesMap[key]  = result.status === 'fulfilled' ? (result.value || []) : []
+        loadedMap[key] = true
+      })
+      setItemNotes(prev => ({ ...prev, ...notesMap }))
+      setLoadedItems(prev => ({ ...prev, ...loadedMap }))
+    })
   }
 
   // ── Close a tab ────────────────────────────────────────────────────────────
@@ -1671,6 +1701,19 @@ export default function LibraryNotes() {
                 }}
               />
             )}
+
+            {/* Notes Copilot side panel */}
+            <NotesCopilotPanel
+              open={showCopilot}
+              onToggle={() => setShowCopilot(v => !v)}
+              libraryId={activeLibraryId}
+              papers={papers}
+              websites={websites}
+              githubRepos={githubRepos}
+              collections={collections}
+              allNotes={allLoadedNotes}
+              onNotesChanged={handleCopilotNotesChanged}
+            />
           </div>
         )}
       </div>
