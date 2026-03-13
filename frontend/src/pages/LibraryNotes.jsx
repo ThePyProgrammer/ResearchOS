@@ -188,6 +188,70 @@ function exportPDF(html, name) {
   win.document.close()
 }
 
+// ─── Table right-click context menu ──────────────────────────────────────────
+function TableContextMenu({ editor, x, y, onClose }) {
+  const ref = useRef(null)
+
+  // Close on outside click or Escape
+  useEffect(() => {
+    function onDown(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
+    function onKey(e)  { if (e.key === 'Escape') onClose() }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [onClose])
+
+  // Clamp to viewport so the menu never overflows off-screen
+  useEffect(() => {
+    if (!ref.current) return
+    const { innerWidth: vw, innerHeight: vh } = window
+    const { offsetWidth: mw, offsetHeight: mh } = ref.current
+    if (x + mw > vw) ref.current.style.left = `${vw - mw - 8}px`
+    if (y + mh > vh) ref.current.style.top  = `${vh - mh - 8}px`
+  })
+
+  function act(fn) { fn(); onClose() }
+  const sep = <div className="my-1 border-t border-slate-100" />
+  const Item = ({ icon, label, danger, onClick }) => (
+    <button
+      onClick={() => act(onClick)}
+      className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] hover:bg-slate-50 ${danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700'}`}
+    >
+      <Icon name={icon} className={`text-[14px] ${danger ? '' : 'text-slate-400'}`} />
+      {label}
+    </button>
+  )
+
+  return (
+    <div
+      ref={ref}
+      style={{ position: 'fixed', top: y, left: x, zIndex: 9999 }}
+      className="w-52 bg-white rounded-lg shadow-xl border border-slate-200 py-1"
+    >
+      <p className="px-3 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Columns</p>
+      <Item icon="add" label="Add column before" onClick={() => editor.chain().focus().addColumnBefore().run()} />
+      <Item icon="add" label="Add column after"  onClick={() => editor.chain().focus().addColumnAfter().run()} />
+      <Item icon="remove" label="Delete column" danger onClick={() => editor.chain().focus().deleteColumn().run()} />
+
+      {sep}
+      <p className="px-3 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Rows</p>
+      <Item icon="add" label="Add row before" onClick={() => editor.chain().focus().addRowBefore().run()} />
+      <Item icon="add" label="Add row after"  onClick={() => editor.chain().focus().addRowAfter().run()} />
+      <Item icon="remove" label="Delete row" danger onClick={() => editor.chain().focus().deleteRow().run()} />
+
+      {sep}
+      <p className="px-3 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-slate-400">Cells</p>
+      <Item icon="merge"      label="Merge cells"           onClick={() => editor.chain().focus().mergeCells().run()} />
+      <Item icon="call_split" label="Split cell"            onClick={() => editor.chain().focus().splitCell().run()} />
+      <Item icon="view_agenda" label="Toggle header row"    onClick={() => editor.chain().focus().toggleHeaderRow().run()} />
+      <Item icon="view_week"   label="Toggle header column" onClick={() => editor.chain().focus().toggleHeaderColumn().run()} />
+
+      {sep}
+      <Item icon="delete" label="Delete table" danger onClick={() => editor.chain().focus().deleteTable().run()} />
+    </div>
+  )
+}
+
 // ─── Table toolbar menu ───────────────────────────────────────────────────────
 function TableMenu({ editor }) {
   const [open, setOpen] = useState(false)
@@ -380,6 +444,8 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick,
     if (content !== editor.getHTML()) editor.commands.setContent(content || '', false)
   }, [content, editor])
 
+  const [tableCtx, setTableCtx] = useState(null)
+
   if (!editor) return null
 
   const html = editor.getHTML()
@@ -456,8 +522,25 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick,
           />
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto">
-        <EditorContent editor={editor} className="h-full p-5 max-w-4xl" />
+      <div className="flex-1 overflow-y-auto relative">
+        <EditorContent
+          editor={editor}
+          className="h-full p-5 max-w-4xl"
+          onContextMenu={e => {
+            const cell = e.target.closest('td, th')
+            if (!cell) return
+            e.preventDefault()
+            setTableCtx({ x: e.clientX, y: e.clientY })
+          }}
+        />
+        {tableCtx && (
+          <TableContextMenu
+            editor={editor}
+            x={tableCtx.x}
+            y={tableCtx.y}
+            onClose={() => setTableCtx(null)}
+          />
+        )}
       </div>
     </>
   )
