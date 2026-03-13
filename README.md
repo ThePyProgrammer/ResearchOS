@@ -17,10 +17,16 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Duplicate detection** — centralized three-tier dedup (DOI, arXiv ID, normalized title) across all import paths: identifier import, PDF upload, and BibTeX import; surfaces warnings with "Import anyway" option
 - **PDF upload with metadata extraction** — drag-and-drop PDFs; LLM-powered extraction of title, authors, date, venue, abstract, and DOI
 - **PDF storage** — stored in Supabase Storage, rendered inline; auto-downloaded from source on import
-- **Notes IDE** — per-item note filesystem with folders and files, powered by a tiptap WYSIWYG editor with LaTeX support and `[[wiki-link]]` syntax
-- **Library Notes IDE** — a library-level scratchpad at `/library/notes` for cross-item notes not tied to any single paper; includes a D3 force graph visualizing wiki-link connections between notes
+- **Notes IDE** — library-level scratchpad at `/library/notes` covering all notes across papers, websites, GitHub repos, and the library itself; multi-tab tiptap WYSIWYG editor with:
+  - LaTeX / KaTeX math rendering
+  - `[[wiki-link]]` syntax with autocomplete, click-to-navigate, and a D3 force graph of all link connections
+  - **Tables** — full tiptap table support with resizable columns, a toolbar menu, and a right-click context menu for insert/delete row/column, merge/split cells, and header toggles
+  - **Note templates** — six built-in templates (Blank, Literature Note, Meeting Note, Experiment Log, Literature Review, Paper Summary) shown in a split preview modal on file creation
+  - **Pinned notes** — star any note to float it to the top of the file tree and a dedicated Pinned section; toggle from the star icon or right-click context menu
+  - **Export** — export the active note as Markdown (`.md` download) or PDF (print-ready `window.print()` with KaTeX and wiki-link styles) from a toolbar dropdown
+  - Drag-and-drop reordering, backlinks panel, recent notes section, full-text search
 - **AI Auto-Note-Taker** — generates a multi-file note structure for any paper, website, or GitHub repo; auto-runs on import and PDF upload
-- **AI copilot** — context-aware research assistant that can suggest diffs to your notes
+- **AI copilot** — context-aware research assistant that can suggest diffs to your notes; `[[wiki-link]]` references in chat output are rendered as clickable chips that open the linked note in the IDE
 - **Notes-page AI copilot** — library-scoped AI copilot on the Notes IDE that runs in an agentic loop (up to 6 LLM turns per request). Type `@` in the chat input to select any combination of papers, websites, GitHub repos, collections, or "all items" as context; toggle per-item note inclusion. The model can call `read_note` and `list_item_notes` internally before producing `suggest_note_edit` and `suggest_note_create` proposals targeting any item in the library or the library-level notes tree
 - **Semantic search** — hybrid lexical and OpenAI-embedding search across papers, websites, and GitHub repos (falls back to lexical when no API key is set)
 - **Related paper discovery** — surfaces related works for any paper via OpenAlex citation links and semantic neighbors
@@ -43,7 +49,7 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Database:** Supabase (PostgreSQL + Storage)
 - **AI:** OpenAI
 - **Frontend:** React 18, Vite, React Router v6, Tailwind CSS 3
-- **Editor:** tiptap v3 with KaTeX
+- **Editor:** tiptap v3 with KaTeX, `@tiptap/extension-table`
 - **Graph:** D3.js (note graph view, library map)
 
 ## Quick Start
@@ -94,6 +100,7 @@ backend/migrations/010_github_repos.sql
 backend/migrations/011_github_repo_notes_chat.sql
 backend/migrations/012_library_notes.sql
 backend/migrations/013_notes_copilot.sql
+backend/migrations/014_pin_notes.sql
 ```
 
 </details>
@@ -226,7 +233,7 @@ All routes are prefixed `/api`. Responses are camelCase JSON. See the full API r
 | POST | `/api/proposals/batch` | Batch approve/reject |
 | GET | `/api/activity` | Activity feed; `?type=agent\|human` |
 | GET | `/api/user` | User profile |
-| PATCH/DELETE | `/api/notes/{id}` | Update / delete a note by ID |
+| PATCH/DELETE | `/api/notes/{id}` | Update / delete a note by ID (supports `is_pinned`) |
 | GET | `/api/settings/models` | Get current LLM model assignments and available models |
 | PATCH | `/api/settings/models` | Update model assignments for one or more roles |
 
@@ -250,6 +257,7 @@ researchos/
 │       ├── hooks/                # Reusable hooks (e.g. useDragResize)
 │       ├── components/           # Shared UI (NotesPanel, CopilotPanel, NotesCopilotPanel, NoteGraphView, etc.)
 │       └── pages/                # Route-level components
+├── ideas/                  # Feature idea documents
 ├── ARCHITECTURE.md         # Codebase architecture guide
 ├── CONTRIBUTING.md         # How to contribute
 └── LICENSE                 # MIT
@@ -269,9 +277,10 @@ Scoped for a single-user, local research OS (no auth, no collaboration, no multi
 2. **Scholarly Discovery** — ~~Related paper discovery via OpenAlex~~, Semantic Scholar and Unpaywall integrations
 3. **Literature Review Automation** — prompt-to-collection pipeline, continuous refresh, provider-aware throttling
 4. **Search & Retrieval** — ~~hybrid lexical + semantic search~~, full embedding pipeline with persistent index
-5. **PDF Annotations** — in-document highlights, anchored comments, annotation export
-6. **Agent Runtime Hardening** — durable execution, ag-ui-protocol streaming, structured run artifacts
-7. **Advanced PDF Processing** — GROBID integration, citation graph from PDFs, section-aware chunking
+5. **Notes IDE** — ~~tables~~, ~~note templates~~, ~~pinned notes~~, ~~export (Markdown/PDF)~~, note version history, spaced repetition / flashcard mode, AI synthesis across selected notes
+6. **PDF Annotations** — in-document highlights, anchored comments, annotation export
+7. **Agent Runtime Hardening** — durable execution, ag-ui-protocol streaming, structured run artifacts
+8. **Advanced PDF Processing** — GROBID integration, citation graph from PDFs, section-aware chunking
 
 ## License
 
