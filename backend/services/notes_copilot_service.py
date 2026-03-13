@@ -246,6 +246,28 @@ def _build_context_block(context_items: list[NotesCopilotContextItem]) -> str:
                 if m.get("name"):
                     meta_lines.append(f"Library: {m['name']}")
 
+        # Inject full PDF text when the user toggled "pdf?" on a paper chip
+        if item.type == "paper" and item.include_pdf:
+            pdf_url = None
+            if item.metadata:
+                pdf_url = item.metadata.get("pdfUrl") or item.metadata.get("pdf_url")
+            if pdf_url:
+                try:
+                    from services import pdf_text_service
+                    pdf_data = pdf_text_service.extract_and_cache(item.id, pdf_url)
+                    if pdf_data and pdf_data.get("markdown"):
+                        pages = pdf_data.get("page_count", "?")
+                        meta_lines.append(
+                            f"\n--- FULL PAPER TEXT ({pages} pages) ---\n{pdf_data['markdown']}"
+                        )
+                    else:
+                        meta_lines.append("\n(PDF is available but no text could be extracted)")
+                except Exception as e:
+                    logger.warning("Failed to extract PDF for paper %s: %s", item.id, e)
+                    meta_lines.append("\n(PDF extraction failed)")
+            else:
+                meta_lines.append("\n(No PDF available for this paper)")
+
         notes_lines: list[str] = []
         if item.notes:
             notes_lines.append("Notes:")

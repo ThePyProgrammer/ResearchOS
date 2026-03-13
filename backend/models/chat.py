@@ -50,6 +50,7 @@ class NotesCopilotContextItem(CamelModel):
     name: str
     metadata: Optional[dict] = None  # item-specific fields (title, abstract, url, …)
     notes: Optional[list[NotesCopilotContextItemNote]] = None
+    include_pdf: Optional[bool] = False  # if True and type=='paper', inject full PDF text
 
 
 class NotesCopilotMessageCreate(CamelModel):

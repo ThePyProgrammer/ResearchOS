@@ -349,9 +349,10 @@ function MentionDropdown({ query, papers, websites, githubRepos, collections, on
 }
 
 /* ─── Context chip ───────────────────────────────────────────────────────────── */
-function ContextChip({ item, onRemove, onToggleNotes }) {
+function ContextChip({ item, onRemove, onToggleNotes, onTogglePdf }) {
   const style = ITEM_STYLE[item.type] || ITEM_STYLE.library
   const isSpecial = item.id.startsWith('__')
+  const isPaper = item.type === 'paper'
 
   return (
     <div className={`inline-flex items-center gap-1 pl-1.5 pr-0.5 py-0.5 rounded-full text-[10px] font-medium border ${style.pill} border-transparent`}>
@@ -373,6 +374,21 @@ function ContextChip({ item, onRemove, onToggleNotes }) {
         </button>
       )}
 
+      {/* Toggle PDF inclusion — only for individual paper chips */}
+      {!isSpecial && isPaper && (
+        <button
+          onClick={() => onTogglePdf(item.id)}
+          title={item.includePdf ? 'Remove PDF from context' : 'Include full PDF text in context'}
+          className={`px-1 py-0.5 rounded-full text-[9px] font-semibold transition-colors ${
+            item.includePdf
+              ? 'bg-orange-200 text-orange-700 hover:bg-orange-300'
+              : 'bg-white/70 text-slate-500 hover:bg-slate-200'
+          }`}
+        >
+          {item.includePdf ? '+pdf' : 'pdf?'}
+        </button>
+      )}
+
       <button
         onClick={() => onRemove(item.id)}
         className="p-0.5 rounded-full hover:bg-black/10 transition-colors"
@@ -386,7 +402,7 @@ function ContextChip({ item, onRemove, onToggleNotes }) {
 
 /* ─── Chat input with @ trigger ─────────────────────────────────────────────── */
 function ChatInput({ onSend, sending, papers, websites, githubRepos, collections,
-                     contextItems, onAddContext, onRemoveContext, onToggleNotes }) {
+                     contextItems, onAddContext, onRemoveContext, onToggleNotes, onTogglePdf }) {
   const [value, setValue] = useState('')
   const [mentionQuery, setMentionQuery] = useState(null) // null = no dropdown
   const textareaRef = useRef(null)
@@ -456,6 +472,7 @@ function ChatInput({ onSend, sending, papers, websites, githubRepos, collections
               item={item}
               onRemove={onRemoveContext}
               onToggleNotes={onToggleNotes}
+              onTogglePdf={onTogglePdf}
             />
           ))}
         </div>
@@ -590,7 +607,11 @@ export default function NotesCopilotPanel({
           else if (item.type === 'github_repo')
             notes = allNotes.filter(n => n.githubRepoId === item.id || (n.sourceKey && n.sourceKey === `github:${item.id}`))
         }
-        resolved.push({ type: item.type, id: item.id, name: item.name, metadata: item.metadata, notes })
+        resolved.push({
+          type: item.type, id: item.id, name: item.name,
+          metadata: item.metadata, notes,
+          includePdf: item.type === 'paper' ? (item.includePdf || false) : false,
+        })
       }
     }
     return resolved
@@ -623,6 +644,7 @@ export default function NotesCopilotPanel({
           id: ci.id,
           name: ci.name,
           metadata: ci.metadata || null,
+          include_pdf: ci.includePdf || false,
           notes: ci.notes
             ? ci.notes.map(n => ({
                 id: n.id, name: n.name, type: n.type,
@@ -669,6 +691,9 @@ export default function NotesCopilotPanel({
   }
   function handleToggleNotes(id) {
     setContextItems(prev => prev.map(c => c.id === id ? { ...c, includeNotes: !c.includeNotes } : c))
+  }
+  function handleTogglePdf(id) {
+    setContextItems(prev => prev.map(c => c.id === id ? { ...c, includePdf: !c.includePdf } : c))
   }
 
   /* ─── Suggestion accept/reject ─────────────────────────────────────────── */
@@ -790,8 +815,13 @@ export default function NotesCopilotPanel({
           <div className="flex items-center gap-1.5">
             <Icon name="hub" className="text-[13px] text-purple-400 flex-shrink-0" />
             <span className="text-[10px] text-slate-500">
-              {contextItems.length} context item{contextItems.length !== 1 ? 's' : ''} — including{' '}
-              {contextItems.filter(c => c.includeNotes).length} with notes
+              {contextItems.length} context item{contextItems.length !== 1 ? 's' : ''}
+              {contextItems.filter(c => c.includeNotes).length > 0 && (
+                <> — {contextItems.filter(c => c.includeNotes).length} with notes</>
+              )}
+              {contextItems.filter(c => c.includePdf).length > 0 && (
+                <>, {contextItems.filter(c => c.includePdf).length} with PDF</>
+              )}
             </span>
           </div>
         </div>
@@ -861,6 +891,7 @@ export default function NotesCopilotPanel({
         onAddContext={handleAddContext}
         onRemoveContext={handleRemoveContext}
         onToggleNotes={handleToggleNotes}
+        onTogglePdf={handleTogglePdf}
       />
     </div>
   )
