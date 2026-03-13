@@ -911,65 +911,235 @@ const TEMPLATES = [
     id: 'blank',
     label: 'Blank',
     icon: 'description',
+    color: 'text-slate-400',
     description: 'Start with an empty note',
     content: '',
   },
   {
-    id: 'paper_summary',
-    label: 'Paper Summary',
-    icon: 'article',
-    description: 'Title, contributions, method, results, and takeaways',
-    content: '<h1>Paper Summary</h1><h2>Key Contributions</h2><ul><li><p></p></li></ul><h2>Methodology</h2><p></p><h2>Results</h2><p></p><h2>Limitations</h2><p></p><h2>My Takeaways</h2><p></p>',
+    id: 'literature_note',
+    label: 'Literature Note',
+    icon: 'menu_book',
+    color: 'text-blue-500',
+    description: 'Atomic note on a single paper — claim, evidence, and your critique',
+    content: [
+      '<h1>Literature Note</h1>',
+      '<p><strong>Paper:</strong> </p>',
+      '<p><strong>Authors:</strong> </p>',
+      '<p><strong>Year:</strong> &nbsp; <strong>Venue:</strong> </p>',
+      '<hr>',
+      '<h2>Core Claim</h2>',
+      '<p>In one sentence, what does this paper argue?</p>',
+      '<h2>Key Contributions</h2>',
+      '<ul><li><p></p></li><li><p></p></li><li><p></p></li></ul>',
+      '<h2>Evidence &amp; Methodology</h2>',
+      '<p>How do the authors support their claim? What data, experiments, or proofs do they use?</p>',
+      '<h2>Limitations</h2>',
+      '<p>What assumptions does the paper make? Where does the argument break down?</p>',
+      '<h2>My Critique</h2>',
+      '<p>Do I find this convincing? What would change my mind?</p>',
+      '<h2>Connections</h2>',
+      '<p>Links to related notes, contradicting papers, or open questions.</p>',
+      '<ul><li><p></p></li></ul>',
+    ].join(''),
+  },
+  {
+    id: 'meeting_note',
+    label: 'Meeting Note',
+    icon: 'groups',
+    color: 'text-violet-500',
+    description: 'Agenda, discussion, decisions, and action items',
+    content: [
+      '<h1>Meeting Note</h1>',
+      '<p><strong>Date:</strong> &nbsp; <strong>Time:</strong> </p>',
+      '<p><strong>Attendees:</strong> </p>',
+      '<p><strong>Location / Link:</strong> </p>',
+      '<hr>',
+      '<h2>Agenda</h2>',
+      '<ol><li><p></p></li><li><p></p></li><li><p></p></li></ol>',
+      '<h2>Discussion</h2>',
+      '<h3>Topic 1</h3>',
+      '<p></p>',
+      '<h3>Topic 2</h3>',
+      '<p></p>',
+      '<h2>Decisions Made</h2>',
+      '<ul><li><p></p></li><li><p></p></li></ul>',
+      '<h2>Action Items</h2>',
+      '<ul data-type="taskList">',
+      '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"></label><div><p> — owner: &nbsp; due: </p></div></li>',
+      '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"></label><div><p> — owner: &nbsp; due: </p></div></li>',
+      '</ul>',
+      '<h2>Next Meeting</h2>',
+      '<p><strong>Date:</strong> &nbsp; <strong>Agenda:</strong> </p>',
+    ].join(''),
   },
   {
     id: 'experiment_log',
     label: 'Experiment Log',
     icon: 'science',
-    description: 'Hypothesis, setup, procedure, and observations',
-    content: '<h1>Experiment Log</h1><h2>Hypothesis</h2><p></p><h2>Setup</h2><p></p><h2>Procedure</h2><ul><li><p></p></li></ul><h2>Results</h2><p></p><h2>Observations &amp; Conclusions</h2><p></p>',
+    color: 'text-emerald-500',
+    description: 'Hypothesis, setup, procedure, results, and conclusions',
+    content: [
+      '<h1>Experiment Log</h1>',
+      '<p><strong>Date:</strong> &nbsp; <strong>Status:</strong> </p>',
+      '<hr>',
+      '<h2>Hypothesis</h2>',
+      '<p>If [condition], then [outcome] because [reasoning].</p>',
+      '<h2>Setup &amp; Materials</h2>',
+      '<ul><li><p></p></li><li><p></p></li></ul>',
+      '<h2>Procedure</h2>',
+      '<ol><li><p></p></li><li><p></p></li><li><p></p></li></ol>',
+      '<h2>Raw Results</h2>',
+      '<p>Paste data, measurements, or model outputs here.</p>',
+      '<h2>Observations</h2>',
+      '<p>What patterns, surprises, or anomalies did you notice?</p>',
+      '<h2>Conclusions</h2>',
+      '<p>Does the result support the hypothesis? What confidence do you assign?</p>',
+      '<h2>Next Steps</h2>',
+      '<ul data-type="taskList">',
+      '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"></label><div><p></p></div></li>',
+      '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"></label><div><p></p></div></li>',
+      '</ul>',
+    ].join(''),
   },
   {
     id: 'literature_review',
     label: 'Literature Review',
     icon: 'library_books',
-    description: 'Research question, key papers, themes, and synthesis',
-    content: '<h1>Literature Review</h1><h2>Research Question</h2><p></p><h2>Key Papers</h2><ul><li><p></p></li></ul><h2>Themes &amp; Patterns</h2><p></p><h2>Gaps in Literature</h2><p></p><h2>Synthesis</h2><p></p>',
+    color: 'text-amber-500',
+    description: 'Research question, key papers, themes, gaps, and synthesis',
+    content: [
+      '<h1>Literature Review</h1>',
+      '<p><strong>Topic:</strong> </p>',
+      '<p><strong>Date:</strong> </p>',
+      '<hr>',
+      '<h2>Research Question</h2>',
+      '<p>The central question this review addresses.</p>',
+      '<h2>Search Strategy</h2>',
+      '<p><strong>Databases:</strong> </p>',
+      '<p><strong>Keywords:</strong> </p>',
+      '<p><strong>Date range:</strong> &nbsp; <strong>Papers reviewed:</strong> </p>',
+      '<h2>Key Papers</h2>',
+      '<ul>',
+      '<li><p><strong>Author (Year)</strong> — one-line summary. [[Link to literature note]]</p></li>',
+      '<li><p><strong>Author (Year)</strong> — one-line summary. [[Link to literature note]]</p></li>',
+      '</ul>',
+      '<h2>Themes &amp; Patterns</h2>',
+      '<h3>Theme 1</h3><p></p>',
+      '<h3>Theme 2</h3><p></p>',
+      '<h2>Gaps in the Literature</h2>',
+      '<ul><li><p></p></li><li><p></p></li></ul>',
+      '<h2>Synthesis</h2>',
+      '<p>Overall answer to the research question given the evidence.</p>',
+    ].join(''),
+  },
+  {
+    id: 'paper_summary',
+    label: 'Paper Summary',
+    icon: 'article',
+    color: 'text-rose-500',
+    description: 'Quick summary of contributions, method, results, and takeaways',
+    content: [
+      '<h1>Paper Summary</h1>',
+      '<p><strong>Paper:</strong> </p>',
+      '<p><strong>Authors:</strong> &nbsp; <strong>Year:</strong> </p>',
+      '<hr>',
+      '<h2>Key Contributions</h2>',
+      '<ul><li><p></p></li><li><p></p></li></ul>',
+      '<h2>Methodology</h2>',
+      '<p></p>',
+      '<h2>Results</h2>',
+      '<p></p>',
+      '<h2>Limitations</h2>',
+      '<p></p>',
+      '<h2>My Takeaways</h2>',
+      '<p></p>',
+    ].join(''),
   },
 ]
 
 // ─── Template picker modal ────────────────────────────────────────────────────
 function TemplatePickerModal({ noteName, onSelect, onCancel }) {
+  const [selected, setSelected] = useState(TEMPLATES[0])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-[480px] max-w-[90vw] p-6">
-        <div className="mb-5">
-          <h2 className="text-[15px] font-semibold text-slate-800">Choose a template</h2>
-          <p className="text-[12px] text-slate-500 mt-0.5">
-            Creating <span className="font-medium text-slate-700">"{noteName}"</span>
-          </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onCancel}>
+      <div
+        className="bg-white rounded-xl shadow-2xl border border-slate-200 flex overflow-hidden"
+        style={{ width: 720, maxWidth: '95vw', height: 480, maxHeight: '90vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Left: template list ── */}
+        <div className="w-52 flex-shrink-0 border-r border-slate-100 flex flex-col bg-slate-50/60">
+          <div className="px-4 py-3.5 border-b border-slate-100">
+            <p className="text-[13px] font-semibold text-slate-800">New note</p>
+            <p className="text-[11px] text-slate-400 mt-0.5 truncate">"{noteName}"</p>
+          </div>
+          <div className="flex-1 overflow-y-auto py-1.5 px-1.5 flex flex-col gap-0.5">
+            {TEMPLATES.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setSelected(t)}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
+                  selected.id === t.id
+                    ? 'bg-blue-50 border border-blue-200'
+                    : 'hover:bg-slate-100 border border-transparent'
+                }`}
+              >
+                <Icon name={t.icon} className={`text-[18px] flex-shrink-0 ${selected.id === t.id ? 'text-blue-500' : t.color}`} />
+                <div className="min-w-0">
+                  <p className={`text-[12px] font-medium truncate ${selected.id === t.id ? 'text-blue-700' : 'text-slate-700'}`}>
+                    {t.label}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          {TEMPLATES.map(t => (
-            <button
-              key={t.id}
-              onClick={() => onSelect(t.content)}
-              className="flex flex-col items-start gap-1.5 p-3.5 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-left group"
-            >
-              <div className="flex items-center gap-2">
-                <Icon name={t.icon} className="text-[18px] text-slate-400 group-hover:text-blue-500 transition-colors" />
-                <span className="text-[13px] font-medium text-slate-700 group-hover:text-blue-700 transition-colors">{t.label}</span>
+
+        {/* ── Right: preview + actions ── */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Icon name={selected.icon} className={`text-[18px] ${selected.color}`} />
+              <div>
+                <p className="text-[13px] font-semibold text-slate-800">{selected.label}</p>
+                <p className="text-[11px] text-slate-400">{selected.description}</p>
               </div>
-              <span className="text-[11px] text-slate-400 leading-snug">{t.description}</span>
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {selected.content ? (
+              <div
+                className="tiptap-editor pointer-events-none select-none"
+                dangerouslySetInnerHTML={{ __html: selected.content }}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-300">
+                <Icon name="description" className="text-[40px]" />
+                <p className="text-[12px]">Empty note — start from scratch</p>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end gap-2 flex-shrink-0 bg-slate-50/60">
+            <button
+              onClick={onCancel}
+              className="px-3 py-1.5 text-[12px] text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              Cancel
             </button>
-          ))}
-        </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={onCancel}
-            className="text-[12px] text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded hover:bg-slate-100 transition-colors"
-          >
-            Cancel
-          </button>
+            <button
+              onClick={() => onSelect(selected.content)}
+              className="px-4 py-1.5 text-[12px] font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+            >
+              <Icon name="add" className="text-[14px]" />
+              Create note
+            </button>
+          </div>
         </div>
       </div>
     </div>
