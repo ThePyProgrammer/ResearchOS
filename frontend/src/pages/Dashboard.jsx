@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { activityApi, runsApi, papersApi, collectionsApi } from '../services/api'
+import { activityApi, runsApi, papersApi, collectionsApi, githubReposApi, websitesApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 
 function Icon({ name, className = '' }) {
@@ -122,9 +122,15 @@ export default function Dashboard() {
   const [tab, setTab] = useState('all')
   const [activityPage, setActivityPage] = useState(1)
   const [chartMode, setChartMode] = useState('cumulative')
+  const [chartItemType, setChartItemType] = useState('all')
+  const [chartSplit, setChartSplit] = useState('combined')
+  const [chartTypeOpen, setChartTypeOpen] = useState(false)
+  const chartTypeRef = useRef(null)
   const [activity, setActivity] = useState([])
   const [runs, setRuns] = useState([])
   const [papers, setPapers] = useState([])
+  const [githubRepos, setGithubRepos] = useState([])
+  const [websites, setWebsites] = useState([])
   const [collectionCount, setCollectionCount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -138,49 +144,77 @@ export default function Dashboard() {
       runsApi.list(lib),
       papersApi.list(lib),
       collectionsApi.list(lib),
+      githubReposApi.list(lib),
+      websitesApi.list(lib),
     ])
-      .then(([activityData, runsData, papersData, collectionsData]) => {
+      .then(([activityData, runsData, papersData, collectionsData, reposData, websitesData]) => {
         setActivity(activityData)
         setRuns(runsData)
         setPapers(papersData)
         setCollectionCount(collectionsData.length)
+        setGithubRepos(reposData)
+        setWebsites(websitesData)
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [activeLibrary?.id])
 
+  // Close type dropdown when clicking outside
+  useEffect(() => {
+    if (!chartTypeOpen) return
+    function handleClick(e) {
+      if (chartTypeRef.current && !chartTypeRef.current.contains(e.target)) {
+        setChartTypeOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [chartTypeOpen])
+
   // Filter locally — data is already scoped to the active library
   const filtered = tab === 'all' ? activity : activity.filter(a => a.type === tab)
   const runningCount = runs.filter(r => r.status === 'running').length
 
-  const ACTIVITY_PAGE_SIZE = 10
+  const ACTIVITY_PAGE_SIZE = 5
   const totalActivityPages = Math.ceil(filtered.length / ACTIVITY_PAGE_SIZE)
   const paginatedActivity = filtered.slice(
     (activityPage - 1) * ACTIVITY_PAGE_SIZE,
     activityPage * ACTIVITY_PAGE_SIZE,
   )
 
-  // Build cumulative "papers added over time" chart data grouped by day
+  // Build "items added over time" chart data grouped by day across all item types
   const chartData = useMemo(() => {
-    if (!papers.length) return []
+    const allItems = [
+      ...papers.map(p => ({ createdAt: p.createdAt, _type: 'papers' })),
+      ...githubRepos.map(r => ({ createdAt: r.createdAt, _type: 'repos' })),
+      ...websites.map(w => ({ createdAt: w.createdAt, _type: 'websites' })),
+    ]
+    if (!allItems.length) return []
     const counts = {}
-    for (const p of papers) {
-      const normalized = (p.createdAt || '').replace(/(\.\d{3})\d+/, '$1')
+    for (const item of allItems) {
+      const normalized = (item.createdAt || '').replace(/(\.\d{3})\d+/, '$1')
       const d = new Date(normalized)
       if (isNaN(d)) continue
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      counts[key] = (counts[key] || 0) + 1
+      if (!counts[key]) counts[key] = { papers: 0, repos: 0, websites: 0 }
+      counts[key][item._type]++
     }
     const sorted = Object.keys(counts).sort()
-    let cumulative = 0
+    let cPapers = 0, cRepos = 0, cWebsites = 0
     return sorted.map(key => {
-      cumulative += counts[key]
+      const { papers: p = 0, repos: r = 0, websites: w = 0 } = counts[key]
+      cPapers += p; cRepos += r; cWebsites += w
       const [year, month, day] = key.split('-')
       const label = new Date(Number(year), Number(month) - 1, Number(day))
         .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-      return { label, added: counts[key], total: cumulative }
+      return {
+        label,
+        papers: p, repos: r, websites: w, added: p + r + w,
+        papersTotal: cPapers, reposTotal: cRepos, websitesTotal: cWebsites,
+        total: cPapers + cRepos + cWebsites,
+      }
     })
-  }, [papers])
+  }, [papers, githubRepos, websites])
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -193,8 +227,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4 mb-8">
         <StatCard
           icon="collections_bookmark"
-          label="Total Papers"
-          value={loading ? '—' : papers.length.toLocaleString()}
+          label="Total Items"
+          value={loading ? '—' : (papers.length + githubRepos.length + websites.length).toLocaleString()}
           sub={collectionCount === null ? null : `Across ${collectionCount} collection${collectionCount === 1 ? '' : 's'}`}
         />
         <StatCard
@@ -206,63 +240,125 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Papers over time */}
-      {chartData.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-base font-semibold text-slate-800">Papers Added Over Time</h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {chartMode === 'cumulative' ? 'Cumulative library growth' : 'Daily additions'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">{papers.length} total</span>
-              <div className="flex bg-slate-100 rounded-lg p-0.5 text-xs">
-                <button
-                  onClick={() => setChartMode('cumulative')}
-                  className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-                    chartMode === 'cumulative' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Cumulative
-                </button>
-                <button
-                  onClick={() => setChartMode('daily')}
-                  className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-                    chartMode === 'daily' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Daily
-                </button>
+      {/* Items over time */}
+      {chartData.length > 0 && (() => {
+        const typeOptions = [
+          { key: 'all',      label: 'Items' },
+          { key: 'papers',   label: 'Papers' },
+          { key: 'websites', label: 'Websites' },
+          { key: 'repos',    label: 'Repos' },
+        ]
+        const typeConfig = {
+          all:      { label: 'Items',        dataKey: chartMode === 'cumulative' ? 'total'         : 'added',    stroke: '#f97316', gradientId: 'chartGradient' },
+          papers:   { label: 'Papers',       dataKey: chartMode === 'cumulative' ? 'papersTotal'   : 'papers',   stroke: '#3b82f6', gradientId: 'chartGradient' },
+          repos:    { label: 'Repos',        dataKey: chartMode === 'cumulative' ? 'reposTotal'    : 'repos',    stroke: '#8b5cf6', gradientId: 'chartGradient' },
+          websites: { label: 'Websites',     dataKey: chartMode === 'cumulative' ? 'websitesTotal' : 'websites', stroke: '#10b981', gradientId: 'chartGradient' },
+        }
+        const cfg = typeConfig[chartItemType]
+        const totalCount = {
+          all:      papers.length + githubRepos.length + websites.length,
+          papers:   papers.length,
+          repos:    githubRepos.length,
+          websites: websites.length,
+        }[chartItemType]
+        return (
+          <div className="bg-white rounded-xl border border-slate-200 p-5 mb-8">
+            <div className="flex items-center justify-between mb-3 gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-slate-800 flex items-center gap-1.5">
+                  {/* Clickable type word opens dropdown */}
+                  <span ref={chartTypeRef} className="relative">
+                    <button
+                      onClick={() => setChartTypeOpen(o => !o)}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 transition-colors"
+                    >
+                      {cfg.label}
+                      <Icon name="unfold_more" className="text-[14px] text-slate-500" />
+                    </button>
+                    {chartTypeOpen && (
+                      <div className="absolute left-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-10 min-w-[120px]">
+                        {typeOptions.map(opt => (
+                          <button
+                            key={opt.key}
+                            onClick={() => { setChartItemType(opt.key); setChartTypeOpen(false) }}
+                            className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                              chartItemType === opt.key
+                                ? 'text-blue-600 font-medium bg-blue-50'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </span>
+                  <span className="text-slate-800"> Added Over Time</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {chartMode === 'cumulative' ? 'Cumulative library growth' : 'Daily additions'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">{totalCount.toLocaleString()} total</span>
+                {chartItemType === 'all' && (
+                  <div className="flex bg-slate-100 rounded-lg p-0.5 text-xs">
+                    <button
+                      onClick={() => setChartSplit('combined')}
+                      className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                        chartSplit === 'combined' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Combined
+                    </button>
+                    <button
+                      onClick={() => setChartSplit('separate')}
+                      className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                        chartSplit === 'separate' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Separate
+                    </button>
+                  </div>
+                )}
+                <div className="flex bg-slate-100 rounded-lg p-0.5 text-xs">
+                  <button
+                    onClick={() => setChartMode('cumulative')}
+                    className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                      chartMode === 'cumulative' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Cumulative
+                  </button>
+                  <button
+                    onClick={() => setChartMode('daily')}
+                    className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                      chartMode === 'daily' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Daily
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          <ResponsiveContainer width="100%" height={180}>
-            {chartMode === 'cumulative' ? (
+            <ResponsiveContainer width="100%" height={180}>
               <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="paperGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                  <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={cfg.stroke} stopOpacity={0.15} />
+                    <stop offset="95%" stopColor={cfg.stroke} stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="chartGradientPapers" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.12} />
                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                   </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-                  formatter={(value, name) => [value, name === 'total' ? 'Total' : 'Added']}
-                  labelStyle={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}
-                />
-                <Area type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} fill="url(#paperGradient)" dot={{ r: 3, fill: '#3b82f6', strokeWidth: 0 }} activeDot={{ r: 5 }} />
-              </AreaChart>
-            ) : (
-              <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="dailyGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.15} />
+                  <linearGradient id="chartGradientRepos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.12} />
                     <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="chartGradientWebsites" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.12} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -270,24 +366,48 @@ export default function Dashboard() {
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-                  formatter={(value) => [value, 'Added']}
+                  formatter={(value, name) => {
+                    const nameMap = {
+                      papersTotal: 'Papers', reposTotal: 'Repos', websitesTotal: 'Websites',
+                      papers: 'Papers', repos: 'Repos', websites: 'Websites',
+                    }
+                    const label = nameMap[name] ?? (chartMode === 'cumulative' ? `Total ${cfg.label}` : `${cfg.label} Added`)
+                    return [value, label]
+                  }}
                   labelStyle={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}
                 />
-                <Area type="monotone" dataKey="added" stroke="#8b5cf6" strokeWidth={2} fill="url(#dailyGradient)" dot={{ r: 3, fill: '#8b5cf6', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                {chartItemType === 'all' && chartSplit === 'separate' ? (
+                  <>
+                    <Area type="monotone" dataKey={chartMode === 'cumulative' ? 'papersTotal'   : 'papers'}   stroke="#3b82f6" strokeWidth={2} fill="url(#chartGradientPapers)"   dot={false} activeDot={{ r: 4 }} />
+                    <Area type="monotone" dataKey={chartMode === 'cumulative' ? 'reposTotal'    : 'repos'}    stroke="#8b5cf6" strokeWidth={2} fill="url(#chartGradientRepos)"    dot={false} activeDot={{ r: 4 }} />
+                    <Area type="monotone" dataKey={chartMode === 'cumulative' ? 'websitesTotal' : 'websites'} stroke="#10b981" strokeWidth={2} fill="url(#chartGradientWebsites)" dot={false} activeDot={{ r: 4 }} />
+                  </>
+                ) : (
+                  <Area
+                    type="monotone"
+                    dataKey={cfg.dataKey}
+                    stroke={cfg.stroke}
+                    strokeWidth={2}
+                    fill="url(#chartGradient)"
+                    dot={{ r: 3, fill: cfg.stroke, strokeWidth: 0 }}
+                    activeDot={{ r: 5 }}
+                  />
+                )}
               </AreaChart>
-            )}
-          </ResponsiveContainer>
-        </div>
-      )}
+            </ResponsiveContainer>
+          </div>
+        )
+      })()}
 
       {/* Triage + Budget grid */}
-      {!loading && (papers.length > 0 || runs.some(r => r.cost)) && (() => {
-        const inbox    = papers.filter(p => p.status === 'inbox').length
-        const toRead   = papers.filter(p => p.status === 'to-read').length
-        const read     = papers.filter(p => p.status === 'read').length
-        const total    = papers.length
-        const pct      = n => total ? Math.round((n / total) * 100) : 0
-        const hasTriage = papers.length > 0
+      {!loading && (papers.length > 0 || githubRepos.length > 0 || websites.length > 0 || runs.some(r => r.cost)) && (() => {
+        const allItems = [...papers, ...githubRepos, ...websites]
+        const inbox  = allItems.filter(i => i.status === 'inbox').length
+        const toRead = allItems.filter(i => i.status === 'to-read').length
+        const read   = allItems.filter(i => i.status === 'read').length
+        const total  = allItems.length
+        const pct    = n => total ? Math.round((n / total) * 100) : 0
+        const hasTriage = total > 0
         const hasBudget = runs.some(r => r.cost)
         return (
           <div className={`mb-8 ${hasTriage && hasBudget ? 'grid grid-cols-2 gap-4 items-start' : ''}`}>
