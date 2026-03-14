@@ -7,16 +7,38 @@
 
 An AI-powered research operating system that merges a Zotero-like reference manager with a multi-agent workflow engine. Agents read from and write back to a shared knowledge library with full provenance.
 
+![Dashboard](img/dashboard.png)
+
 ## Features
 
 - **Library management** — import papers and websites via DOI, arXiv ID, URL, OpenReview, or Zenodo; organize into nested collections with drag-and-drop
+
+![Library](img/library_main.png)
+
 - **Multiple libraries** — create and switch between independent libraries
 - **Websites as first-class items** — blog posts, articles, and any URL live alongside papers with their own metadata
 - **GitHub repos as first-class items** — track repositories alongside papers and websites; full detail page with metadata, notes, and AI copilot
+
+<p align="center">
+  <img src="img/library_paper_preview.png" width="32%" />
+  <img src="img/library_website_preview.png" width="32%" />
+  <img src="img/library_github_preview.png" width="32%" />
+</p>
+
 - **BibTeX import/export** — bulk-import `.bib` files with a two-phase preview/confirm flow; export papers and websites as `.bib` with a tree-view editor for reviewing and editing entries before download
 - **Duplicate detection** — centralized three-tier dedup (DOI, arXiv ID, normalized title) across all import paths: identifier import, PDF upload, and BibTeX import; surfaces warnings with "Import anyway" option
 - **PDF upload with metadata extraction** — drag-and-drop PDFs; LLM-powered extraction of title, authors, date, venue, abstract, and DOI
 - **PDF storage** — stored in Supabase Storage, rendered inline; auto-downloaded from source on import
+
+![Quick Add](img/library_quick_add.png)
+
+<p align="center">
+  <img src="img/paper_details.png" width="49%" />
+  <img src="img/paper_notes.png" width="49%" />
+</p>
+
+![Website Details](img/website_details.png)
+
 - **Notes IDE** — library-level scratchpad at `/library/notes` covering all notes across papers, websites, GitHub repos, and the library itself; multi-tab tiptap WYSIWYG editor with:
   - LaTeX / KaTeX math rendering
   - `[[wiki-link]]` syntax with autocomplete, click-to-navigate, and a D3 force graph of all link connections
@@ -25,9 +47,16 @@ An AI-powered research operating system that merges a Zotero-like reference mana
   - **Pinned notes** — star any note to float it to the top of the file tree and a dedicated Pinned section; toggle from the star icon or right-click context menu
   - **Export** — export the active note as Markdown (`.md` download) or PDF (print-ready `window.print()` with KaTeX and wiki-link styles) from a toolbar dropdown
   - Drag-and-drop reordering, backlinks panel, recent notes section, full-text search
+
+![Notes IDE](img/notes_ide.png)
+
+![Notes Graph](img/notes_graph.png)
+
 - **AI Auto-Note-Taker** — generates a multi-file note structure for any paper, website, or GitHub repo; auto-runs on import and PDF upload
 - **AI copilot** — context-aware research assistant that can suggest diffs to your notes; `[[wiki-link]]` references in chat output are rendered as clickable chips that open the linked note in the IDE
 - **Notes-page AI copilot** — library-scoped AI copilot on the Notes IDE that runs in an agentic loop (up to 6 LLM turns per request). Type `@` in the chat input to select any combination of papers, websites, GitHub repos, collections, or "all items" as context; toggle per-item note inclusion. The model can call `read_note` and `list_item_notes` internally before producing `suggest_note_edit` and `suggest_note_create` proposals targeting any item in the library or the library-level notes tree
+
+![Notes Copilot](img/notes_copilot.png)
 - **Semantic search** — hybrid lexical and OpenAI-embedding search across papers, websites, and GitHub repos (falls back to lexical when no API key is set)
 - **Related paper discovery** — surfaces related works for any paper via OpenAlex citation links and semantic neighbors
 - **Agent workflows** — multi-step research workflows (literature review, model research, experiment design) powered by OpenAI via pydantic-ai
@@ -42,6 +71,8 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Collections picker for GitHub repos** — GitHub repo detail panels now include the same collections picker available for papers and websites
 - **Export BibTeX from sidebar collection context menu** — the collection right-click menu includes an "Export BibTeX" action, making citation export accessible without opening the Library
 - **Semantic library map** — a 2D scatter plot of all papers, websites, and GitHub repos positioned by semantic similarity (UMAP over cached embeddings). Color-coded by collection or item type; hover for title and collection membership; click to navigate; brush-select a region to create a new collection from items that cluster together. No new AI calls — runs entirely on the existing embedding cache
+
+![Library Map](img/library_map.png)
 
 ## Tech Stack
 
