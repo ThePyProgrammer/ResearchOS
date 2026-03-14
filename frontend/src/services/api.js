@@ -303,3 +303,8 @@ export const searchApi = {
     return apiFetch(`/search/map?${params}`)
   },
 }
+
+export const usageApi = {
+  get: () => apiFetch('/usage'),
+  reset: () => apiFetch('/usage', { method: 'DELETE' }),
+}

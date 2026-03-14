@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
 from agents.base import RunLogger, emit_activity, search_arxiv
-from agents.llm import get_pydantic_ai_model
+from agents.llm import get_model, get_pydantic_ai_model
 from agents.prompts import (
     EXPERIMENT_GOAL_EXTRACTION,
     EXPERIMENT_IDEA_GEN,
@@ -27,6 +27,7 @@ from agents.prompts import (
 )
 from models.paper import AgentRunRef, PaperCreate
 from services import paper_service, proposal_service, run_service
+from services.cost_service import RunCostTracker, record_openai_usage
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,7 @@ async def run_experiment_designer(
     log.set_progress(5, "Initializing (Step 0/6)")
 
     trace: list[dict] = []
+    tracker = RunCostTracker()
 
     try:
         # ── Step 1: Extract goals ─────────────────────────────────────────────
@@ -174,6 +176,8 @@ async def run_experiment_designer(
         goals_result = await _make_goal_extraction_agent().run(
             f"Research plan / problem description:\n{prompt}"
         )
+        tracker.add_llm(goals_result.usage(), get_model("agent"))
+        record_openai_usage(goals_result.usage(), get_model("agent"))
         goals = goals_result.output
         log.info(f"Domain: {goals.domain}")
         log.info(f"Goals: {'; '.join(goals.goals)}")
@@ -198,6 +202,7 @@ async def run_experiment_designer(
         for q in goals.arxiv_queries:
             log.tool(f'Call arXiv API (query="{q}", limit=30)')
             fetched = await search_arxiv(q, max_results=30)
+            tracker.add_api_calls("arXiv")
             for p in fetched:
                 if p["arxiv_id"] not in all_papers:
                     all_papers[p["arxiv_id"]] = p
@@ -231,6 +236,8 @@ async def run_experiment_designer(
             f"Supporting literature:\n{literature_context}\n\n"
             "Generate 3–5 experiment ideas and select the best one."
         )
+        tracker.add_llm(ideas_result.usage(), get_model("agent"))
+        record_openai_usage(ideas_result.usage(), get_model("agent"))
         ideas_output = ideas_result.output
         log.info(f"Generated {len(ideas_output.ideas)} experiment ideas")
         for idx, idea in enumerate(ideas_output.ideas):
@@ -272,6 +279,8 @@ async def run_experiment_designer(
         )
 
         design_result = await _make_design_agent().run(design_prompt)
+        tracker.add_llm(design_result.usage(), get_model("agent"))
+        record_openai_usage(design_result.usage(), get_model("agent"))
         design = design_result.output
 
         for round_num in range(1, _MAX_CRITIQUE_ROUNDS + 1):
@@ -288,6 +297,8 @@ async def run_experiment_designer(
                 f"Implementation: {design.implementation_plan}\n"
                 f"Expected outcomes: {design.expected_outcomes}"
             )
+            tracker.add_llm(critique_result.usage(), get_model("agent"))
+            record_openai_usage(critique_result.usage(), get_model("agent"))
             critique = critique_result.output
 
             log.agent(
@@ -318,6 +329,8 @@ async def run_experiment_designer(
                 + "\n\nPlease improve the design to address these issues."
             )
             design_result = await _make_design_agent().run(refine_prompt)
+            tracker.add_llm(design_result.usage(), get_model("agent"))
+            record_openai_usage(design_result.usage(), get_model("agent"))
             design = design_result.output
 
         trace.append(
@@ -342,6 +355,8 @@ async def run_experiment_designer(
             f"Metrics: {', '.join(design.evaluation_metrics)}\n"
             f"Implementation plan: {design.implementation_plan}"
         )
+        tracker.add_llm(code_result.usage(), get_model("agent"))
+        record_openai_usage(code_result.usage(), get_model("agent"))
         code_output = code_result.output
 
         # Log the full design and code to the run record
@@ -428,7 +443,7 @@ async def run_experiment_designer(
         )
 
         log.set_progress(100, "Complete")
-        run_service.complete_run(run_id, trace)
+        run_service.complete_run(run_id, trace, cost=tracker.to_cost_dict())
 
         emit_activity(
             run_id=run_id,

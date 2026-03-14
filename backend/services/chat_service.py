@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from agents.llm import get_model, get_openai_client, completion_params
+from services.cost_service import record_openai_usage
 from agents.prompts import PAPER_CHAT, WEBSITE_CHAT, GITHUB_REPO_CHAT
 
 from models.chat import ChatMessage
@@ -250,6 +251,7 @@ def generate_response(
             tools=TOOLS,
             **completion_params(model_id, max_tokens=4096, temperature=0.7),
         )
+        record_openai_usage(response.usage, model_id)
         assistant_content, suggestions = _process_tool_calls(response.choices[0])
     except Exception as e:
         logger.exception("OpenAI API call failed for paper %s", paper_id)
@@ -364,6 +366,7 @@ def generate_response_for_website(
             tools=TOOLS,
             **completion_params(model_id, max_tokens=4096, temperature=0.7),
         )
+        record_openai_usage(response.usage, model_id)
         assistant_content, suggestions = _process_tool_calls(response.choices[0])
     except Exception as e:
         logger.exception("OpenAI API call failed for website %s", website_id)
@@ -490,6 +493,7 @@ def generate_response_for_github_repo(
             tools=TOOLS,
             **completion_params(model_id, max_tokens=4096, temperature=0.7),
         )
+        record_openai_usage(response.usage, model_id)
         assistant_content, suggestions = _process_tool_calls(response.choices[0])
     except Exception as e:
         logger.exception("OpenAI API call failed for github_repo %s", github_repo_id)

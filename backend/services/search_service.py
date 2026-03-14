@@ -16,6 +16,7 @@ import os
 from typing import Optional, Union
 
 from agents.llm import get_model
+from services.cost_service import record_openai_usage
 
 from models.github_repo import GitHubRepo
 from models.paper import Paper
@@ -70,7 +71,9 @@ async def _embed(text: str) -> Optional[list[float]]:
     try:
         from agents.llm import get_async_openai_client
         client = get_async_openai_client()
-        resp = await client.embeddings.create(model=get_model("embedding"), input=text[:8000])
+        embedding_model = get_model("embedding")
+        resp = await client.embeddings.create(model=embedding_model, input=text[:8000])
+        record_openai_usage(resp.usage, embedding_model)
         return resp.data[0].embedding
     except Exception as exc:
         logger.warning("Embedding call failed: %s", exc)

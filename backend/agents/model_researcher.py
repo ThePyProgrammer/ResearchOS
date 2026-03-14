@@ -17,10 +17,11 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
 from agents.base import RunLogger, emit_activity, search_arxiv
-from agents.llm import get_pydantic_ai_model
+from agents.llm import get_model, get_pydantic_ai_model
 from agents.prompts import MODEL_RESEARCH_ANALYSIS, MODEL_RESEARCH_SCREENING, MODEL_RESEARCH_SUGGESTION
 from models.paper import AgentRunRef, PaperCreate
 from services import paper_service, proposal_service, run_service
+from services.cost_service import RunCostTracker, record_openai_usage
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +125,7 @@ async def run_model_researcher(
     log.set_progress(5, "Initializing (Step 0/5)")
 
     trace: list[dict] = []
+    tracker = RunCostTracker()
 
     try:
         # ── Step 1: Task decomposition ────────────────────────────────────────
@@ -133,6 +135,8 @@ async def run_model_researcher(
         analysis_result = await _make_analysis_agent().run(
             f"ML Problem: {prompt}\n\nDecompose this task and generate a search query."
         )
+        tracker.add_llm(analysis_result.usage(), get_model("agent"))
+        record_openai_usage(analysis_result.usage(), get_model("agent"))
         analysis = analysis_result.output
         log.info(
             f"Task type: {analysis.task_type} | Modality: {analysis.modality}"
@@ -157,12 +161,14 @@ async def run_model_researcher(
         log.tool(f'Call arXiv API (query="{analysis.search_query}", limit=50)')
 
         papers_raw = await search_arxiv(analysis.search_query, max_results=50)
+        tracker.add_api_calls("arXiv")
 
         # Supplement with a broader fallback if fewer than 10 results
         if len(papers_raw) < 10:
             fallback = f"{analysis.task_type}/{analysis.modality}/deep learning"
             log.tool(f'Call arXiv API fallback (query="{fallback}", limit=30)')
             fallback_papers = await search_arxiv(fallback, max_results=30)
+            tracker.add_api_calls("arXiv")
             seen = {p["arxiv_id"] for p in papers_raw}
             for p in fallback_papers:
                 if p["arxiv_id"] not in seen:
@@ -181,7 +187,7 @@ async def run_model_researcher(
 
         if not papers_raw:
             log.error("No papers found")
-            run_service.complete_run(run_id, trace)
+            run_service.complete_run(run_id, trace, cost=tracker.to_cost_dict())
             return
 
         # ── Step 3: Paper validation ──────────────────────────────────────────
@@ -205,6 +211,8 @@ async def run_model_researcher(
             result = await _make_screening_agent().run(
                 f"ML task: {prompt}\n\nPapers:\n{papers_text}"
             )
+            tracker.add_llm(result.usage(), get_model("agent_light"))
+            record_openai_usage(result.usage(), get_model("agent_light"))
             for score in result.output.scores:
                 all_scores[score.arxiv_id] = score
 
@@ -247,6 +255,8 @@ async def run_model_researcher(
             f"Relevant Literature:\n{literature_summary}\n\n"
             "Recommend the top 3–5 model architectures for this problem."
         )
+        tracker.add_llm(suggestion_result.usage(), get_model("agent"))
+        record_openai_usage(suggestion_result.usage(), get_model("agent"))
         suggestions = suggestion_result.output
 
         log.agent(
@@ -328,7 +338,7 @@ async def run_model_researcher(
         )
 
         log.set_progress(100, "Complete")
-        run_service.complete_run(run_id, trace)
+        run_service.complete_run(run_id, trace, cost=tracker.to_cost_dict())
 
         emit_activity(
             run_id=run_id,

@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { activityApi, runsApi, papersApi, collectionsApi, githubReposApi, websitesApi } from '../services/api'
+import { activityApi, runsApi, papersApi, collectionsApi, githubReposApi, websitesApi, usageApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 
 function Icon({ name, className = '' }) {
@@ -134,6 +134,7 @@ export default function Dashboard() {
   const [collectionCount, setCollectionCount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [usage, setUsage] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -157,6 +158,7 @@ export default function Dashboard() {
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
+    usageApi.get().then(setUsage).catch(() => {})
   }, [activeLibrary?.id])
 
   // Close type dropdown when clicking outside
@@ -266,7 +268,6 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-3 gap-3">
               <div>
                 <h2 className="text-base font-semibold text-slate-800 flex items-center gap-1.5">
-                  {/* Clickable type word opens dropdown */}
                   <span ref={chartTypeRef} className="relative">
                     <button
                       onClick={() => setChartTypeOpen(o => !o)}
@@ -399,20 +400,18 @@ export default function Dashboard() {
         )
       })()}
 
-      {/* Triage + Budget grid */}
-      {!loading && (papers.length > 0 || githubRepos.length > 0 || websites.length > 0 || runs.some(r => r.cost)) && (() => {
-        const allItems = [...papers, ...githubRepos, ...websites]
-        const inbox  = allItems.filter(i => i.status === 'inbox').length
-        const toRead = allItems.filter(i => i.status === 'to-read').length
-        const read   = allItems.filter(i => i.status === 'read').length
-        const total  = allItems.length
-        const pct    = n => total ? Math.round((n / total) * 100) : 0
-        const hasTriage = total > 0
-        const hasBudget = runs.some(r => r.cost)
-        return (
-          <div className={`mb-8 ${hasTriage && hasBudget ? 'grid grid-cols-2 gap-4 items-start' : ''}`}>
+      {/* Triage Health + LLM Usage side by side */}
+      {(!loading && (papers.length > 0 || githubRepos.length > 0 || websites.length > 0)) || usage ? (
+        <div className="grid grid-cols-2 gap-4 items-start mb-8">
 
-            {hasTriage && (
+          {!loading && (papers.length > 0 || githubRepos.length > 0 || websites.length > 0) && (() => {
+            const allItems = [...papers, ...githubRepos, ...websites]
+            const inbox  = allItems.filter(i => i.status === 'inbox').length
+            const toRead = allItems.filter(i => i.status === 'to-read').length
+            const read   = allItems.filter(i => i.status === 'read').length
+            const total  = allItems.length
+            const pct    = n => total ? Math.round((n / total) * 100) : 0
+            return (
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <h2 className="text-base font-semibold text-slate-800 mb-4">Triage Health</h2>
                 <div className="space-y-4">
@@ -443,45 +442,51 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-            )}
+            )
+          })()}
 
-            {hasBudget && (
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h2 className="text-base font-semibold text-slate-800 mb-4">Budget & API Usage</h2>
-                <div className="space-y-6">
-                  {runs.filter(r => r.cost).map(run => (
-                    <div key={run.id}>
-                      {runs.filter(r => r.cost).length > 1 && (
-                        <p className="text-xs font-medium text-slate-500 mb-3">{run.workflowName}</p>
-                      )}
-                      <div className="space-y-3">
-                        {Object.entries(run.cost).filter(([k]) => k !== 'total').map(([key, item]) => (
-                          <div key={key}>
-                            <div className="flex justify-between text-xs mb-1">
-                              <span className="text-slate-600">{item.label}</span>
-                              <span className="font-semibold text-slate-800">{item.amount}</span>
-                            </div>
-                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-blue-400 rounded-full" style={{ width: `${item.pct || 0}%` }} />
-                            </div>
-                            {item.tokens && <p className="text-[10px] text-slate-400 mt-0.5">{item.tokens}</p>}
-                            {item.calls && <p className="text-[10px] text-slate-400 mt-0.5">{item.calls}{item.limit ? ` · ${item.limit}` : ''}</p>}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
-                        <span className="text-xs font-semibold text-slate-600">Total Run Cost</span>
-                        <span className="text-sm font-bold text-emerald-600">{run.cost.total}</span>
-                      </div>
-                    </div>
-                  ))}
+          {usage && (
+            <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <h2 className="text-base font-semibold text-slate-800 mb-4">LLM Usage Breakdown</h2>
+              {usage.breakdown && usage.breakdown.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100">
+                        <th className="text-left text-xs font-medium text-slate-500 pb-2 pr-4">Model</th>
+                        <th className="text-right text-xs font-medium text-slate-500 pb-2 px-2">Calls</th>
+                        <th className="text-right text-xs font-medium text-slate-500 pb-2 px-2">Input tokens</th>
+                        <th className="text-right text-xs font-medium text-slate-500 pb-2 px-2">Output tokens</th>
+                        <th className="text-right text-xs font-medium text-slate-500 pb-2 pl-2">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usage.breakdown.map(row => (
+                        <tr key={row.model} className="border-b border-slate-50 last:border-0">
+                          <td className="py-2 pr-4 font-mono text-xs text-slate-700">{row.model}</td>
+                          <td className="py-2 px-2 text-right text-slate-600">{row.calls.toLocaleString()}</td>
+                          <td className="py-2 px-2 text-right text-slate-600">{row.inputTokens.toLocaleString()}</td>
+                          <td className="py-2 px-2 text-right text-slate-600">{row.outputTokens.toLocaleString()}</td>
+                          <td className="py-2 pl-2 text-right font-semibold text-slate-800">{row.costFormatted}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-slate-200">
+                        <td colSpan={4} className="pt-3 text-xs font-semibold text-slate-600">Total</td>
+                        <td className="pt-3 text-right font-bold text-emerald-600">{usage.totalCostFormatted}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-sm text-slate-400">No usage recorded yet. Costs will appear here after your first chat, note generation, or agent run.</p>
+              )}
+            </div>
+          )}
 
-          </div>
-        )
-      })()}
+        </div>
+      ) : null}
 
       {/* Activity Feed */}
       <div className="bg-white rounded-xl border border-slate-200">

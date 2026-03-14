@@ -7,6 +7,7 @@ from typing import Optional
 
 from agents.llm import get_model, get_openai_client, is_new_api_model, completion_params
 from agents.prompts import NOTE_GENERATION
+from services.cost_service import record_openai_usage
 
 from models.note import Note, NoteCreate, NoteUpdate
 from services.db import get_client
@@ -181,6 +182,7 @@ def _call_openai_json(system: str, user_msg: str) -> dict:
         create_kwargs["response_format"] = {"type": "json_object"}
 
     response = client.chat.completions.create(**create_kwargs)
+    record_openai_usage(response.usage, model_id)
     choice = response.choices[0]
 
     # Check for refusal (newer models may refuse via a .refusal field)

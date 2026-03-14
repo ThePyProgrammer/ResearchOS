@@ -16,6 +16,7 @@ import httpx
 
 from agents.llm import get_model, get_openai_client, get_async_openai_client, is_new_api_model, completion_params
 from agents.prompts import AUTHOR_ENRICHMENT
+from services.cost_service import record_openai_usage
 
 from models.author import Author
 from services import author_service
@@ -108,6 +109,7 @@ async def _web_search_author(
             web_search_options={},
             messages=[{"role": "user", "content": query}],
         )
+        record_openai_usage(response.usage, get_model("web_search"))
         message = response.choices[0].message
         summary = message.content or ""
 
@@ -255,6 +257,7 @@ async def enrich_author(author: Author) -> dict:
         else:
             enrich_kwargs["response_format"] = {"type": "json_object"}
         response = client.chat.completions.create(**enrich_kwargs)
+        record_openai_usage(response.usage, enrich_model)
 
         raw_content: str = response.choices[0].message.content or "{}"
         suggestions = json.loads(raw_content)

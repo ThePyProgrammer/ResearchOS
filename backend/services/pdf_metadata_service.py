@@ -9,6 +9,7 @@ import pymupdf4llm
 
 from agents.llm import get_model, get_openai_client, completion_params
 from agents.prompts import PDF_METADATA_EXTRACTION
+from services.cost_service import record_openai_usage
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ def extract_metadata_from_bytes(pdf_bytes: bytes) -> dict:
         ],
         **completion_params(model_id, max_tokens=1024, temperature=0),
     )
+    record_openai_usage(response.usage, model_id)
 
     raw = response.choices[0].message.content.strip()
     # Strip markdown fences if the model wraps them anyway

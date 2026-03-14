@@ -16,10 +16,11 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
 from agents.base import RunLogger, emit_activity, search_arxiv
-from agents.llm import get_pydantic_ai_model
+from agents.llm import get_model, get_pydantic_ai_model
 from agents.prompts import LIT_REVIEW_QUERY_GEN, LIT_REVIEW_SCREENING
 from models.paper import AgentRunRef, PaperCreate
 from services import paper_service, proposal_service, run_service
+from services.cost_service import RunCostTracker, record_openai_usage
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,7 @@ async def run_literature_reviewer(
     log.set_progress(5, "Initializing (Step 0/4)")
 
     trace: list[dict] = []
+    tracker = RunCostTracker()
 
     try:
         # ── Step 1: Generate search queries ──────────────────────────────────
@@ -103,6 +105,8 @@ async def run_literature_reviewer(
             f"Research topic: {prompt}\n\n"
             "Generate 2–4 targeted arXiv search queries to find the most relevant papers."
         )
+        tracker.add_llm(query_result.usage(), get_model("agent_light"))
+        record_openai_usage(query_result.usage(), get_model("agent_light"))
         queries = query_result.output.queries[:4]
         log.info(
             f"Query generation complete. Queries: {'; '.join(repr(q) for q in queries)}"
@@ -124,6 +128,7 @@ async def run_literature_reviewer(
         for q in queries:
             log.tool(f'Call arXiv API (query="{q}", limit=40)')
             fetched = await search_arxiv(q, max_results=40)
+            tracker.add_api_calls("arXiv")
             new_count = 0
             for p in fetched:
                 if p["arxiv_id"] not in all_papers:
@@ -150,7 +155,7 @@ async def run_literature_reviewer(
             trace.append(
                 {"step": "LLM Screening", "status": "done", "detail": "No candidates to screen"}
             )
-            run_service.complete_run(run_id, trace)
+            run_service.complete_run(run_id, trace, cost=tracker.to_cost_dict())
             return
 
         # ── Step 3: Screen papers for relevance ───────────────────────────────
@@ -177,6 +182,8 @@ async def run_literature_reviewer(
             screening_result = await _make_screening_agent().run(
                 f"Research topic: {prompt}\n\nPapers to screen:\n{papers_text}"
             )
+            tracker.add_llm(screening_result.usage(), get_model("agent_light"))
+            record_openai_usage(screening_result.usage(), get_model("agent_light"))
             for score in screening_result.output.scores:
                 all_scores[score.arxiv_id] = score
 
@@ -257,7 +264,7 @@ async def run_literature_reviewer(
         )
 
         log.set_progress(100, "Complete")
-        run_service.complete_run(run_id, trace)
+        run_service.complete_run(run_id, trace, cost=tracker.to_cost_dict())
 
         emit_activity(
             run_id=run_id,

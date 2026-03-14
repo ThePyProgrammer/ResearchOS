@@ -30,6 +30,7 @@ from typing import Optional
 
 from agents.llm import get_model, get_openai_client, completion_params
 from agents.prompts import NOTES_COPILOT
+from services.cost_service import record_openai_usage
 from models.chat import ChatMessage, NotesCopilotContextItem
 from services.db import get_client
 
@@ -506,6 +507,7 @@ def generate_response(
                 tools=TOOLS,
                 **completion_params(model_id, max_tokens=4096, temperature=0.7),
             )
+            record_openai_usage(response.usage, model_id)
             choice = response.choices[0]
             msg_content = choice.message.content or ""
 
@@ -597,6 +599,7 @@ def generate_response(
                     tools=TOOLS,
                     **completion_params(model_id, max_tokens=4096, temperature=0.7),
                 )
+                record_openai_usage(exec_response.usage, model_id)
                 exec_choice = exec_response.choices[0]
                 if exec_choice.message.content:
                     final_content = exec_choice.message.content
@@ -622,6 +625,7 @@ def generate_response(
                 messages=messages,
                 **completion_params(model_id, max_tokens=2048, temperature=0.7),
             )
+            record_openai_usage(recovery.usage, model_id)
             final_content = recovery.choices[0].message.content or ""
         except Exception as e:
             logger.warning("Notes copilot plain-text recovery failed: %s", e)
