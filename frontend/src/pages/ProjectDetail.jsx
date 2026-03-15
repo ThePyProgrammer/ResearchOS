@@ -355,13 +355,14 @@ function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsit
 
 // ─── RQ Node (recursive) ──────────────────────────────────────────────────────
 
-function RQNode({ rq, depth, projectId, libraryId, onRefresh, rqPapersMap, onRqPapersChange, isDragOverlay = false, dropTarget = null }) {
+function RQNode({ rq, depth, parentId = null, projectId, libraryId, onRefresh, rqPapersMap, onRqPapersChange, rootRqs = [], onReParent, isDragOverlay = false }) {
   const [expanded, setExpanded] = useState(true)
   const [editingQuestion, setEditingQuestion] = useState(false)
   const [questionDraft, setQuestionDraft] = useState(rq.question)
   const [editingHypothesis, setEditingHypothesis] = useState(false)
   const [hypothesisDraft, setHypothesisDraft] = useState(rq.hypothesis || '')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [nestPickerOpen, setNestPickerOpen] = useState(false)
   const [showLinkPicker, setShowLinkPicker] = useState(false)
   const menuRef = useRef(null)
 
@@ -384,6 +385,7 @@ function RQNode({ rq, depth, projectId, libraryId, onRefresh, rqPapersMap, onRqP
     function handleClick(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setMenuOpen(false)
+        setNestPickerOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -443,6 +445,22 @@ function RQNode({ rq, depth, projectId, libraryId, onRefresh, rqPapersMap, onRqP
     }
   }
 
+  const isSubQuestion = parentId !== null
+
+  async function handleNestUnder(targetParentId) {
+    setMenuOpen(false)
+    setNestPickerOpen(false)
+    if (onReParent) await onReParent(rq.id, targetParentId)
+  }
+
+  async function handlePromoteToRoot() {
+    setMenuOpen(false)
+    if (onReParent) await onReParent(rq.id, null)
+  }
+
+  // Candidates for "Nest under" / "Move to": root RQs, excluding self and current parent
+  const reparentCandidates = rootRqs.filter(r => r.id !== rq.id && r.id !== parentId)
+
   // RQ paper linking
   const rqPapers = rqPapersMap?.get(rq.id) || []
   const existingPaperIds = useMemo(() => new Set(rqPapers.filter(p => p.paperId).map(p => p.paperId)), [rqPapers])
@@ -479,12 +497,10 @@ function RQNode({ rq, depth, projectId, libraryId, onRefresh, rqPapersMap, onRqP
     opacity: isDragging ? 0.4 : 1,
   }
 
-  const isNestTarget = dropTarget?.id === rq.id && dropTarget?.mode === 'nest'
-
   return (
-    <div ref={isDragOverlay ? undefined : setNodeRef} data-rq-id={rq.id} style={{ paddingLeft: depth * 24, ...sortableStyle }}>
+    <div ref={isDragOverlay ? undefined : setNodeRef} style={{ paddingLeft: depth * 24, ...sortableStyle }}>
       {/* Row */}
-      <div className={`group relative flex items-start gap-1 py-1.5 px-2 rounded-lg hover:bg-slate-50 transition-colors${isNestTarget ? ' ring-2 ring-blue-400 bg-blue-50' : ''}`}>
+      <div className="group relative flex items-start gap-1 py-1.5 px-2 rounded-lg hover:bg-slate-50 transition-colors">
         {/* Drag handle — listeners go here only, preserving click targets elsewhere */}
         <span
           className="opacity-0 group-hover:opacity-100 text-slate-300 flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing touch-none"
@@ -644,11 +660,14 @@ function RQNode({ rq, depth, projectId, libraryId, onRefresh, rqPapersMap, onRqP
                       key={child.id}
                       rq={child}
                       depth={0}
+                      parentId={rq.id}
                       projectId={projectId}
                       libraryId={libraryId}
                       onRefresh={onRefresh}
                       rqPapersMap={rqPapersMap}
                       onRqPapersChange={onRqPapersChange}
+                      rootRqs={rootRqs}
+                      onReParent={onReParent}
                     />
                   ))}
                 </div>
@@ -669,19 +688,81 @@ function RQNode({ rq, depth, projectId, libraryId, onRefresh, rqPapersMap, onRqP
         {/* Three-dot menu */}
         <div className="relative flex-shrink-0" ref={menuRef}>
           <button
-            onClick={e => { e.stopPropagation(); setMenuOpen(m => !m) }}
+            onClick={e => { e.stopPropagation(); setMenuOpen(m => { if (m) setNestPickerOpen(false); return !m }) }}
             className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
           >
             <Icon name="more_vert" className="text-[16px]" />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-6 z-10 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[110px]">
-              <button
-                onClick={handleDelete}
-                className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-              >
-                Delete
-              </button>
+            <div className="absolute right-0 top-6 z-10 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[150px]">
+              {!nestPickerOpen ? (
+                <>
+                  {/* Nesting actions */}
+                  {!isSubQuestion && reparentCandidates.length > 0 && (
+                    <button
+                      onClick={() => setNestPickerOpen(true)}
+                      className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+                    >
+                      <Icon name="subdirectory_arrow_right" className="text-[14px] text-slate-400" />
+                      Nest under…
+                    </button>
+                  )}
+                  {isSubQuestion && (
+                    <>
+                      <button
+                        onClick={handlePromoteToRoot}
+                        className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+                      >
+                        <Icon name="vertical_align_top" className="text-[14px] text-slate-400" />
+                        Promote to root
+                      </button>
+                      {reparentCandidates.length > 0 && (
+                        <button
+                          onClick={() => setNestPickerOpen(true)}
+                          className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+                        >
+                          <Icon name="subdirectory_arrow_right" className="text-[14px] text-slate-400" />
+                          Move under…
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {((!isSubQuestion && reparentCandidates.length > 0) || isSubQuestion) && (
+                    <div className="border-t border-slate-100 my-1" />
+                  )}
+                  <button
+                    onClick={handleDelete}
+                    className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="px-3 py-1.5 text-xs font-medium text-slate-500 border-b border-slate-100">
+                    {isSubQuestion ? 'Move under:' : 'Nest under:'}
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {reparentCandidates.map(candidate => (
+                      <button
+                        key={candidate.id}
+                        onClick={() => handleNestUnder(candidate.id)}
+                        className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors truncate"
+                        title={candidate.question}
+                      >
+                        {candidate.question}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setNestPickerOpen(false)}
+                    className="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 transition-colors border-t border-slate-100 flex items-center gap-1"
+                  >
+                    <Icon name="arrow_back" className="text-[12px]" />
+                    Back
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -710,14 +791,11 @@ function RQSection({ projectId, libraryId }) {
   const [loading, setLoading] = useState(true)
   const [rqPapersMap, setRqPapersMap] = useState(new Map())
   const [activeId, setActiveId] = useState(null)
-  const [dropTarget, setDropTarget] = useState(null) // { id, mode: 'reorder' | 'nest' }
-  const lastPointerY = useRef(null)
-  // Cache the last computed root-onto-root drop mode from onDragMove so handleDragEnd
-  // can read it reliably (DOM / translated rects may be stale by the time dragEnd fires)
-  const pendingDropMode = useRef('reorder')
 
   const rqTree = useMemo(() => buildRqTree(flatRqs), [flatRqs])
   const flatTree = useMemo(() => flattenRqTree(rqTree), [rqTree])
+  // Root-level RQs list passed to RQNode for the nest/move picker
+  const rootRqs = useMemo(() => rqTree.map(n => ({ id: n.id, question: n.question })), [rqTree])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -766,184 +844,60 @@ function RQSection({ projectId, libraryId }) {
     return flatTree.find(n => n.id === id) || null
   }
 
-  function computeDropMode(overId) {
-    const overElement = document.querySelector(`[data-rq-id="${overId}"]`)
-    if (!overElement || lastPointerY.current === null) return 'reorder'
-    const rect = overElement.getBoundingClientRect()
-    const pointerY = lastPointerY.current
-    const topZone = rect.top + rect.height * 0.25
-    const bottomZone = rect.bottom - rect.height * 0.25
-    return (pointerY > topZone && pointerY < bottomZone) ? 'nest' : 'reorder'
-  }
-
-  function handleDragMove(event) {
-    // Also keep pointer ref updated as fallback for computeDropMode
-    const { activatorEvent, delta } = event
-    if (activatorEvent) {
-      lastPointerY.current = activatorEvent.clientY + delta.y
-    }
-
-    // Update visual drop target for root-onto-root hover
-    const overId = event.over?.id
-    if (overId) {
-      const draggedNode = findFlatNode(event.active.id)
-      const targetNode = findFlatNode(overId)
-      if (draggedNode && targetNode) {
-        const draggedParentId = draggedNode._parentId || null
-        const targetParentId = targetNode._parentId || null
-        if (draggedParentId === null && targetParentId === null && draggedNode.id !== targetNode.id) {
-          // Prefer @dnd-kit rect data over DOM query for reliable hover mode
-          let mode = 'reorder'
-          const overRect = event.over?.rect
-          const translatedRect = event.active?.rect?.current?.translated
-          if (overRect && translatedRect) {
-            const activeCenterY = translatedRect.top + translatedRect.height / 2
-            const topZone = overRect.top + overRect.height * 0.25
-            const bottomZone = overRect.bottom - overRect.height * 0.25
-            mode = (activeCenterY > topZone && activeCenterY < bottomZone) ? 'nest' : 'reorder'
-          } else {
-            mode = computeDropMode(overId)
-          }
-          // Cache so handleDragEnd can read it without re-querying (DOM may be stale at drop time)
-          pendingDropMode.current = mode
-          setDropTarget({ id: overId, mode })
-          return
-        }
-      }
-    }
-    // Not a root-onto-root hover — clear the cached mode
-    pendingDropMode.current = 'reorder'
-    setDropTarget(null)
-  }
-
+  // Drag handles sibling reorder only; reparenting is via the context menu
   async function handleDragEnd(event) {
     const { active, over } = event
     setActiveId(null)
-    setDropTarget(null)
 
     if (!over || active.id === over.id) return
 
     const draggedNode = findFlatNode(active.id)
     const targetNode = findFlatNode(over.id)
-
     if (!draggedNode || !targetNode) return
 
     const draggedParentId = draggedNode._parentId || null
     const targetParentId = targetNode._parentId || null
 
-    // ── Case 1: Same parent ────────────────────────────────────────────────
-    if (draggedParentId === targetParentId) {
-      // Root-onto-root: distinguish "drop onto" (demote to child) from "drop between" (sibling reorder)
-      if (draggedParentId === null && targetParentId === null) {
-        // Read the mode cached by the last onDragMove — avoids unreliable DOM/rect
-        // queries at dragEnd time (when @dnd-kit may have already begun cleanup)
-        const mode = pendingDropMode.current
-        pendingDropMode.current = 'reorder' // reset for next drag
-        if (mode === 'nest') {
-          // Demote: make dragged item a sub-question of target
-          if (draggedNode.children && draggedNode.children.length > 0) {
-            console.warn('Cannot reparent an RQ that has sub-questions. Remove sub-questions first.')
-            return
-          }
-          const targetChildren = flatTree
-            .filter(n => (n._parentId || null) === targetNode.id)
-            .sort((a, b) => a.position - b.position)
-          const newPosition = targetChildren.length // append at end
+    // Different parents — ignore (use context menu to reparent)
+    if (draggedParentId !== targetParentId) return
 
-          try {
-            await researchQuestionsApi.update(draggedNode.id, {
-              parent_id: targetNode.id,
-              position: newPosition,
-            })
-            await fetchRqs()
-          } catch (err) {
-            console.error('Failed to demote research question:', err)
-            await fetchRqs()
-          }
-          return
-        }
-        // mode === 'reorder': fall through to sibling reorder below
-      }
+    // Sibling reorder
+    const siblings = flatTree
+      .filter(n => (n._parentId || null) === draggedParentId)
+      .sort((a, b) => a.position - b.position)
 
-      // Sibling reorder (same parent)
-      const siblings = flatTree
-        .filter(n => (n._parentId || null) === draggedParentId)
-        .sort((a, b) => a.position - b.position)
+    const oldIndex = siblings.findIndex(n => n.id === active.id)
+    const newIndex = siblings.findIndex(n => n.id === over.id)
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
 
-      const oldIndex = siblings.findIndex(n => n.id === active.id)
-      const newIndex = siblings.findIndex(n => n.id === over.id)
+    const reordered = arrayMove(siblings, oldIndex, newIndex)
 
-      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
-
-      const reordered = arrayMove(siblings, oldIndex, newIndex)
-
-      // Update positions optimistically
-      setFlatRqs(prev => {
-        const byId = Object.fromEntries(prev.map(rq => [rq.id, { ...rq }]))
-        reordered.forEach((rq, i) => {
-          if (byId[rq.id]) byId[rq.id].position = i
-        })
-        return Object.values(byId)
-      })
-
-      // Persist via reorder endpoint using the parent's first sibling id as anchor
-      try {
-        const ids = reordered.map(n => n.id)
-        // Use the first sibling's id as the rqId anchor for the reorder call
-        await researchQuestionsApi.reorder(reordered[0].id, ids)
-        await fetchRqs()
-      } catch (err) {
-        console.error('Failed to reorder research questions:', err)
-        await fetchRqs()
-      }
-      return
-    }
-
-    // ── Case 2: Different parent — reparent ────────────────────────────────
-
-    // Constraint: cannot reparent if dragged item has children
-    if (draggedNode.children && draggedNode.children.length > 0) {
-      console.warn('Cannot reparent an RQ that has sub-questions. Remove sub-questions first.')
-      return
-    }
-
-    // Determine new parent:
-    // - If targetNode is a root item (no parentId) and draggedNode was a sub-question → promote to root
-    // - If targetNode has a parentId → place as sibling under targetNode's parent
-    // - Additional case: drag sub-Q onto a root item → make it a child of targetNode
-
-    let newParentId = null
-    let newPosition = 0
-
-    if (draggedParentId !== null && targetParentId === null) {
-      // Sub-question dropped into root area → promote to root
-      newParentId = null
-      const rootSiblings = flatTree.filter(n => (n._parentId || null) === null).sort((a, b) => a.position - b.position)
-      const targetIdx = rootSiblings.findIndex(n => n.id === targetNode.id)
-      newPosition = targetIdx >= 0 ? targetIdx : rootSiblings.length
-    } else if (draggedParentId === null && targetParentId !== null) {
-      // Root item dropped onto a sub-question's level → make sibling of targetNode under targetNode's parent
-      newParentId = targetParentId
-      const targetSiblings = flatTree.filter(n => (n._parentId || null) === targetParentId).sort((a, b) => a.position - b.position)
-      const targetIdx = targetSiblings.findIndex(n => n.id === targetNode.id)
-      newPosition = targetIdx >= 0 ? targetIdx : targetSiblings.length
-    } else {
-      // sub-Q → different parent's children
-      newParentId = targetParentId
-      const targetSiblings = flatTree.filter(n => (n._parentId || null) === targetParentId).sort((a, b) => a.position - b.position)
-      const targetIdx = targetSiblings.findIndex(n => n.id === targetNode.id)
-      newPosition = targetIdx >= 0 ? targetIdx : targetSiblings.length
-    }
+    // Update positions optimistically
+    setFlatRqs(prev => {
+      const byId = Object.fromEntries(prev.map(rq => [rq.id, { ...rq }]))
+      reordered.forEach((rq, i) => { if (byId[rq.id]) byId[rq.id].position = i })
+      return Object.values(byId)
+    })
 
     try {
-      await researchQuestionsApi.update(draggedNode.id, {
-        parent_id: newParentId,
-        position: newPosition,
-      })
+      const ids = reordered.map(n => n.id)
+      await researchQuestionsApi.reorder(reordered[0].id, ids)
+      await fetchRqs()
+    } catch (err) {
+      console.error('Failed to reorder research questions:', err)
+      await fetchRqs()
+    }
+  }
+
+  // Context-menu reparenting: newParentId=null promotes to root
+  async function handleReParent(rqId, newParentId) {
+    try {
+      const siblings = flatTree.filter(n => (n._parentId || null) === newParentId)
+      const newPosition = siblings.length
+      await researchQuestionsApi.update(rqId, { parent_id: newParentId, position: newPosition })
       await fetchRqs()
     } catch (err) {
       console.error('Failed to reparent research question:', err)
-      await fetchRqs()
     }
   }
 
@@ -974,9 +928,8 @@ function RQSection({ projectId, libraryId }) {
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={({ active }) => setActiveId(active.id)}
-          onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
-          onDragCancel={() => { setActiveId(null); setDropTarget(null); pendingDropMode.current = 'reorder' }}
+          onDragCancel={() => setActiveId(null)}
         >
           <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
             <div>
@@ -991,7 +944,8 @@ function RQSection({ projectId, libraryId }) {
                     onRefresh={fetchRqs}
                     rqPapersMap={rqPapersMap}
                     onRqPapersChange={handleRqPapersChange}
-                    dropTarget={dropTarget}
+                    rootRqs={rootRqs}
+                    onReParent={handleReParent}
                   />
                 ))}
               </div>
