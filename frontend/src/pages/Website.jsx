@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { websitesApi, notesApi, papersApi } from '../services/api'
+import { websitesApi, notesApi, papersApi, projectsApi, projectPapersApi } from '../services/api'
 import { statusConfig, NamedLinks, EditableField, EditableTextArea, AuthorChips, TagChips } from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
@@ -8,6 +8,109 @@ import { useDragResize } from '../hooks/useDragResize'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
+}
+
+// ─── Link to project button ──────────────────────────────────────────────────
+
+function LinkToProjectButton({ paperId, websiteId }) {
+  const [open, setOpen] = useState(false)
+  const [projects, setProjects] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [linkedIds, setLinkedIds] = useState(new Set())
+  const containerRef = useRef(null)
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  async function handleOpen() {
+    setOpen(o => !o)
+    if (!projects.length) {
+      setLoading(true)
+      try {
+        const data = await projectsApi.list()
+        setProjects(Array.isArray(data) ? data : data?.items || [])
+      } catch (err) {
+        console.error('Failed to fetch projects:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+  }
+
+  async function handleLink(project) {
+    if (linkedIds.has(project.id)) return
+    try {
+      const data = paperId ? { paperId } : { websiteId }
+      await projectPapersApi.link(project.id, data)
+      setLinkedIds(prev => new Set([...prev, project.id]))
+    } catch (err) {
+      if (err.message?.includes('409') || err.message?.toLowerCase().includes('already') || err.message?.toLowerCase().includes('duplicate') || err.message?.toLowerCase().includes('unique')) {
+        setLinkedIds(prev => new Set([...prev, project.id]))
+      } else {
+        console.error('Failed to link to project:', err)
+      }
+    }
+  }
+
+  const projectStatusConfig = {
+    active:    'bg-emerald-100 text-emerald-700',
+    paused:    'bg-amber-100 text-amber-700',
+    completed: 'bg-blue-100 text-blue-700',
+    archived:  'bg-slate-100 text-slate-600',
+  }
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        onClick={handleOpen}
+        title="Link to project"
+        className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-500 hover:text-teal-600 hover:bg-slate-100 transition-colors text-xs font-medium"
+      >
+        <Icon name="link" className="text-[15px]" />
+        Link
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[200px] overflow-y-auto min-w-[180px]">
+          {loading ? (
+            <div className="px-4 py-3 text-xs text-slate-400 text-center animate-pulse">Loading projects…</div>
+          ) : projects.length === 0 ? (
+            <div className="px-4 py-3 text-xs text-slate-400 text-center">No projects found</div>
+          ) : (
+            projects.map(project => {
+              const isLinked = linkedIds.has(project.id)
+              return (
+                <button
+                  key={project.id}
+                  onClick={() => handleLink(project)}
+                  disabled={isLinked}
+                  className={`w-full text-left px-3 py-2.5 flex items-center gap-2 border-b border-slate-50 last:border-0 transition-colors ${
+                    isLinked ? 'opacity-60 cursor-default' : 'hover:bg-slate-50 cursor-pointer'
+                  }`}
+                >
+                  <span className="flex-1 text-xs text-slate-800 truncate">{project.name}</span>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                    projectStatusConfig[project.status] || projectStatusConfig.active
+                  }`}>
+                    {project.status || 'active'}
+                  </span>
+                  {isLinked && <Icon name="check" className="text-[13px] text-emerald-500 flex-shrink-0" />}
+                </button>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function WebsiteInfoPanel({ site, onUpdate, onStatusChange }) {
@@ -275,6 +378,7 @@ export default function Website() {
           </span>
         </div>
         <div className="flex items-center gap-1.5 ml-auto">
+          <LinkToProjectButton websiteId={site.id} />
           <button
             onClick={handleCopyBibtex}
             title="Copy BibTeX citation"
