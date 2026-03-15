@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { projectsApi, notesApi, researchQuestionsApi } from '../services/api'
+import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi } from '../services/api'
 import NotesPanel from '../components/NotesPanel'
 
 function Icon({ name, className = '' }) {
@@ -222,15 +222,129 @@ function AddRQInput({ projectId, parentId, onCreated }) {
   )
 }
 
+// ─── Mini Search Picker (for RQ-level paper linking) ─────────────────────────
+
+function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsiteIds = new Set() }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [open, setOpen] = useState(false)
+  const [linking, setLinking] = useState(false)
+  const containerRef = useRef(null)
+  const debounceRef = useRef(null)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.focus()
+  }, [])
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  function handleQueryChange(e) {
+    const q = e.target.value
+    setQuery(q)
+    if (!q.trim()) { setResults([]); setOpen(false); return }
+
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const [papers, websites] = await Promise.all([
+          papersApi.list({ search: q }),
+          websitesApi.list({ search: q }),
+        ])
+        const paperResults = (Array.isArray(papers) ? papers : papers?.items || []).map(p => ({ ...p, _type: 'paper' }))
+        const websiteResults = (Array.isArray(websites) ? websites : websites?.items || []).map(w => ({ ...w, _type: 'website' }))
+        setResults([...paperResults.slice(0, 5), ...websiteResults.slice(0, 5)])
+        setOpen(true)
+      } catch (err) {
+        console.error('Mini search failed:', err)
+      }
+    }, 300)
+  }
+
+  async function handleSelect(item) {
+    if (linking) return
+    const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : existingWebsiteIds.has(item.id)
+    if (alreadyLinked) return
+    setLinking(true)
+    try {
+      const data = item._type === 'paper' ? { paperId: item.id } : { websiteId: item.id }
+      await onLink(data)
+      setQuery('')
+      setResults([])
+      setOpen(false)
+    } catch (err) {
+      console.error('Mini link failed:', err)
+    } finally {
+      setLinking(false)
+    }
+  }
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div className="flex items-center gap-1 border border-slate-200 rounded-lg px-2 py-1 bg-white focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400/30">
+        <Icon name="search" className="text-[13px] text-slate-400 flex-shrink-0" />
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={handleQueryChange}
+          onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery(''); setResults([]) } }}
+          placeholder="Search papers and websites..."
+          className="text-xs text-slate-700 bg-transparent focus:outline-none w-44"
+        />
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto min-w-[260px]">
+          {results.map(item => {
+            const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : existingWebsiteIds.has(item.id)
+            const title = item.title || 'Untitled'
+            const authors = Array.isArray(item.authors) ? item.authors.slice(0, 2).join(', ') : ''
+            return (
+              <button
+                key={`${item._type}-${item.id}`}
+                onClick={() => handleSelect(item)}
+                disabled={alreadyLinked || linking}
+                className={`w-full text-left px-3 py-2 flex items-start gap-2 transition-colors ${
+                  alreadyLinked ? 'opacity-40 cursor-default' : 'hover:bg-slate-50 cursor-pointer'
+                }`}
+              >
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5 ${
+                  item._type === 'paper' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                }`}>
+                  {item._type === 'paper' ? 'Paper' : 'Website'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-slate-800 truncate">{title}</div>
+                  {authors && <div className="text-[10px] text-slate-400 truncate">{authors}</div>}
+                </div>
+                {alreadyLinked && <Icon name="check" className="text-[13px] text-emerald-500 flex-shrink-0 mt-0.5" />}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── RQ Node (recursive) ──────────────────────────────────────────────────────
 
-function RQNode({ rq, depth, projectId, onRefresh }) {
+function RQNode({ rq, depth, projectId, onRefresh, rqPapersMap, onRqPapersChange }) {
   const [expanded, setExpanded] = useState(true)
   const [editingQuestion, setEditingQuestion] = useState(false)
   const [questionDraft, setQuestionDraft] = useState(rq.question)
   const [editingHypothesis, setEditingHypothesis] = useState(false)
   const [hypothesisDraft, setHypothesisDraft] = useState(rq.hypothesis || '')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showLinkPicker, setShowLinkPicker] = useState(false)
   const menuRef = useRef(null)
 
   useEffect(() => { setQuestionDraft(rq.question) }, [rq.question])
@@ -301,6 +415,34 @@ function RQNode({ rq, depth, projectId, onRefresh }) {
     }
   }
 
+  // RQ paper linking
+  const rqPapers = rqPapersMap?.get(rq.id) || []
+  const existingPaperIds = useMemo(() => new Set(rqPapers.filter(p => p.paperId).map(p => p.paperId)), [rqPapers])
+  const existingWebsiteIds = useMemo(() => new Set(rqPapers.filter(p => p.websiteId).map(p => p.websiteId)), [rqPapers])
+  const hasLinkedPapers = rqPapers.length > 0
+
+  async function handleRqLink(data) {
+    await researchQuestionsApi.linkPaper(rq.id, data)
+    // Refresh rq papers for this rq
+    try {
+      const updated = await researchQuestionsApi.listPapers(rq.id)
+      onRqPapersChange(rq.id, updated)
+    } catch (err) {
+      console.error('Failed to refresh rq papers:', err)
+    }
+    setShowLinkPicker(false)
+  }
+
+  async function handleRqUnlink(linkId) {
+    try {
+      await researchQuestionsApi.unlinkPaper(rq.id, linkId)
+      const updated = await researchQuestionsApi.listPapers(rq.id)
+      onRqPapersChange(rq.id, updated)
+    } catch (err) {
+      console.error('Failed to unlink from rq:', err)
+    }
+  }
+
   const hasChildren = rq.children && rq.children.length > 0
 
   return (
@@ -357,6 +499,16 @@ function RQNode({ rq, depth, projectId, onRefresh }) {
             )}
 
             <RQStatusDropdown status={rq.status} onChange={saveStatus} />
+
+            {/* Gap indicator: no linked papers */}
+            {!hasLinkedPapers && (
+              <span
+                className="text-amber-400 flex-shrink-0"
+                title="No supporting literature linked"
+              >
+                <Icon name="warning_amber" className="text-[14px]" />
+              </span>
+            )}
           </div>
 
           {/* Expanded content */}
@@ -393,6 +545,57 @@ function RQNode({ rq, depth, projectId, onRefresh }) {
                 </div>
               )}
 
+              {/* Linked papers chips */}
+              {rqPapers.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pl-0">
+                  {rqPapers.map(link => {
+                    const label = link.paperTitle || link.websiteTitle || link.paperId || link.websiteId || 'Unknown'
+                    return (
+                      <span
+                        key={link.id}
+                        className="inline-flex items-center gap-1 text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100"
+                        title={label}
+                      >
+                        <span className="truncate max-w-[160px]">{label}</span>
+                        <button
+                          onClick={() => handleRqUnlink(link.id)}
+                          className="text-blue-400 hover:text-blue-700 flex-shrink-0 ml-0.5"
+                        >
+                          <Icon name="close" className="text-[11px]" />
+                        </button>
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Link paper to RQ */}
+              <div className="pl-0">
+                {showLinkPicker ? (
+                  <div className="flex items-center gap-2">
+                    <MiniSearchPicker
+                      onLink={handleRqLink}
+                      existingPaperIds={existingPaperIds}
+                      existingWebsiteIds={existingWebsiteIds}
+                    />
+                    <button
+                      onClick={() => setShowLinkPicker(false)}
+                      className="text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowLinkPicker(true)}
+                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
+                  >
+                    <Icon name="link" className="text-[13px]" />
+                    Link paper
+                  </button>
+                )}
+              </div>
+
               {/* Children */}
               {hasChildren && (
                 <div className="space-y-0">
@@ -403,6 +606,8 @@ function RQNode({ rq, depth, projectId, onRefresh }) {
                       depth={0}
                       projectId={projectId}
                       onRefresh={onRefresh}
+                      rqPapersMap={rqPapersMap}
+                      onRqPapersChange={onRqPapersChange}
                     />
                   ))}
                 </div>
@@ -449,24 +654,47 @@ function RQNode({ rq, depth, projectId, onRefresh }) {
 function RQSection({ projectId }) {
   const [flatRqs, setFlatRqs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [rqPapersMap, setRqPapersMap] = useState(new Map())
 
   const rqTree = useMemo(() => buildRqTree(flatRqs), [flatRqs])
+
+  const fetchRqPapers = useCallback(async (rqs) => {
+    if (!rqs.length) { setRqPapersMap(new Map()); return }
+    try {
+      const results = await Promise.all(rqs.map(rq => researchQuestionsApi.listPapers(rq.id)))
+      const map = new Map()
+      rqs.forEach((rq, i) => map.set(rq.id, Array.isArray(results[i]) ? results[i] : []))
+      setRqPapersMap(map)
+    } catch (err) {
+      console.error('Failed to fetch rq papers:', err)
+    }
+  }, [])
 
   const fetchRqs = useCallback(async () => {
     try {
       const data = await researchQuestionsApi.list(projectId)
-      setFlatRqs(Array.isArray(data) ? data : [])
+      const rqs = Array.isArray(data) ? data : []
+      setFlatRqs(rqs)
+      await fetchRqPapers(rqs)
     } catch (err) {
       console.error('Failed to fetch research questions:', err)
       setFlatRqs([])
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [projectId, fetchRqPapers])
 
   useEffect(() => {
     fetchRqs()
   }, [fetchRqs])
+
+  const handleRqPapersChange = useCallback((rqId, papers) => {
+    setRqPapersMap(prev => {
+      const next = new Map(prev)
+      next.set(rqId, papers)
+      return next
+    })
+  }, [])
 
   return (
     <div className="mb-6">
@@ -494,6 +722,8 @@ function RQSection({ projectId }) {
                 depth={0}
                 projectId={projectId}
                 onRefresh={fetchRqs}
+                rqPapersMap={rqPapersMap}
+                onRqPapersChange={handleRqPapersChange}
               />
             ))}
           </div>
@@ -506,12 +736,264 @@ function RQSection({ projectId }) {
   )
 }
 
+// ─── Search Picker (for Literature tab) ───────────────────────────────────────
+
+function SearchPicker({ projectId, onLinked, existingPaperIds, existingWebsiteIds }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [open, setOpen] = useState(false)
+  const [linking, setLinking] = useState(false)
+  const containerRef = useRef(null)
+  const debounceRef = useRef(null)
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  function handleQueryChange(e) {
+    const q = e.target.value
+    setQuery(q)
+    if (!q.trim()) { setResults([]); setOpen(false); return }
+
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const [papers, websites] = await Promise.all([
+          papersApi.list({ search: q }),
+          websitesApi.list({ search: q }),
+        ])
+        const paperResults = (Array.isArray(papers) ? papers : papers?.items || []).map(p => ({ ...p, _type: 'paper' }))
+        const websiteResults = (Array.isArray(websites) ? websites : websites?.items || []).map(w => ({ ...w, _type: 'website' }))
+        setResults([...paperResults.slice(0, 8), ...websiteResults.slice(0, 8)])
+        setOpen(true)
+      } catch (err) {
+        console.error('Search failed:', err)
+      }
+    }, 300)
+  }
+
+  async function handleSelect(item) {
+    if (linking) return
+    const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : existingWebsiteIds.has(item.id)
+    if (alreadyLinked) return
+    setLinking(true)
+    try {
+      const data = item._type === 'paper' ? { paperId: item.id } : { websiteId: item.id }
+      await projectPapersApi.link(projectId, data)
+      onLinked()
+      setQuery('')
+      setResults([])
+      setOpen(false)
+    } catch (err) {
+      console.error('Link failed:', err)
+    } finally {
+      setLinking(false)
+    }
+  }
+
+  return (
+    <div className="relative mb-4" ref={containerRef}>
+      <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 bg-white focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-400/20">
+        <Icon name="search" className="text-[18px] text-slate-400 flex-shrink-0" />
+        <input
+          value={query}
+          onChange={handleQueryChange}
+          onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery(''); setResults([]) } }}
+          placeholder="Search papers and websites..."
+          className="flex-1 text-sm text-slate-700 bg-transparent focus:outline-none"
+        />
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
+          {results.map(item => {
+            const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : existingWebsiteIds.has(item.id)
+            const title = item.title || 'Untitled'
+            const authors = Array.isArray(item.authors) ? item.authors.slice(0, 2).join(', ') : ''
+            return (
+              <button
+                key={`${item._type}-${item.id}`}
+                onClick={() => handleSelect(item)}
+                disabled={alreadyLinked || linking}
+                className={`w-full text-left px-4 py-3 flex items-start gap-3 border-b border-slate-50 last:border-0 transition-colors ${
+                  alreadyLinked ? 'opacity-50 cursor-default' : 'hover:bg-slate-50 cursor-pointer'
+                }`}
+              >
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5 ${
+                  item._type === 'paper' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                }`}>
+                  {item._type === 'paper' ? 'Paper' : 'Website'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-slate-800 truncate">{title}</div>
+                  {authors && <div className="text-xs text-slate-400 truncate">{authors}</div>}
+                </div>
+                {alreadyLinked && <Icon name="check" className="text-[16px] text-emerald-500 flex-shrink-0 mt-0.5" />}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Literature Tab ────────────────────────────────────────────────────────────
+
+function LiteratureTab({ projectId }) {
+  const [links, setLinks] = useState([])
+  const [paperLookup, setPaperLookup] = useState({})
+  const [websiteLookup, setWebsiteLookup] = useState({})
+  const [loading, setLoading] = useState(true)
+
+  const fetchAll = useCallback(async () => {
+    try {
+      const [linkRecords, papers, websites] = await Promise.all([
+        projectPapersApi.list(projectId),
+        papersApi.list(),
+        websitesApi.list(),
+      ])
+      const pLookup = {}
+      const wLookup = {}
+      const paperList = Array.isArray(papers) ? papers : papers?.items || []
+      const websiteList = Array.isArray(websites) ? websites : websites?.items || []
+      paperList.forEach(p => { pLookup[p.id] = p })
+      websiteList.forEach(w => { wLookup[w.id] = w })
+      setPaperLookup(pLookup)
+      setWebsiteLookup(wLookup)
+      setLinks(Array.isArray(linkRecords) ? linkRecords : [])
+    } catch (err) {
+      console.error('Failed to fetch literature:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
+
+  async function handleUnlink(linkId) {
+    try {
+      await projectPapersApi.unlink(projectId, linkId)
+      setLinks(prev => prev.filter(l => l.id !== linkId))
+    } catch (err) {
+      console.error('Failed to unlink:', err)
+    }
+  }
+
+  const existingPaperIds = useMemo(() => new Set(links.filter(l => l.paperId).map(l => l.paperId)), [links])
+  const existingWebsiteIds = useMemo(() => new Set(links.filter(l => l.websiteId).map(l => l.websiteId)), [links])
+
+  function formatDate(iso) {
+    if (!iso) return '—'
+    try {
+      const d = new Date(iso)
+      const now = new Date()
+      const diff = now - d
+      if (diff < 60000) return 'just now'
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+      if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`
+      return d.toLocaleDateString()
+    } catch {
+      return '—'
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-3 animate-pulse">
+        <div className="h-10 bg-slate-100 rounded-lg" />
+        <div className="h-12 bg-slate-100 rounded-lg" />
+        <div className="h-12 bg-slate-100 rounded-lg" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6 max-w-2xl">
+      <h2 className="text-lg font-semibold text-slate-800 mb-4">Literature</h2>
+
+      <SearchPicker
+        projectId={projectId}
+        onLinked={fetchAll}
+        existingPaperIds={existingPaperIds}
+        existingWebsiteIds={existingWebsiteIds}
+      />
+
+      {links.length === 0 ? (
+        <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center">
+          <Icon name="menu_book" className="text-slate-300 text-[36px] mb-2" />
+          <p className="text-sm text-slate-400">No literature linked yet. Use the search above to add supporting papers and websites.</p>
+        </div>
+      ) : (
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5">Title</th>
+                <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5 w-24">Type</th>
+                <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5 w-28">Added</th>
+                <th className="w-10" />
+              </tr>
+            </thead>
+            <tbody>
+              {links.map(link => {
+                const isPaper = !!link.paperId
+                const item = isPaper ? paperLookup[link.paperId] : websiteLookup[link.websiteId]
+                const title = item?.title || (isPaper ? link.paperId : link.websiteId) || 'Unknown'
+                return (
+                  <tr key={link.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="text-sm text-slate-800 line-clamp-1">{title}</span>
+                      {item?.authors && Array.isArray(item.authors) && item.authors.length > 0 && (
+                        <span className="text-xs text-slate-400 block truncate">
+                          {item.authors.slice(0, 2).join(', ')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                        isPaper ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                      }`}>
+                        {isPaper ? 'Paper' : 'Website'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-400">{formatDate(link.createdAt)}</td>
+                    <td className="px-2 py-3">
+                      <button
+                        onClick={() => handleUnlink(link.id)}
+                        title="Unlink"
+                        className="text-slate-300 hover:text-red-400 transition-colors p-1 rounded"
+                      >
+                        <Icon name="link_off" className="text-[16px]" />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Left panel nav ───────────────────────────────────────────────────────────
 
 function LeftNav({ projectName, activeTab, onTabChange }) {
   const navItems = [
-    { id: 'overview', icon: 'info', label: 'Overview' },
-    { id: 'notes',    icon: 'edit_note', label: 'Notes' },
+    { id: 'overview',   icon: 'info',      label: 'Overview' },
+    { id: 'literature', icon: 'menu_book', label: 'Literature' },
+    { id: 'notes',      icon: 'edit_note', label: 'Notes' },
   ]
 
   return (
@@ -540,7 +1022,7 @@ function LeftNav({ projectName, activeTab, onTabChange }) {
           </button>
         ))}
 
-        {/* Phase 2 placeholder */}
+        {/* Phase 3 placeholder */}
         <div className="mt-3">
           <p className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Coming Soon</p>
           <div
@@ -719,6 +1201,9 @@ export default function ProjectDetail() {
               project={project}
               onUpdate={updated => setProject(updated)}
             />
+          )}
+          {activeTab === 'literature' && (
+            <LiteratureTab projectId={project.id} />
           )}
           {activeTab === 'notes' && (
             <NotesPanel
