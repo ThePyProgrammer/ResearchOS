@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-stopped_at: "Completed Phase 03-01 (experiment infrastructure: migration, models, service, router, frontend API)"
-last_updated: "2026-03-15T14:34:25Z"
-last_activity: "2026-03-15 — Completed plan 03-01 (experiment backend infrastructure + frontend API client)"
+status: executing
+stopped_at: "Completed Phase 03-02 (experiment tree UI: ExperimentSection, ExperimentNode, KVEditor, DnD, modal)"
+last_updated: "2026-03-15T14:47:07.053Z"
+last_activity: 2026-03-15 — Completed plan 03-01 (experiments migration, models, service, router, frontend API client)
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 10
-  completed_plans: 11
+  total_plans: 13
+  completed_plans: 12
   percent: 66
 ---
 
@@ -57,6 +57,7 @@ Progress: [██████░░░░] 66%
 | Phase 02-research-questions-literature P05 | 2 min | 1 tasks | 1 files |
 | Phase 02-research-questions-literature P06 | 2 min | 1 tasks | 0 files |
 | Phase 03-experiment-tree P01 | 8 min | 2 tasks | 8 files |
+| Phase 03-experiment-tree P02 | 4 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,9 @@ Recent decisions affecting current work:
 - [Phase 03-experiment-tree]: experiment_id added to note_service._SOURCE_FIELDS so note reassignment to experiment nulls other source FKs (consistent with existing pattern)
 - [Phase 03-experiment-tree]: notesApi experiment extensions added inline to existing notesApi object to avoid duplicate export error
 - [Phase 03-experiment-tree]: experiment_papers join table uses CHECK constraint enforcing exactly-one-of paper_id/website_id/github_repo_id (same pattern as rq_papers)
+- [Phase 03-experiment-tree]: ExperimentNode uses double-click for name editing to avoid conflicts with expand/collapse chevron
+- [Phase 03-experiment-tree]: KVEditor sends complete updated dict to onSave (JSONB replace semantics), syncs local rows via useEffect when data prop changes
+- [Phase 03-experiment-tree]: Phase 3 Coming Soon placeholder in LeftNav removed; Experiments is now a first-class nav item between Literature and Notes
 
 ### Pending Todos
 
@@ -108,5 +112,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T14:34:25Z
-Stopped at: Completed Phase 03-01 (experiment infrastructure: migration, models, service, router, frontend API)
+Last session: 2026-03-15T14:47:07.046Z
+Stopped at: Completed Phase 03-02 (experiment tree UI: ExperimentSection, ExperimentNode, KVEditor, DnD, modal)

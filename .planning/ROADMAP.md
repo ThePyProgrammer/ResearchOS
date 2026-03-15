@@ -69,7 +69,7 @@ Plans:
   5. Experiment tree nodes show color-coded status badges distinguishing planned, running, completed, and failed states
   6. User can attach notes to an individual experiment using the same tiptap editor used for papers
   7. User can link a specific paper or website to an individual experiment as supporting literature
-**Plans:** 3 plans
+**Plans:** 2/3 plans executed
 Plans:
 - [x] 03-01-PLAN.md — Backend: migration, models, service, router, app.py wiring, frontend API client
 - [ ] 03-02-PLAN.md — Frontend: experiment tree UI with ExperimentSection, ExperimentNode, KVEditor, create modal, status dropdown, DnD
@@ -94,5 +94,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Project Foundation | 4/4 | Complete   | 2026-03-15 |
 | 2. Research Questions & Literature | 6/6 | Complete   | 2026-03-15 |
-| 3. Experiment Tree | 1/3 | In progress | - |
+| 3. Experiment Tree | 2/3 | In Progress|  |
 | 4. Experiment Differentiators | 0/TBD | Not started | - |
