@@ -2,6 +2,21 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi } from '../services/api'
 import NotesPanel from '../components/NotesPanel'
+import {
+  DndContext,
+  closestCenter,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -337,7 +352,7 @@ function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsit
 
 // ─── RQ Node (recursive) ──────────────────────────────────────────────────────
 
-function RQNode({ rq, depth, projectId, onRefresh, rqPapersMap, onRqPapersChange }) {
+function RQNode({ rq, depth, projectId, onRefresh, rqPapersMap, onRqPapersChange, isDragOverlay = false }) {
   const [expanded, setExpanded] = useState(true)
   const [editingQuestion, setEditingQuestion] = useState(false)
   const [questionDraft, setQuestionDraft] = useState(rq.question)
@@ -346,6 +361,16 @@ function RQNode({ rq, depth, projectId, onRefresh, rqPapersMap, onRqPapersChange
   const [menuOpen, setMenuOpen] = useState(false)
   const [showLinkPicker, setShowLinkPicker] = useState(false)
   const menuRef = useRef(null)
+
+  // DnD sortable
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: rq.id })
 
   useEffect(() => { setQuestionDraft(rq.question) }, [rq.question])
   useEffect(() => { setHypothesisDraft(rq.hypothesis || '') }, [rq.hypothesis])
@@ -445,12 +470,21 @@ function RQNode({ rq, depth, projectId, onRefresh, rqPapersMap, onRqPapersChange
 
   const hasChildren = rq.children && rq.children.length > 0
 
+  const sortableStyle = isDragOverlay ? {} : {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+
   return (
-    <div style={{ paddingLeft: depth * 24 }}>
+    <div ref={isDragOverlay ? undefined : setNodeRef} style={{ paddingLeft: depth * 24, ...sortableStyle }}>
       {/* Row */}
       <div className="group relative flex items-start gap-1 py-1.5 px-2 rounded-lg hover:bg-slate-50 transition-colors">
-        {/* Drag handle (visual affordance, not yet functional) */}
-        <span className="opacity-0 group-hover:opacity-100 text-slate-300 flex-shrink-0 mt-0.5 cursor-grab">
+        {/* Drag handle — listeners go here only, preserving click targets elsewhere */}
+        <span
+          className="opacity-0 group-hover:opacity-100 text-slate-300 flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing touch-none"
+          {...(isDragOverlay ? {} : { ...attributes, ...listeners })}
+        >
           <Icon name="drag_indicator" className="text-[16px]" />
         </span>
 
@@ -649,14 +683,33 @@ function RQNode({ rq, depth, projectId, onRefresh, rqPapersMap, onRqPapersChange
   )
 }
 
+// ─── Flatten tree helpers for DnD ─────────────────────────────────────────────
+
+function flattenRqTree(nodes, parentId = null) {
+  const result = []
+  for (const node of nodes) {
+    result.push({ ...node, _parentId: parentId })
+    if (node.children && node.children.length > 0) {
+      result.push(...flattenRqTree(node.children, node.id))
+    }
+  }
+  return result
+}
+
 // ─── RQ Section ───────────────────────────────────────────────────────────────
 
 function RQSection({ projectId }) {
   const [flatRqs, setFlatRqs] = useState([])
   const [loading, setLoading] = useState(true)
   const [rqPapersMap, setRqPapersMap] = useState(new Map())
+  const [activeId, setActiveId] = useState(null)
 
   const rqTree = useMemo(() => buildRqTree(flatRqs), [flatRqs])
+  const flatTree = useMemo(() => flattenRqTree(rqTree), [rqTree])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  )
 
   const fetchRqPapers = useCallback(async (rqs) => {
     if (!rqs.length) { setRqPapersMap(new Map()); return }
@@ -696,6 +749,122 @@ function RQSection({ projectId }) {
     })
   }, [])
 
+  // Find the rq node with the given id in flatTree
+  function findFlatNode(id) {
+    return flatTree.find(n => n.id === id) || null
+  }
+
+  async function handleDragEnd(event) {
+    const { active, over } = event
+    setActiveId(null)
+
+    if (!over || active.id === over.id) return
+
+    const draggedNode = findFlatNode(active.id)
+    const targetNode = findFlatNode(over.id)
+
+    if (!draggedNode || !targetNode) return
+
+    const draggedParentId = draggedNode._parentId || null
+    const targetParentId = targetNode._parentId || null
+
+    // ── Case 1: Same parent — sibling reorder ──────────────────────────────
+    if (draggedParentId === targetParentId) {
+      // Get all siblings at this level
+      const siblings = flatTree
+        .filter(n => (n._parentId || null) === draggedParentId)
+        .sort((a, b) => a.position - b.position)
+
+      const oldIndex = siblings.findIndex(n => n.id === active.id)
+      const newIndex = siblings.findIndex(n => n.id === over.id)
+
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+
+      const reordered = arrayMove(siblings, oldIndex, newIndex)
+
+      // Update positions optimistically
+      setFlatRqs(prev => {
+        const byId = Object.fromEntries(prev.map(rq => [rq.id, { ...rq }]))
+        reordered.forEach((rq, i) => {
+          if (byId[rq.id]) byId[rq.id].position = i
+        })
+        return Object.values(byId)
+      })
+
+      // Persist via reorder endpoint using the parent's first sibling id as anchor
+      try {
+        const ids = reordered.map(n => n.id)
+        // Use the first sibling's id as the rqId anchor for the reorder call
+        await researchQuestionsApi.reorder(reordered[0].id, ids)
+        await fetchRqs()
+      } catch (err) {
+        console.error('Failed to reorder research questions:', err)
+        await fetchRqs()
+      }
+      return
+    }
+
+    // ── Case 2: Different parent — reparent ────────────────────────────────
+
+    // Constraint: cannot reparent if dragged item has children
+    if (draggedNode.children && draggedNode.children.length > 0) {
+      console.warn('Cannot reparent an RQ that has sub-questions. Remove sub-questions first.')
+      return
+    }
+
+    // Determine new parent:
+    // - If targetNode is a root item (no parentId) and draggedNode was a sub-question → promote to root
+    // - If targetNode has a parentId → place as sibling under targetNode's parent
+    // - If targetNode is a root item and draggedNode is also root (different root) → already handled above (same level)
+    // - Additional case: drag sub-Q onto a root item → make it a child of targetNode
+
+    let newParentId = null
+    let newPosition = 0
+
+    if (draggedParentId !== null && targetParentId === null) {
+      // Sub-question dropped into root area → promote to root
+      newParentId = null
+      const rootSiblings = flatTree.filter(n => (n._parentId || null) === null).sort((a, b) => a.position - b.position)
+      const targetIdx = rootSiblings.findIndex(n => n.id === targetNode.id)
+      newPosition = targetIdx >= 0 ? targetIdx : rootSiblings.length
+    } else if (draggedParentId === null && targetParentId === null) {
+      // Both root — this should have been caught above (same parent). Defensive fallback.
+      newParentId = null
+      const rootSiblings = flatTree.filter(n => (n._parentId || null) === null).sort((a, b) => a.position - b.position)
+      const targetIdx = rootSiblings.findIndex(n => n.id === targetNode.id)
+      newPosition = targetIdx >= 0 ? targetIdx : rootSiblings.length
+    } else if (draggedParentId === null && targetParentId !== null) {
+      // Root item dropped onto a sub-question's level → make sibling of targetNode under targetNode's parent
+      newParentId = targetParentId
+      const targetSiblings = flatTree.filter(n => (n._parentId || null) === targetParentId).sort((a, b) => a.position - b.position)
+      const targetIdx = targetSiblings.findIndex(n => n.id === targetNode.id)
+      newPosition = targetIdx >= 0 ? targetIdx : targetSiblings.length
+    } else {
+      // sub-Q → different parent's children
+      newParentId = targetParentId
+      const targetSiblings = flatTree.filter(n => (n._parentId || null) === targetParentId).sort((a, b) => a.position - b.position)
+      const targetIdx = targetSiblings.findIndex(n => n.id === targetNode.id)
+      newPosition = targetIdx >= 0 ? targetIdx : targetSiblings.length
+    }
+
+    try {
+      await researchQuestionsApi.update(draggedNode.id, {
+        parent_id: newParentId,
+        position: newPosition,
+      })
+      await fetchRqs()
+    } catch (err) {
+      console.error('Failed to reparent research question:', err)
+      await fetchRqs()
+    }
+  }
+
+  // Find RQ for active drag overlay
+  const activeRq = activeId ? flatTree.find(n => n.id === activeId) : null
+
+  // Collect all IDs for SortableContext (flat list of all nodes)
+  const allIds = flatTree.map(n => n.id)
+
   return (
     <div className="mb-6">
       <h3 className="text-sm font-semibold text-slate-700 mb-2">Research Questions</h3>
@@ -713,24 +882,50 @@ function RQSection({ projectId }) {
           <AddRQInput projectId={projectId} parentId={null} onCreated={fetchRqs} />
         </div>
       ) : (
-        <div>
-          <div className="space-y-0">
-            {rqTree.map(rq => (
-              <RQNode
-                key={rq.id}
-                rq={rq}
-                depth={0}
-                projectId={projectId}
-                onRefresh={fetchRqs}
-                rqPapersMap={rqPapersMap}
-                onRqPapersChange={handleRqPapersChange}
-              />
-            ))}
-          </div>
-          <div className="mt-1 pl-9">
-            <AddRQInput projectId={projectId} parentId={null} onCreated={fetchRqs} />
-          </div>
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={({ active }) => setActiveId(active.id)}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveId(null)}
+        >
+          <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
+            <div>
+              <div className="space-y-0">
+                {rqTree.map(rq => (
+                  <RQNode
+                    key={rq.id}
+                    rq={rq}
+                    depth={0}
+                    projectId={projectId}
+                    onRefresh={fetchRqs}
+                    rqPapersMap={rqPapersMap}
+                    onRqPapersChange={handleRqPapersChange}
+                  />
+                ))}
+              </div>
+              <div className="mt-1 pl-9">
+                <AddRQInput projectId={projectId} parentId={null} onCreated={fetchRqs} />
+              </div>
+            </div>
+          </SortableContext>
+
+          <DragOverlay>
+            {activeRq ? (
+              <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg flex items-center gap-2 max-w-xs">
+                <Icon name="drag_indicator" className="text-[16px] text-slate-300 flex-shrink-0" />
+                <span className="text-sm text-slate-800 truncate flex-1">{activeRq.question}</span>
+                {activeRq.status && (
+                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                    rqStatusConfig[activeRq.status]?.class || rqStatusConfig.open.class
+                  }`}>
+                    {rqStatusConfig[activeRq.status]?.label || activeRq.status}
+                  </span>
+                )}
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
     </div>
   )
