@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { proposalsApi, papersApi, websitesApi } from '../../services/api'
+import { proposalsApi, papersApi, websitesApi, projectsApi } from '../../services/api'
 import { useLibrary } from '../../context/LibraryContext'
 import WindowModal from '../WindowModal'
 import BibtexExportModal from '../BibtexExportModal'
@@ -706,6 +706,101 @@ function LibraryTree() {
 }
 
 
+const projectStatusDotClass = {
+  active:    'bg-emerald-500',
+  paused:    'bg-amber-500',
+  completed: 'bg-blue-500',
+  archived:  'bg-slate-400',
+}
+
+function ProjectsTree({ collapsed }) {
+  const { activeLibraryId } = useLibrary()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [expanded, setExpanded] = useState(true)
+  const [projects, setProjects] = useState([])
+
+  useEffect(() => {
+    if (!activeLibraryId) return
+    projectsApi.list({ library_id: activeLibraryId })
+      .then(data => setProjects(data))
+      .catch(() => {})
+  }, [activeLibraryId])
+
+  if (collapsed) {
+    return (
+      <div className="pt-2">
+        <NavLink
+          to="/projects"
+          title="Projects"
+          className={({ isActive }) =>
+            `flex justify-center py-1.5 rounded-lg transition-colors ${
+              isActive || location.pathname.startsWith('/projects')
+                ? 'bg-white/10 text-white'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+            }`
+          }
+        >
+          <Icon name="science" className="text-[18px] flex-shrink-0" />
+        </NavLink>
+      </div>
+    )
+  }
+
+  return (
+    <div className="pt-2">
+      {/* Header */}
+      <div className="flex items-center px-3 pb-1">
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="flex-1 flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest hover:text-slate-300 transition-colors"
+        >
+          <Icon
+            name={expanded ? 'expand_more' : 'chevron_right'}
+            className="text-[14px]"
+          />
+          Projects
+        </button>
+        <button
+          onClick={() => navigate('/projects')}
+          title="Browse all projects"
+          className="p-0.5 rounded text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
+        >
+          <Icon name="add" className="text-[18px]" />
+        </button>
+      </div>
+
+      {/* Project links */}
+      {expanded && (
+        <div className="space-y-0.5">
+          {projects.map(project => {
+            const isActive = location.pathname === `/projects/${project.id}`
+            const dotClass = projectStatusDotClass[project.status] || projectStatusDotClass.active
+            return (
+              <NavLink
+                key={project.id}
+                to={`/projects/${project.id}`}
+                title={project.name}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+                  isActive
+                    ? 'bg-white/10 text-white font-medium'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClass}`} />
+                <span className="flex-1 truncate text-[13px]">{project.name}</span>
+              </NavLink>
+            )
+          })}
+          {projects.length === 0 && (
+            <p className="px-3 py-1 text-[12px] text-slate-600 italic">No projects yet</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Sidebar({ collapsed, onToggle }) {
   const navigate = useNavigate()
   const [pendingCount, setPendingCount] = useState(null)
@@ -760,6 +855,11 @@ export default function Sidebar({ collapsed, onToggle }) {
             <LibraryTree />
           </div>
         )}
+
+        {/* Projects */}
+        <div className="space-y-0.5">
+          <ProjectsTree collapsed={collapsed} />
+        </div>
 
         {/* Authors */}
         <div className="pt-3 space-y-0.5">
