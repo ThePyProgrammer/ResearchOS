@@ -230,6 +230,8 @@ export const notesApi = {
   createForLibrary: (libraryId, data) => apiFetch(`/libraries/${libraryId}/notes`, { method: 'POST', body: data }),
   listForProject: (projectId) => apiFetch(`/projects/${projectId}/notes`),
   createForProject: (projectId, data) => apiFetch(`/projects/${projectId}/notes`, { method: 'POST', body: data }),
+  listForExperiment: (expId) => apiFetch(`/experiments/${expId}/notes`),
+  createForExperiment: (expId, data) => apiFetch(`/experiments/${expId}/notes`, { method: 'POST', body: data }),
 }
 
 export const chatApi = {
@@ -340,3 +342,15 @@ export const projectPapersApi = {
   link: (projectId, data) => apiFetch(`/projects/${projectId}/papers`, { method: 'POST', body: data }),
   unlink: (projectId, linkId) => apiFetch(`/projects/${projectId}/papers/${linkId}`, { method: 'DELETE' }),
 }
+
+export const experimentsApi = {
+  list: (projectId) => apiFetch(`/projects/${projectId}/experiments`),
+  create: (projectId, data) => apiFetch(`/projects/${projectId}/experiments`, { method: 'POST', body: data }),
+  update: (expId, data) => apiFetch(`/experiments/${expId}`, { method: 'PATCH', body: data }),
+  remove: (expId) => apiFetch(`/experiments/${expId}`, { method: 'DELETE' }),
+  reorder: (expId, ids) => apiFetch(`/experiments/${expId}/reorder`, { method: 'POST', body: { ids } }),
+  listPapers: (expId) => apiFetch(`/experiments/${expId}/papers`),
+  linkPaper: (expId, data) => apiFetch(`/experiments/${expId}/papers`, { method: 'POST', body: data }),
+  unlinkPaper: (expId, linkId) => apiFetch(`/experiments/${expId}/papers/${linkId}`, { method: 'DELETE' }),
+}
+
