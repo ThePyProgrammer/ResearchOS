@@ -108,12 +108,12 @@ function ProjectCard({ project, onDelete, onArchive }) {
 
   return (
     <div
-      className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 cursor-pointer relative flex flex-col gap-2"
+      className="bg-white rounded-xl border border-slate-200 p-4 cursor-pointer relative flex flex-col gap-2 hover:border-slate-300 transition-colors"
       onClick={() => navigate(`/projects/${project.id}`)}
     >
       {/* Header row */}
       <div className="flex items-start gap-2">
-        <h3 className="flex-1 font-semibold text-lg text-slate-800 truncate leading-tight">{project.name}</h3>
+        <h3 className="flex-1 font-semibold text-lg text-slate-800 leading-tight">{project.name}</h3>
         <div className="relative flex-shrink-0" onClick={e => e.stopPropagation()}>
           <button
             onClick={() => setMenuOpen(o => !o)}
