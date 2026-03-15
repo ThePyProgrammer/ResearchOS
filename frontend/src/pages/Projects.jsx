@@ -335,7 +335,7 @@ export default function Projects() {
         <LoadingSkeleton />
       ) : projects.length === 0 ? (
         /* Empty state */
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center px-6 pt-12">
           <Icon name="science" className="text-slate-300 text-[72px]" />
           <div>
             <h2 className="text-lg font-semibold text-slate-700 mb-1">Start your first research project</h2>
@@ -343,13 +343,6 @@ export default function Projects() {
               Create a project to organize your research questions and experiments
             </p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Icon name="add" className="text-[18px]" />
-            New Project
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
