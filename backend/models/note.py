@@ -9,6 +9,7 @@ class Note(CamelModel):
     github_repo_id: Optional[str] = None
     library_id: Optional[str] = None
     project_id: Optional[str] = None
+    experiment_id: Optional[str] = None
     name: str
     parent_id: Optional[str] = None
     type: str = "file"  # file | folder
