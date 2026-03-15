@@ -299,6 +299,7 @@ export default function Projects() {
 
   function handleDelete(id) {
     setProjects(ps => ps.filter(p => p.id !== id))
+    window.dispatchEvent(new CustomEvent('researchos:projects-changed'))
   }
 
   function handleArchive(id, status) {
@@ -306,6 +307,7 @@ export default function Projects() {
   }
 
   function handleCreated(project) {
+    window.dispatchEvent(new CustomEvent('researchos:projects-changed'))
     navigate(`/projects/${project.id}`)
   }
 

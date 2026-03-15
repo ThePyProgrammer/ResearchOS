@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { proposalsApi, papersApi, websitesApi, projectsApi } from '../../services/api'
@@ -720,12 +720,22 @@ function ProjectsTree({ collapsed }) {
   const [expanded, setExpanded] = useState(true)
   const [projects, setProjects] = useState([])
 
-  useEffect(() => {
+  const fetchProjects = useCallback(() => {
     if (!activeLibraryId) return
     projectsApi.list({ library_id: activeLibraryId })
       .then(data => setProjects(data))
       .catch(err => console.error('ProjectsTree: failed to fetch projects:', err))
   }, [activeLibraryId])
+
+  useEffect(() => {
+    fetchProjects()
+  }, [fetchProjects])
+
+  useEffect(() => {
+    const handler = () => fetchProjects()
+    window.addEventListener('researchos:projects-changed', handler)
+    return () => window.removeEventListener('researchos:projects-changed', handler)
+  }, [fetchProjects])
 
   if (collapsed) {
     return (
