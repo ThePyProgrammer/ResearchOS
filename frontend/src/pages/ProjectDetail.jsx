@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi, githubReposApi } from '../services/api'
+import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi, githubReposApi, experimentsApi } from '../services/api'
 import NotesPanel from '../components/NotesPanel'
 import {
   DndContext,
@@ -51,6 +51,48 @@ function buildRqTree(flatRqs) {
   }
   sortLevel(roots)
   return roots
+}
+
+const experimentStatusConfig = {
+  planned:   { label: 'Planned',   class: 'bg-blue-100 text-blue-700' },
+  running:   { label: 'Running',   class: 'bg-amber-100 text-amber-700' },
+  completed: { label: 'Completed', class: 'bg-emerald-100 text-emerald-700' },
+  failed:    { label: 'Failed',    class: 'bg-red-100 text-red-700' },
+}
+
+function buildExperimentTree(flatExperiments) {
+  const byId = Object.fromEntries(flatExperiments.map(e => [e.id, { ...e, children: [] }]))
+  const roots = []
+  for (const exp of Object.values(byId)) {
+    if (exp.parentId) byId[exp.parentId]?.children.push(exp)
+    else roots.push(exp)
+  }
+  const sortLevel = nodes => {
+    nodes.sort((a, b) => a.position - b.position)
+    nodes.forEach(n => sortLevel(n.children))
+  }
+  sortLevel(roots)
+  return roots
+}
+
+function flattenExperimentTree(nodes, parentId = null) {
+  const result = []
+  for (const node of nodes) {
+    result.push({ ...node, _parentId: parentId })
+    if (node.children && node.children.length > 0) {
+      result.push(...flattenExperimentTree(node.children, node.id))
+    }
+  }
+  return result
+}
+
+function detectType(raw) {
+  const trimmed = String(raw).trim()
+  if (trimmed === 'true') return true
+  if (trimmed === 'false') return false
+  const num = Number(trimmed)
+  if (trimmed !== '' && !isNaN(num)) return num
+  return trimmed
 }
 
 // ─── Inline editable field ──────────────────────────────────────────────────
@@ -163,6 +205,22 @@ function RQStatusDropdown({ status, onChange }) {
       className={`text-xs font-medium px-2 py-0.5 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 flex-shrink-0 ${cfg.class}`}
     >
       {Object.entries(rqStatusConfig).map(([key, c]) => (
+        <option key={key} value={key}>{c.label}</option>
+      ))}
+    </select>
+  )
+}
+
+function ExperimentStatusDropdown({ status, onChange }) {
+  const cfg = experimentStatusConfig[status] || experimentStatusConfig.planned
+  return (
+    <select
+      value={status || 'planned'}
+      onChange={e => onChange(e.target.value)}
+      onClick={e => e.stopPropagation()}
+      className={`text-xs font-medium px-2 py-0.5 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 flex-shrink-0 ${cfg.class}`}
+    >
+      {Object.entries(experimentStatusConfig).map(([key, c]) => (
         <option key={key} value={key}>{c.label}</option>
       ))}
     </select>
@@ -349,6 +407,288 @@ function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsit
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── KV Editor ────────────────────────────────────────────────────────────────
+
+function KVEditor({ data, label, onSave }) {
+  // Normalize data to array of {key, value} rows
+  const [rows, setRows] = useState(() =>
+    Object.entries(data || {}).map(([k, v]) => ({ key: k, value: String(v) }))
+  )
+  const [editingCell, setEditingCell] = useState(null) // { rowIndex, col: 'key'|'value' }
+  const [draft, setDraft] = useState('')
+
+  // Sync when data prop changes (e.g., after refresh)
+  useEffect(() => {
+    setRows(Object.entries(data || {}).map(([k, v]) => ({ key: k, value: String(v) })))
+  }, [data])
+
+  function startEdit(rowIndex, col) {
+    setEditingCell({ rowIndex, col })
+    setDraft(rows[rowIndex][col])
+  }
+
+  async function commitEdit() {
+    if (!editingCell) return
+    const { rowIndex, col } = editingCell
+    const newRows = rows.map((r, i) => i === rowIndex ? { ...r, [col]: draft } : r)
+    setRows(newRows)
+    setEditingCell(null)
+    // Build dict and call onSave
+    const dict = {}
+    for (const r of newRows) {
+      if (r.key.trim()) dict[r.key.trim()] = detectType(r.value)
+    }
+    await onSave(dict)
+  }
+
+  async function addRow() {
+    const newRows = [...rows, { key: '', value: '' }]
+    setRows(newRows)
+    // Start editing the key of the new row
+    setEditingCell({ rowIndex: newRows.length - 1, col: 'key' })
+    setDraft('')
+  }
+
+  async function removeRow(rowIndex) {
+    const newRows = rows.filter((_, i) => i !== rowIndex)
+    setRows(newRows)
+    const dict = {}
+    for (const r of newRows) {
+      if (r.key.trim()) dict[r.key.trim()] = detectType(r.value)
+    }
+    await onSave(dict)
+  }
+
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{label}</span>
+        <button
+          onClick={addRow}
+          className="text-slate-400 hover:text-blue-600 transition-colors"
+          title={`Add ${label.toLowerCase()} row`}
+        >
+          <Icon name="add" className="text-[13px]" />
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-xs text-slate-400 italic">No {label.toLowerCase()} set</p>
+      ) : (
+        <div className="border border-slate-100 rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={i} className="border-b border-slate-100 last:border-0 group/row hover:bg-slate-50 transition-colors">
+                  {/* Key cell */}
+                  <td
+                    className="px-2 py-1 text-slate-500 font-medium w-1/3 cursor-pointer min-w-0"
+                    onClick={() => startEdit(i, 'key')}
+                  >
+                    {editingCell?.rowIndex === i && editingCell?.col === 'key' ? (
+                      <input
+                        autoFocus
+                        value={draft}
+                        onChange={e => setDraft(e.target.value)}
+                        onBlur={commitEdit}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') commitEdit()
+                          if (e.key === 'Escape') { setEditingCell(null) }
+                          if (e.key === 'Tab') { e.preventDefault(); commitEdit(); setTimeout(() => startEdit(i, 'value'), 0) }
+                        }}
+                        className="w-full bg-white border border-blue-400 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                        onClick={e => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="truncate block" title={row.key}>{row.key || <span className="text-slate-300">key</span>}</span>
+                    )}
+                  </td>
+                  {/* Value cell */}
+                  <td
+                    className="px-2 py-1 text-slate-700 cursor-pointer min-w-0"
+                    onClick={() => startEdit(i, 'value')}
+                  >
+                    {editingCell?.rowIndex === i && editingCell?.col === 'value' ? (
+                      <input
+                        autoFocus
+                        value={draft}
+                        onChange={e => setDraft(e.target.value)}
+                        onBlur={commitEdit}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') commitEdit()
+                          if (e.key === 'Escape') { setEditingCell(null) }
+                        }}
+                        className="w-full bg-white border border-blue-400 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                        onClick={e => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="truncate block font-mono text-[11px]" title={String(row.value)}>{row.value !== '' ? String(row.value) : <span className="text-slate-300">value</span>}</span>
+                    )}
+                  </td>
+                  {/* Remove button */}
+                  <td className="px-1 py-1 w-6 text-right">
+                    <button
+                      onClick={e => { e.stopPropagation(); removeRow(i) }}
+                      className="opacity-0 group-hover/row:opacity-100 text-slate-300 hover:text-red-400 transition-colors"
+                      title="Remove row"
+                    >
+                      <Icon name="close" className="text-[12px]" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Experiment Create Modal ──────────────────────────────────────────────────
+
+function ExperimentCreateModal({ projectId, parentId, onCreated, onClose }) {
+  const [name, setName] = useState('')
+  const [status, setStatus] = useState('planned')
+  const [configRows, setConfigRows] = useState([])
+  const [submitting, setSubmitting] = useState(false)
+  const nameRef = useRef(null)
+
+  useEffect(() => {
+    if (nameRef.current) nameRef.current.focus()
+  }, [])
+
+  // Escape key closes modal
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [onClose])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    const trimmedName = name.trim()
+    if (!trimmedName || submitting) return
+    setSubmitting(true)
+    try {
+      const config = {}
+      for (const row of configRows) {
+        if (row.key.trim()) config[row.key.trim()] = detectType(row.value)
+      }
+      await experimentsApi.create(projectId, {
+        name: trimmedName,
+        status,
+        config,
+        parent_id: parentId || null,
+      })
+      onCreated()
+      onClose()
+    } catch (err) {
+      console.error('Failed to create experiment:', err)
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-800">
+            {parentId ? 'Add Sub-Experiment' : 'New Experiment'}
+          </h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <Icon name="close" className="text-[20px]" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Name */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
+            <input
+              ref={nameRef}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Experiment name..."
+              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+            />
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+            <ExperimentStatusDropdown status={status} onChange={setStatus} />
+          </div>
+
+          {/* Config rows */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="text-xs font-medium text-slate-600">Config (optional)</label>
+              <button
+                type="button"
+                onClick={() => setConfigRows(prev => [...prev, { key: '', value: '' }])}
+                className="text-slate-400 hover:text-blue-600 transition-colors"
+                title="Add config row"
+              >
+                <Icon name="add" className="text-[13px]" />
+              </button>
+            </div>
+            {configRows.length > 0 && (
+              <div className="space-y-1.5">
+                {configRows.map((row, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      value={row.key}
+                      onChange={e => setConfigRows(prev => prev.map((r, j) => j === i ? { ...r, key: e.target.value } : r))}
+                      placeholder="key"
+                      className="flex-1 text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500/30 focus:border-blue-400"
+                    />
+                    <input
+                      value={row.value}
+                      onChange={e => setConfigRows(prev => prev.map((r, j) => j === i ? { ...r, value: e.target.value } : r))}
+                      placeholder="value"
+                      className="flex-1 text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500/30 focus:border-blue-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setConfigRows(prev => prev.filter((_, j) => j !== i))}
+                      className="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0"
+                    >
+                      <Icon name="close" className="text-[14px]" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!name.trim() || submitting}
+              className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {submitting ? 'Creating...' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
@@ -976,6 +1316,412 @@ function RQSection({ projectId, libraryId }) {
   )
 }
 
+// ─── Experiment Node (recursive) ──────────────────────────────────────────────
+
+function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay = false }) {
+  const [expanded, setExpanded] = useState(true)
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState(experiment.name)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const menuRef = useRef(null)
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: experiment.id })
+
+  useEffect(() => { setNameDraft(experiment.name) }, [experiment.name])
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return
+    function handleClick(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [menuOpen])
+
+  async function saveName() {
+    const trimmed = nameDraft.trim()
+    if (trimmed && trimmed !== experiment.name) {
+      try {
+        await experimentsApi.update(experiment.id, { name: trimmed })
+        onRefresh()
+      } catch (err) {
+        console.error('Failed to update experiment name:', err)
+      }
+    }
+    setEditingName(false)
+  }
+
+  async function saveStatus(newStatus) {
+    try {
+      await experimentsApi.update(experiment.id, { status: newStatus })
+      onRefresh()
+    } catch (err) {
+      console.error('Failed to update experiment status:', err)
+    }
+  }
+
+  async function handleDelete() {
+    setMenuOpen(false)
+    const childCount = experiment.children?.length || 0
+    const msg = childCount > 0
+      ? `Delete this experiment and its ${childCount} sub-experiment(s)?`
+      : `Delete experiment "${experiment.name}"?`
+    if (!window.confirm(msg)) return
+    try {
+      await experimentsApi.remove(experiment.id)
+      onRefresh()
+    } catch (err) {
+      console.error('Failed to delete experiment:', err)
+    }
+  }
+
+  const hasChildren = experiment.children && experiment.children.length > 0
+  const isLeaf = !hasChildren
+
+  const sortableStyle = isDragOverlay ? {} : {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+
+  return (
+    <div ref={isDragOverlay ? undefined : setNodeRef} style={{ paddingLeft: depth * 24, ...sortableStyle }}>
+      {/* Row */}
+      <div className="group relative flex items-start gap-1 py-1.5 px-2 rounded-lg hover:bg-slate-50 transition-colors">
+        {/* Drag handle */}
+        <span
+          className="opacity-0 group-hover:opacity-100 text-slate-300 flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing touch-none"
+          {...(isDragOverlay ? {} : { ...attributes, ...listeners })}
+        >
+          <Icon name="drag_indicator" className="text-[16px]" />
+        </span>
+
+        {/* Expand/collapse chevron */}
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors mt-0.5"
+        >
+          <Icon
+            name={hasChildren ? (expanded ? 'expand_more' : 'chevron_right') : 'remove'}
+            className="text-[16px]"
+          />
+        </button>
+
+        {/* Node icon */}
+        <span className="flex-shrink-0 mt-0.5 text-slate-400">
+          <Icon name={isLeaf ? 'science' : 'account_tree'} className="text-[14px]" />
+        </span>
+
+        {/* Main content */}
+        <div className="flex-1 min-w-0">
+          {/* Name + status row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {editingName ? (
+              <input
+                autoFocus
+                value={nameDraft}
+                onChange={e => setNameDraft(e.target.value)}
+                onBlur={saveName}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') saveName()
+                  if (e.key === 'Escape') { setNameDraft(experiment.name); setEditingName(false) }
+                }}
+                className="flex-1 text-sm text-slate-800 bg-white border border-blue-400 rounded px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            ) : (
+              <span
+                className="flex-1 text-sm text-slate-800 cursor-pointer hover:text-blue-700 min-w-0"
+                title="Double-click to edit"
+                onDoubleClick={() => setEditingName(true)}
+              >
+                {experiment.name}
+              </span>
+            )}
+
+            {/* Collapsed children count */}
+            {!expanded && hasChildren && (
+              <span className="text-xs text-slate-400 flex-shrink-0">
+                ({experiment.children.length} sub-experiment{experiment.children.length !== 1 ? 's' : ''})
+              </span>
+            )}
+
+            <ExperimentStatusDropdown status={experiment.status} onChange={saveStatus} />
+          </div>
+
+          {/* Expanded: config, metrics, children */}
+          {expanded && (
+            <div className="mt-1.5 space-y-1">
+              {/* Config KV editor */}
+              <KVEditor
+                data={experiment.config || {}}
+                label="Config"
+                onSave={async (updatedConfig) => {
+                  try {
+                    await experimentsApi.update(experiment.id, { config: updatedConfig })
+                    onRefresh()
+                  } catch (err) {
+                    console.error('Failed to update config:', err)
+                  }
+                }}
+              />
+
+              {/* Metrics KV editor */}
+              <KVEditor
+                data={experiment.metrics || {}}
+                label="Metrics"
+                onSave={async (updatedMetrics) => {
+                  try {
+                    await experimentsApi.update(experiment.id, { metrics: updatedMetrics })
+                    onRefresh()
+                  } catch (err) {
+                    console.error('Failed to update metrics:', err)
+                  }
+                }}
+              />
+
+              {/* Children */}
+              {hasChildren && (
+                <div className="space-y-0 mt-1">
+                  {experiment.children.map(child => (
+                    <ExperimentNode
+                      key={child.id}
+                      experiment={child}
+                      depth={0}
+                      onRefresh={onRefresh}
+                      projectId={projectId}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Three-dot menu */}
+        <div className="relative flex-shrink-0" ref={menuRef}>
+          <button
+            onClick={e => { e.stopPropagation(); setMenuOpen(m => !m) }}
+            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
+          >
+            <Icon name="more_vert" className="text-[16px]" />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-6 z-10 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+              <button
+                onClick={() => { setMenuOpen(false); setShowCreateModal(true) }}
+                className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+              >
+                <Icon name="add" className="text-[14px] text-slate-400" />
+                Add sub-experiment
+              </button>
+              <div className="border-t border-slate-100 my-1" />
+              <button
+                onClick={handleDelete}
+                className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Create sub-experiment modal */}
+      {showCreateModal && (
+        <ExperimentCreateModal
+          projectId={projectId}
+          parentId={experiment.id}
+          onCreated={onRefresh}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Experiment Section ────────────────────────────────────────────────────────
+
+function ExperimentSection({ projectId }) {
+  const [flatExperiments, setFlatExperiments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [activeId, setActiveId] = useState(null)
+
+  const expTree = useMemo(() => buildExperimentTree(flatExperiments), [flatExperiments])
+  const flatTree = useMemo(() => flattenExperimentTree(expTree), [expTree])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  )
+
+  const fetchExperiments = useCallback(async () => {
+    try {
+      const data = await experimentsApi.list(projectId)
+      setFlatExperiments(Array.isArray(data) ? data : [])
+      setError(null)
+    } catch (err) {
+      console.error('Failed to fetch experiments:', err)
+      setError('Failed to load experiments')
+      setFlatExperiments([])
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchExperiments()
+  }, [fetchExperiments])
+
+  function findFlatNode(id) {
+    return flatTree.find(n => n.id === id) || null
+  }
+
+  async function handleDragEnd(event) {
+    const { active, over } = event
+    setActiveId(null)
+
+    if (!over || active.id === over.id) return
+
+    const draggedNode = findFlatNode(active.id)
+    const targetNode = findFlatNode(over.id)
+    if (!draggedNode || !targetNode) return
+
+    const draggedParentId = draggedNode._parentId || null
+    const targetParentId = targetNode._parentId || null
+
+    // Different parents — reparenting is context-menu only
+    if (draggedParentId !== targetParentId) return
+
+    const siblings = flatTree
+      .filter(n => (n._parentId || null) === draggedParentId)
+      .sort((a, b) => a.position - b.position)
+
+    const oldIndex = siblings.findIndex(n => n.id === active.id)
+    const newIndex = siblings.findIndex(n => n.id === over.id)
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return
+
+    const reordered = arrayMove(siblings, oldIndex, newIndex)
+
+    // Optimistic update
+    setFlatExperiments(prev => {
+      const byId = Object.fromEntries(prev.map(e => [e.id, { ...e }]))
+      reordered.forEach((e, i) => { if (byId[e.id]) byId[e.id].position = i })
+      return Object.values(byId)
+    })
+
+    try {
+      const ids = reordered.map(n => n.id)
+      await experimentsApi.reorder(reordered[0].id, ids)
+      await fetchExperiments()
+    } catch (err) {
+      console.error('Failed to reorder experiments:', err)
+      await fetchExperiments()
+    }
+  }
+
+  const activeExp = activeId ? flatTree.find(n => n.id === activeId) : null
+  const allIds = flatTree.map(n => n.id)
+
+  return (
+    <div className="p-6 max-w-2xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Icon name="add" className="text-[16px]" />
+          Add Experiment
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2 animate-pulse">
+          <div className="h-8 bg-slate-100 rounded-lg" />
+          <div className="h-8 bg-slate-100 rounded-lg" />
+          <div className="h-8 bg-slate-100 rounded-lg" />
+        </div>
+      ) : error ? (
+        <div className="border border-red-100 rounded-lg p-4 text-center">
+          <p className="text-sm text-red-500">{error}</p>
+        </div>
+      ) : expTree.length === 0 ? (
+        <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center">
+          <Icon name="science" className="text-slate-300 text-[36px] mb-2" />
+          <p className="text-sm text-slate-400 mb-3">No experiments yet</p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+          >
+            Create your first experiment
+          </button>
+        </div>
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={({ active }) => setActiveId(active.id)}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveId(null)}
+        >
+          <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
+            <div className="space-y-0">
+              {expTree.map(exp => (
+                <ExperimentNode
+                  key={exp.id}
+                  experiment={exp}
+                  depth={0}
+                  onRefresh={fetchExperiments}
+                  projectId={projectId}
+                />
+              ))}
+            </div>
+          </SortableContext>
+
+          <DragOverlay>
+            {activeExp ? (
+              <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg flex items-center gap-2 max-w-xs">
+                <Icon name="drag_indicator" className="text-[16px] text-slate-300 flex-shrink-0" />
+                <span className="text-sm text-slate-800 truncate flex-1">{activeExp.name}</span>
+                {activeExp.status && (
+                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                    experimentStatusConfig[activeExp.status]?.class || experimentStatusConfig.planned.class
+                  }`}>
+                    {experimentStatusConfig[activeExp.status]?.label || activeExp.status}
+                  </span>
+                )}
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      )}
+
+      {/* Root-level create modal */}
+      {showCreateModal && (
+        <ExperimentCreateModal
+          projectId={projectId}
+          parentId={null}
+          onCreated={fetchExperiments}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
 // ─── Search Picker (for Literature tab) ───────────────────────────────────────
 
 function SearchPicker({ projectId, libraryId, onLinked, existingPaperIds, existingWebsiteIds, existingRepoIds = new Set() }) {
@@ -1245,9 +1991,10 @@ function LiteratureTab({ projectId, libraryId }) {
 
 function LeftNav({ projectName, activeTab, onTabChange }) {
   const navItems = [
-    { id: 'overview',   icon: 'info',      label: 'Overview' },
-    { id: 'literature', icon: 'menu_book', label: 'Literature' },
-    { id: 'notes',      icon: 'edit_note', label: 'Notes' },
+    { id: 'overview',     icon: 'info',      label: 'Overview' },
+    { id: 'literature',   icon: 'menu_book', label: 'Literature' },
+    { id: 'experiments',  icon: 'science',   label: 'Experiments' },
+    { id: 'notes',        icon: 'edit_note', label: 'Notes' },
   ]
 
   return (
@@ -1275,19 +2022,6 @@ function LeftNav({ projectName, activeTab, onTabChange }) {
             {item.label}
           </button>
         ))}
-
-        {/* Phase 3 placeholder */}
-        <div className="mt-3">
-          <p className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Coming Soon</p>
-          <div
-            title="Phase 3 feature"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-300 cursor-default select-none"
-          >
-            <Icon name="science" className="text-[16px] flex-shrink-0" />
-            Experiments
-            <span className="ml-auto text-[10px] text-slate-300 bg-slate-100 px-1.5 py-0.5 rounded font-medium">P3</span>
-          </div>
-        </div>
       </nav>
     </div>
   )
@@ -1327,15 +2061,6 @@ function OverviewTab({ project, onUpdate }) {
 
       {/* Research Questions */}
       <RQSection projectId={project.id} libraryId={project.libraryId} />
-
-      {/* Phase 3: Experiments placeholder */}
-      <div>
-        <h3 className="text-sm font-semibold text-slate-700 mb-2">Experiments</h3>
-        <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center">
-          <Icon name="science" className="text-slate-300 text-[32px] mb-2" />
-          <p className="text-sm text-slate-400">Experiments will appear here in Phase 3</p>
-        </div>
-      </div>
     </div>
   )
 }
@@ -1458,6 +2183,9 @@ export default function ProjectDetail() {
           )}
           {activeTab === 'literature' && (
             <LiteratureTab projectId={project.id} libraryId={project.libraryId} />
+          )}
+          {activeTab === 'experiments' && (
+            <ExperimentSection projectId={project.id} />
           )}
           {activeTab === 'notes' && (
             <NotesPanel
