@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-03-15T09:35:25.000Z"
-last_activity: "2026-03-15 — Completed plan 02-03 (Literature tab, SearchPicker, RQ gap indicators, per-RQ linking, Link-to-project on Paper/Website)"
+status: verifying
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-03-15T12:06:38.601Z"
+last_activity: "2026-03-15 — Completed plan 02-04 (@dnd-kit DnD reparenting for RQ tree: sibling reorder, cross-parent reparent, childless constraint, DragOverlay)"
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 8
-  completed_plans: 7
+  total_plans: 10
+  completed_plans: 9
   percent: 63
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2025-07-17)
 ## Current Position
 
 Phase: 2 of 4 (Research Questions & Literature)
-Plan: 3 of 3 in current phase — Phase Complete
-Status: Phase 02 complete
-Last activity: 2026-03-15 — Completed plan 02-03 (Literature tab, SearchPicker, RQ gap indicators, per-RQ linking, Link-to-project on Paper/Website)
+Plan: 4 of 4 in current phase — Phase Complete
+Status: Phase 02 complete (awaiting human verification checkpoint)
+Last activity: 2026-03-15 — Completed plan 02-04 (@dnd-kit DnD reparenting for RQ tree: sibling reorder, cross-parent reparent, childless constraint, DragOverlay)
 
 Progress: [██████░░░░] 63%
 
@@ -53,6 +53,8 @@ Progress: [██████░░░░] 63%
 | Phase 01-project-foundation P02 | 5 | 2 tasks | 5 files |
 | Phase 02-research-questions-literature P02 | 7 | 1 tasks | 1 files |
 | Phase 02-research-questions-literature P03 | 6 | 2 tasks | 3 files |
+| Phase 02-research-questions-literature P04 | 30 | 2 tasks | 5 files |
+| Phase 02-research-questions-literature P05 | 2 min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -81,6 +83,13 @@ Recent decisions affecting current work:
 - [Phase 02-research-questions-literature]: rqPapersMap fetched in parallel after loading RQs, stored as Map in RQSection, passed to RQNode — avoids per-node fetching on render
 - [Phase 02-research-questions-literature]: LiteratureTab fetches full paper+website lists and joins client-side — correct for small projects, simpler than ID-batched lookup
 - [Phase 02-research-questions-literature]: LinkToProjectButton duplicated in Paper.jsx and Website.jsx (not extracted) — both pages are self-contained by convention
+- [Phase 02-research-questions-literature]: DnD listeners placed on drag_indicator icon only — click-to-edit on question text and dropdown interactions remain unaffected
+- [Phase 02-research-questions-literature]: flattenRqTree produces _parentId metadata for DnD handler to distinguish sibling reorder from cross-parent reparent
+- [Phase 02-research-questions-literature]: Childless constraint (cannot reparent if has sub-questions) is a silent abort with console.warn only — no visual error toast for v1 simplicity
+- [Phase 02-research-questions-literature]: DnD listeners placed on drag_indicator icon only — click-to-edit and dropdown interactions remain unaffected
+- [Phase 02-research-questions-literature]: Childless constraint enforced as silent abort with console.warn only — no visual error toast for v1 simplicity
+- [Phase 02-research-questions-literature]: project_id from URL path param is authoritative for RQ creation — body value overridden server-side to prevent cross-project writes
+- [Phase 02-research-questions-literature]: Middle 50% zone heuristic chosen for root-onto-root DnD nesting (center = demote, edges = reorder)
 
 ### Pending Todos
 
@@ -93,5 +102,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T09:35:25.000Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-03-15T12:06:28.731Z
+Stopped at: Completed 02-05-PLAN.md
