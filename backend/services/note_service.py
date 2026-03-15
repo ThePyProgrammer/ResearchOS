@@ -27,6 +27,7 @@ def list_notes(
     website_id: Optional[str] = None,
     github_repo_id: Optional[str] = None,
     library_id: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> list[Note]:
     query = get_client().table(_TABLE).select("*")
     if paper_id:
@@ -37,6 +38,8 @@ def list_notes(
         query = query.eq("github_repo_id", github_repo_id)
     elif library_id:
         query = query.eq("library_id", library_id)
+    elif project_id:
+        query = query.eq("project_id", project_id)
     result = query.execute()
     notes = [Note.model_validate(r) for r in result.data]
     # Pinned notes float to the top; within each pin tier keep folders before
@@ -58,6 +61,7 @@ def create_note(
     website_id: Optional[str] = None,
     github_repo_id: Optional[str] = None,
     library_id: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> Note:
     now = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     note = Note(
@@ -66,6 +70,7 @@ def create_note(
         website_id=website_id,
         github_repo_id=github_repo_id,
         library_id=library_id,
+        project_id=project_id,
         name=data.name,
         parent_id=data.parent_id,
         type=data.type,
@@ -75,11 +80,11 @@ def create_note(
     )
     row = {k: v for k, v in note.model_dump(by_alias=False).items() if v is not None}
     get_client().table(_TABLE).insert(row).execute()
-    logger.info("Created note '%s' (paper=%s website=%s repo=%s library=%s)", data.name, paper_id, website_id, github_repo_id, library_id)
+    logger.info("Created note '%s' (paper=%s website=%s repo=%s library=%s project=%s)", data.name, paper_id, website_id, github_repo_id, library_id, project_id)
     return note
 
 
-_SOURCE_FIELDS = {"paper_id", "website_id", "github_repo_id", "library_id"}
+_SOURCE_FIELDS = {"paper_id", "website_id", "github_repo_id", "library_id", "project_id"}
 
 
 def update_note(note_id: str, data: NoteUpdate) -> Optional[Note]:

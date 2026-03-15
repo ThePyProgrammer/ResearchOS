@@ -8,6 +8,7 @@ class Note(CamelModel):
     website_id: Optional[str] = None
     github_repo_id: Optional[str] = None
     library_id: Optional[str] = None
+    project_id: Optional[str] = None
     name: str
     parent_id: Optional[str] = None
     type: str = "file"  # file | folder
@@ -29,8 +30,9 @@ class NoteUpdate(CamelModel):
     parent_id: Optional[str] = None
     content: Optional[str] = None
     is_pinned: Optional[bool] = None
-    # Source reassignment — for moving notes between papers / websites / repos / library
+    # Source reassignment — for moving notes between papers / websites / repos / library / projects
     paper_id: Optional[str] = None
     website_id: Optional[str] = None
     github_repo_id: Optional[str] = None
     library_id: Optional[str] = None
+    project_id: Optional[str] = None

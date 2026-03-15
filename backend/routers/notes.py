@@ -112,6 +112,22 @@ async def generate_github_repo_notes(repo_id: str, data: GenerateNotesRequest):
 
 
 # ---------------------------------------------------------------------------
+# Project notes
+# ---------------------------------------------------------------------------
+
+@router.get("/projects/{project_id}/notes")
+async def list_project_notes(project_id: str):
+    notes = note_service.list_notes(project_id=project_id)
+    return JSONResponse([n.model_dump(by_alias=True) for n in notes])
+
+
+@router.post("/projects/{project_id}/notes", status_code=201)
+async def create_project_note(project_id: str, data: NoteCreate):
+    note = note_service.create_note(data, project_id=project_id)
+    return JSONResponse(note.model_dump(by_alias=True), status_code=201)
+
+
+# ---------------------------------------------------------------------------
 # Shared note operations (update / delete by note ID)
 # ---------------------------------------------------------------------------
 
