@@ -774,6 +774,7 @@ function RQSection({ projectId, libraryId }) {
   }
 
   function handleDragMove(event) {
+    // Also keep pointer ref updated as fallback for computeDropMode
     const { activatorEvent, delta } = event
     if (activatorEvent) {
       lastPointerY.current = activatorEvent.clientY + delta.y
@@ -788,7 +789,18 @@ function RQSection({ projectId, libraryId }) {
         const draggedParentId = draggedNode._parentId || null
         const targetParentId = targetNode._parentId || null
         if (draggedParentId === null && targetParentId === null && draggedNode.id !== targetNode.id) {
-          const mode = computeDropMode(overId)
+          // Prefer @dnd-kit rect data over DOM query for reliable hover mode
+          let mode = 'reorder'
+          const overRect = event.over?.rect
+          const translatedRect = event.active?.rect?.current?.translated
+          if (overRect && translatedRect) {
+            const activeCenterY = translatedRect.top + translatedRect.height / 2
+            const topZone = overRect.top + overRect.height * 0.25
+            const bottomZone = overRect.bottom - overRect.height * 0.25
+            mode = (activeCenterY > topZone && activeCenterY < bottomZone) ? 'nest' : 'reorder'
+          } else {
+            mode = computeDropMode(overId)
+          }
           setDropTarget({ id: overId, mode })
           return
         }
@@ -816,7 +828,20 @@ function RQSection({ projectId, libraryId }) {
     if (draggedParentId === targetParentId) {
       // Root-onto-root: distinguish "drop onto" (demote to child) from "drop between" (sibling reorder)
       if (draggedParentId === null && targetParentId === null) {
-        const mode = computeDropMode(over.id)
+        // Use @dnd-kit's own rect data captured during drag — more reliable than
+        // a live DOM query in handleDragEnd (DOM may already be displaced by the time this fires)
+        let mode = 'reorder'
+        const overRect = event.over?.rect
+        const translatedRect = event.active?.rect?.current?.translated
+        if (overRect && translatedRect) {
+          const activeCenterY = translatedRect.top + translatedRect.height / 2
+          const topZone = overRect.top + overRect.height * 0.25
+          const bottomZone = overRect.bottom - overRect.height * 0.25
+          mode = (activeCenterY > topZone && activeCenterY < bottomZone) ? 'nest' : 'reorder'
+        } else {
+          // Fallback: pointer ref + DOM query (less reliable but better than nothing)
+          mode = computeDropMode(over.id)
+        }
         if (mode === 'nest') {
           // Demote: make dragged item a sub-question of target
           if (draggedNode.children && draggedNode.children.length > 0) {
