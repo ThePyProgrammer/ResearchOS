@@ -724,7 +724,7 @@ function ProjectsTree({ collapsed }) {
     if (!activeLibraryId) return
     projectsApi.list({ library_id: activeLibraryId })
       .then(data => setProjects(data))
-      .catch(() => {})
+      .catch(err => console.error('ProjectsTree: failed to fetch projects:', err))
   }, [activeLibraryId])
 
   if (collapsed) {
@@ -787,7 +787,7 @@ function ProjectsTree({ collapsed }) {
                     : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                 }`}
               >
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClass}`} />
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass}`} />
                 <span className="flex-1 truncate text-[13px]">{project.name}</span>
               </NavLink>
             )
