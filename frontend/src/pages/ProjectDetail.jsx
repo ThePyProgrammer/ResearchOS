@@ -712,6 +712,9 @@ function RQSection({ projectId, libraryId }) {
   const [activeId, setActiveId] = useState(null)
   const [dropTarget, setDropTarget] = useState(null) // { id, mode: 'reorder' | 'nest' }
   const lastPointerY = useRef(null)
+  // Cache the last computed root-onto-root drop mode from onDragMove so handleDragEnd
+  // can read it reliably (DOM / translated rects may be stale by the time dragEnd fires)
+  const pendingDropMode = useRef('reorder')
 
   const rqTree = useMemo(() => buildRqTree(flatRqs), [flatRqs])
   const flatTree = useMemo(() => flattenRqTree(rqTree), [rqTree])
@@ -801,11 +804,15 @@ function RQSection({ projectId, libraryId }) {
           } else {
             mode = computeDropMode(overId)
           }
+          // Cache so handleDragEnd can read it without re-querying (DOM may be stale at drop time)
+          pendingDropMode.current = mode
           setDropTarget({ id: overId, mode })
           return
         }
       }
     }
+    // Not a root-onto-root hover — clear the cached mode
+    pendingDropMode.current = 'reorder'
     setDropTarget(null)
   }
 
@@ -828,20 +835,10 @@ function RQSection({ projectId, libraryId }) {
     if (draggedParentId === targetParentId) {
       // Root-onto-root: distinguish "drop onto" (demote to child) from "drop between" (sibling reorder)
       if (draggedParentId === null && targetParentId === null) {
-        // Use @dnd-kit's own rect data captured during drag — more reliable than
-        // a live DOM query in handleDragEnd (DOM may already be displaced by the time this fires)
-        let mode = 'reorder'
-        const overRect = event.over?.rect
-        const translatedRect = event.active?.rect?.current?.translated
-        if (overRect && translatedRect) {
-          const activeCenterY = translatedRect.top + translatedRect.height / 2
-          const topZone = overRect.top + overRect.height * 0.25
-          const bottomZone = overRect.bottom - overRect.height * 0.25
-          mode = (activeCenterY > topZone && activeCenterY < bottomZone) ? 'nest' : 'reorder'
-        } else {
-          // Fallback: pointer ref + DOM query (less reliable but better than nothing)
-          mode = computeDropMode(over.id)
-        }
+        // Read the mode cached by the last onDragMove — avoids unreliable DOM/rect
+        // queries at dragEnd time (when @dnd-kit may have already begun cleanup)
+        const mode = pendingDropMode.current
+        pendingDropMode.current = 'reorder' // reset for next drag
         if (mode === 'nest') {
           // Demote: make dragged item a sub-question of target
           if (draggedNode.children && draggedNode.children.length > 0) {
@@ -979,7 +976,7 @@ function RQSection({ projectId, libraryId }) {
           onDragStart={({ active }) => setActiveId(active.id)}
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
-          onDragCancel={() => { setActiveId(null); setDropTarget(null) }}
+          onDragCancel={() => { setActiveId(null); setDropTarget(null); pendingDropMode.current = 'reorder' }}
         >
           <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
             <div>
