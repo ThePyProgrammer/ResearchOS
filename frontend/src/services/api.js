@@ -323,3 +323,20 @@ export const usageApi = {
   get: () => apiFetch('/usage'),
   reset: () => apiFetch('/usage', { method: 'DELETE' }),
 }
+
+export const researchQuestionsApi = {
+  list: (projectId) => apiFetch(`/projects/${projectId}/research-questions`),
+  create: (projectId, data) => apiFetch(`/projects/${projectId}/research-questions`, { method: 'POST', body: data }),
+  update: (rqId, data) => apiFetch(`/research-questions/${rqId}`, { method: 'PATCH', body: data }),
+  remove: (rqId) => apiFetch(`/research-questions/${rqId}`, { method: 'DELETE' }),
+  reorder: (rqId, ids) => apiFetch(`/research-questions/${rqId}/reorder`, { method: 'POST', body: { ids } }),
+  listPapers: (rqId) => apiFetch(`/research-questions/${rqId}/papers`),
+  linkPaper: (rqId, data) => apiFetch(`/research-questions/${rqId}/papers`, { method: 'POST', body: data }),
+  unlinkPaper: (rqId, linkId) => apiFetch(`/research-questions/${rqId}/papers/${linkId}`, { method: 'DELETE' }),
+}
+
+export const projectPapersApi = {
+  list: (projectId) => apiFetch(`/projects/${projectId}/papers`),
+  link: (projectId, data) => apiFetch(`/projects/${projectId}/papers`, { method: 'POST', body: data }),
+  unlink: (projectId, linkId) => apiFetch(`/projects/${projectId}/papers/${linkId}`, { method: 'DELETE' }),
+}
