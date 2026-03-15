@@ -13,7 +13,7 @@ ResearchOS expands from a reference manager into a full research workflow platfo
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Project Foundation** - Complete project CRUD, navigation shell, and project notes (UAT gap closure) (completed 2026-03-15)
-- [ ] **Phase 2: Research Questions & Literature** - RQ hierarchy, hypothesis tracking, and paper-to-project linking
+- [ ] **Phase 2: Research Questions & Literature** - RQ hierarchy, hypothesis tracking, and paper-to-project linking (gap closure in progress)
 - [ ] **Phase 3: Experiment Tree** - Hierarchical experiment nodes, leaf fields, status badges, experiment notes
 - [ ] **Phase 4: Experiment Differentiators** - Metric comparison, config diff, and experiment duplication
 
@@ -48,12 +48,14 @@ Plans:
   4. User can link papers and websites from the library to a project and see them listed on the project detail page
   5. User can see a gap indicator on any RQ that has no linked papers, prompting them to add supporting literature
   6. User can remove paper and website links from a project
-**Plans:** 3/4 plans executed
+**Plans:** 6 plans (4 complete, 2 gap closure)
 Plans:
-- [ ] 02-01-PLAN.md — Backend: migration, models, services, routers for RQs and project-paper linking + frontend API client
-- [ ] 02-02-PLAN.md — Frontend: recursive RQ tree on Overview tab with inline CRUD, status, hypothesis, delete
-- [ ] 02-03-PLAN.md — Frontend: Literature tab, search picker, gap indicators, per-RQ paper linking, bidirectional linking from Paper/Website pages
-- [ ] 02-04-PLAN.md — Frontend: drag-and-drop RQ reparenting with @dnd-kit + end-to-end verification checkpoint
+- [x] 02-01-PLAN.md — Backend: migration, models, services, routers for RQs and project-paper linking + frontend API client
+- [x] 02-02-PLAN.md — Frontend: recursive RQ tree on Overview tab with inline CRUD, status, hypothesis, delete
+- [x] 02-03-PLAN.md — Frontend: Literature tab, search picker, gap indicators, per-RQ paper linking, bidirectional linking from Paper/Website pages
+- [x] 02-04-PLAN.md — Frontend: drag-and-drop RQ reparenting with @dnd-kit + end-to-end verification checkpoint
+- [ ] 02-05-PLAN.md — Gap closure: root-onto-root DnD demoting via pointer-position heuristic (superseded)
+- [ ] 02-06-PLAN.md — Gap closure (refined): root-onto-root demote via pointer-Y heuristic with exact line-pinned edits
 
 ### Phase 3: Experiment Tree
 **Goal**: Researchers can plan and track a hierarchical tree of experiments within a project, including config, metrics, and notes
@@ -87,6 +89,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Foundation | 4/4 | Complete   | 2026-03-15 |
-| 2. Research Questions & Literature | 3/4 | In Progress|  |
+| 2. Research Questions & Literature | 4/5 | Gap closure | - |
 | 3. Experiment Tree | 0/TBD | Not started | - |
 | 4. Experiment Differentiators | 0/TBD | Not started | - |

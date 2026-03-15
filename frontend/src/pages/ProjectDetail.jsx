@@ -355,7 +355,7 @@ function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsit
 
 // ─── RQ Node (recursive) ──────────────────────────────────────────────────────
 
-function RQNode({ rq, depth, projectId, libraryId, onRefresh, rqPapersMap, onRqPapersChange, isDragOverlay = false }) {
+function RQNode({ rq, depth, projectId, libraryId, onRefresh, rqPapersMap, onRqPapersChange, isDragOverlay = false, dropTarget = null }) {
   const [expanded, setExpanded] = useState(true)
   const [editingQuestion, setEditingQuestion] = useState(false)
   const [questionDraft, setQuestionDraft] = useState(rq.question)
@@ -479,10 +479,12 @@ function RQNode({ rq, depth, projectId, libraryId, onRefresh, rqPapersMap, onRqP
     opacity: isDragging ? 0.4 : 1,
   }
 
+  const isNestTarget = dropTarget?.id === rq.id && dropTarget?.mode === 'nest'
+
   return (
-    <div ref={isDragOverlay ? undefined : setNodeRef} style={{ paddingLeft: depth * 24, ...sortableStyle }}>
+    <div ref={isDragOverlay ? undefined : setNodeRef} data-rq-id={rq.id} style={{ paddingLeft: depth * 24, ...sortableStyle }}>
       {/* Row */}
-      <div className="group relative flex items-start gap-1 py-1.5 px-2 rounded-lg hover:bg-slate-50 transition-colors">
+      <div className={`group relative flex items-start gap-1 py-1.5 px-2 rounded-lg hover:bg-slate-50 transition-colors${isNestTarget ? ' ring-2 ring-blue-400 bg-blue-50' : ''}`}>
         {/* Drag handle — listeners go here only, preserving click targets elsewhere */}
         <span
           className="opacity-0 group-hover:opacity-100 text-slate-300 flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing touch-none"
@@ -708,6 +710,8 @@ function RQSection({ projectId, libraryId }) {
   const [loading, setLoading] = useState(true)
   const [rqPapersMap, setRqPapersMap] = useState(new Map())
   const [activeId, setActiveId] = useState(null)
+  const [dropTarget, setDropTarget] = useState(null) // { id, mode: 'reorder' | 'nest' }
+  const lastPointerY = useRef(null)
 
   const rqTree = useMemo(() => buildRqTree(flatRqs), [flatRqs])
   const flatTree = useMemo(() => flattenRqTree(rqTree), [rqTree])
@@ -759,9 +763,44 @@ function RQSection({ projectId, libraryId }) {
     return flatTree.find(n => n.id === id) || null
   }
 
+  function computeDropMode(overId) {
+    const overElement = document.querySelector(`[data-rq-id="${overId}"]`)
+    if (!overElement || lastPointerY.current === null) return 'reorder'
+    const rect = overElement.getBoundingClientRect()
+    const pointerY = lastPointerY.current
+    const topZone = rect.top + rect.height * 0.25
+    const bottomZone = rect.bottom - rect.height * 0.25
+    return (pointerY > topZone && pointerY < bottomZone) ? 'nest' : 'reorder'
+  }
+
+  function handleDragMove(event) {
+    const { activatorEvent, delta } = event
+    if (activatorEvent) {
+      lastPointerY.current = activatorEvent.clientY + delta.y
+    }
+
+    // Update visual drop target for root-onto-root hover
+    const overId = event.over?.id
+    if (overId) {
+      const draggedNode = findFlatNode(event.active.id)
+      const targetNode = findFlatNode(overId)
+      if (draggedNode && targetNode) {
+        const draggedParentId = draggedNode._parentId || null
+        const targetParentId = targetNode._parentId || null
+        if (draggedParentId === null && targetParentId === null && draggedNode.id !== targetNode.id) {
+          const mode = computeDropMode(overId)
+          setDropTarget({ id: overId, mode })
+          return
+        }
+      }
+    }
+    setDropTarget(null)
+  }
+
   async function handleDragEnd(event) {
     const { active, over } = event
     setActiveId(null)
+    setDropTarget(null)
 
     if (!over || active.id === over.id) return
 
@@ -773,9 +812,38 @@ function RQSection({ projectId, libraryId }) {
     const draggedParentId = draggedNode._parentId || null
     const targetParentId = targetNode._parentId || null
 
-    // ── Case 1: Same parent — sibling reorder ──────────────────────────────
+    // ── Case 1: Same parent ────────────────────────────────────────────────
     if (draggedParentId === targetParentId) {
-      // Get all siblings at this level
+      // Root-onto-root: distinguish "drop onto" (demote to child) from "drop between" (sibling reorder)
+      if (draggedParentId === null && targetParentId === null) {
+        const mode = computeDropMode(over.id)
+        if (mode === 'nest') {
+          // Demote: make dragged item a sub-question of target
+          if (draggedNode.children && draggedNode.children.length > 0) {
+            console.warn('Cannot reparent an RQ that has sub-questions. Remove sub-questions first.')
+            return
+          }
+          const targetChildren = flatTree
+            .filter(n => (n._parentId || null) === targetNode.id)
+            .sort((a, b) => a.position - b.position)
+          const newPosition = targetChildren.length // append at end
+
+          try {
+            await researchQuestionsApi.update(draggedNode.id, {
+              parent_id: targetNode.id,
+              position: newPosition,
+            })
+            await fetchRqs()
+          } catch (err) {
+            console.error('Failed to demote research question:', err)
+            await fetchRqs()
+          }
+          return
+        }
+        // mode === 'reorder': fall through to sibling reorder below
+      }
+
+      // Sibling reorder (same parent)
       const siblings = flatTree
         .filter(n => (n._parentId || null) === draggedParentId)
         .sort((a, b) => a.position - b.position)
@@ -820,7 +888,6 @@ function RQSection({ projectId, libraryId }) {
     // Determine new parent:
     // - If targetNode is a root item (no parentId) and draggedNode was a sub-question → promote to root
     // - If targetNode has a parentId → place as sibling under targetNode's parent
-    // - If targetNode is a root item and draggedNode is also root (different root) → already handled above (same level)
     // - Additional case: drag sub-Q onto a root item → make it a child of targetNode
 
     let newParentId = null
@@ -828,12 +895,6 @@ function RQSection({ projectId, libraryId }) {
 
     if (draggedParentId !== null && targetParentId === null) {
       // Sub-question dropped into root area → promote to root
-      newParentId = null
-      const rootSiblings = flatTree.filter(n => (n._parentId || null) === null).sort((a, b) => a.position - b.position)
-      const targetIdx = rootSiblings.findIndex(n => n.id === targetNode.id)
-      newPosition = targetIdx >= 0 ? targetIdx : rootSiblings.length
-    } else if (draggedParentId === null && targetParentId === null) {
-      // Both root — this should have been caught above (same parent). Defensive fallback.
       newParentId = null
       const rootSiblings = flatTree.filter(n => (n._parentId || null) === null).sort((a, b) => a.position - b.position)
       const targetIdx = rootSiblings.findIndex(n => n.id === targetNode.id)
@@ -891,8 +952,9 @@ function RQSection({ projectId, libraryId }) {
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={({ active }) => setActiveId(active.id)}
+          onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
-          onDragCancel={() => setActiveId(null)}
+          onDragCancel={() => { setActiveId(null); setDropTarget(null) }}
         >
           <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
             <div>
@@ -907,6 +969,7 @@ function RQSection({ projectId, libraryId }) {
                     onRefresh={fetchRqs}
                     rqPapersMap={rqPapersMap}
                     onRqPapersChange={handleRqPapersChange}
+                    dropTarget={dropTarget}
                   />
                 ))}
               </div>
