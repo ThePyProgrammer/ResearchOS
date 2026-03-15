@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed Phase 03-02 (experiment tree UI: ExperimentSection, ExperimentNode, KVEditor, DnD, modal)"
-last_updated: "2026-03-15T14:47:07.053Z"
-last_activity: 2026-03-15 — Completed plan 03-01 (experiments migration, models, service, router, frontend API client)
+stopped_at: "Paused at checkpoint Task 2 in Phase 03-03 (human verification of full experiment tree end-to-end)"
+last_updated: "2026-03-15T15:10:00.000Z"
+last_activity: 2026-03-15 — Completed plan 03-03 Task 1 (parent aggregation, experiment notes, literature linking)
 progress:
   total_phases: 4
   completed_phases: 2
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2025-07-17)
 
 Phase: 3 of 4 (Experiment Tree)
 Plan: 1 of ? in current phase
-Status: Phase 03 in progress — plan 03-01 delivered (experiment backend infrastructure)
-Last activity: 2026-03-15 — Completed plan 03-01 (experiments migration, models, service, router, frontend API client)
+Status: Phase 03 in progress — plan 03-03 Task 1 delivered; awaiting human verification checkpoint (Task 2)
+Last activity: 2026-03-15 — Completed plan 03-03 Task 1 (parent aggregation summaries, experiment notes, literature linking)
 
 Progress: [██████░░░░] 66%
 
@@ -58,6 +58,7 @@ Progress: [██████░░░░] 66%
 | Phase 02-research-questions-literature P06 | 2 min | 1 tasks | 0 files |
 | Phase 03-experiment-tree P01 | 8 min | 2 tasks | 8 files |
 | Phase 03-experiment-tree P02 | 4 | 1 tasks | 1 files |
+| Phase 03-experiment-tree P03 | 10 min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Recent decisions affecting current work:
 - [Phase 03-experiment-tree]: ExperimentNode uses double-click for name editing to avoid conflicts with expand/collapse chevron
 - [Phase 03-experiment-tree]: KVEditor sends complete updated dict to onSave (JSONB replace semantics), syncs local rows via useEffect when data prop changes
 - [Phase 03-experiment-tree]: Phase 3 Coming Soon placeholder in LeftNav removed; Experiments is now a first-class nav item between Literature and Notes
+- [Phase 03-experiment-tree]: aggregateDescendants walks only leaf nodes (no children) to avoid double-counting at intermediate levels
+- [Phase 03-experiment-tree]: expPapersMap fetched in batch in ExperimentSection (same pattern as rqPapersMap) — not per-node on render
+- [Phase 03-experiment-tree]: Experiment notes panel expands inline with max-h-96 / overflow-auto to keep tree navigable; edit_note button color signals open state
 
 ### Pending Todos
 
