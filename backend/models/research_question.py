@@ -16,7 +16,7 @@ class ResearchQuestion(CamelModel):
 
 
 class ResearchQuestionCreate(CamelModel):
-    project_id: str
+    project_id: str = ""
     parent_id: Optional[str] = None
     question: str
     position: int = 0

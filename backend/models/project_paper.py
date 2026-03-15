@@ -8,12 +8,14 @@ class ProjectPaper(CamelModel):
     project_id: str
     paper_id: Optional[str] = None
     website_id: Optional[str] = None
+    github_repo_id: Optional[str] = None
     created_at: str
 
 
 class ProjectPaperCreate(CamelModel):
     paper_id: Optional[str] = None
     website_id: Optional[str] = None
+    github_repo_id: Optional[str] = None
 
 
 class RqPaper(CamelModel):
@@ -21,9 +23,11 @@ class RqPaper(CamelModel):
     rq_id: str
     paper_id: Optional[str] = None
     website_id: Optional[str] = None
+    github_repo_id: Optional[str] = None
     created_at: str
 
 
 class RqPaperCreate(CamelModel):
     paper_id: Optional[str] = None
     website_id: Optional[str] = None
+    github_repo_id: Optional[str] = None

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi } from '../services/api'
+import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi, githubReposApi } from '../services/api'
 import NotesPanel from '../components/NotesPanel'
 import {
   DndContext,
@@ -239,7 +239,7 @@ function AddRQInput({ projectId, parentId, onCreated }) {
 
 // ─── Mini Search Picker (for RQ-level paper linking) ─────────────────────────
 
-function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsiteIds = new Set() }) {
+function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsiteIds = new Set(), existingRepoIds = new Set() }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)
@@ -271,13 +271,15 @@ function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsit
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       try {
-        const [papers, websites] = await Promise.all([
+        const [papers, websites, repos] = await Promise.all([
           papersApi.list({ search: q }),
           websitesApi.list({ search: q }),
+          githubReposApi.list({ search: q }),
         ])
         const paperResults = (Array.isArray(papers) ? papers : papers?.items || []).map(p => ({ ...p, _type: 'paper' }))
         const websiteResults = (Array.isArray(websites) ? websites : websites?.items || []).map(w => ({ ...w, _type: 'website' }))
-        setResults([...paperResults.slice(0, 5), ...websiteResults.slice(0, 5)])
+        const repoResults = (Array.isArray(repos) ? repos : repos?.items || []).map(r => ({ ...r, _type: 'github_repo' }))
+        setResults([...paperResults.slice(0, 5), ...websiteResults.slice(0, 5), ...repoResults.slice(0, 5)])
         setOpen(true)
       } catch (err) {
         console.error('Mini search failed:', err)
@@ -287,11 +289,11 @@ function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsit
 
   async function handleSelect(item) {
     if (linking) return
-    const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : existingWebsiteIds.has(item.id)
+    const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : item._type === 'github_repo' ? existingRepoIds.has(item.id) : existingWebsiteIds.has(item.id)
     if (alreadyLinked) return
     setLinking(true)
     try {
-      const data = item._type === 'paper' ? { paperId: item.id } : { websiteId: item.id }
+      const data = item._type === 'paper' ? { paperId: item.id } : item._type === 'github_repo' ? { githubRepoId: item.id } : { websiteId: item.id }
       await onLink(data)
       setQuery('')
       setResults([])
@@ -312,16 +314,18 @@ function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsit
           value={query}
           onChange={handleQueryChange}
           onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery(''); setResults([]) } }}
-          placeholder="Search papers and websites..."
+          placeholder="Search papers, websites, and repos..."
           className="text-xs text-slate-700 bg-transparent focus:outline-none w-44"
         />
       </div>
       {open && results.length > 0 && (
         <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto min-w-[260px]">
           {results.map(item => {
-            const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : existingWebsiteIds.has(item.id)
+            const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : item._type === 'github_repo' ? existingRepoIds.has(item.id) : existingWebsiteIds.has(item.id)
             const title = item.title || 'Untitled'
             const authors = Array.isArray(item.authors) ? item.authors.slice(0, 2).join(', ') : ''
+            const typeLabel = item._type === 'paper' ? 'Paper' : item._type === 'github_repo' ? 'GitHub' : 'Website'
+            const typeClass = item._type === 'paper' ? 'bg-blue-100 text-blue-700' : item._type === 'github_repo' ? 'bg-violet-100 text-violet-700' : 'bg-purple-100 text-purple-700'
             return (
               <button
                 key={`${item._type}-${item.id}`}
@@ -331,10 +335,8 @@ function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsit
                   alreadyLinked ? 'opacity-40 cursor-default' : 'hover:bg-slate-50 cursor-pointer'
                 }`}
               >
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5 ${
-                  item._type === 'paper' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                }`}>
-                  {item._type === 'paper' ? 'Paper' : 'Website'}
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5 ${typeClass}`}>
+                  {typeLabel}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-slate-800 truncate">{title}</div>
@@ -933,7 +935,7 @@ function RQSection({ projectId }) {
 
 // ─── Search Picker (for Literature tab) ───────────────────────────────────────
 
-function SearchPicker({ projectId, onLinked, existingPaperIds, existingWebsiteIds }) {
+function SearchPicker({ projectId, onLinked, existingPaperIds, existingWebsiteIds, existingRepoIds = new Set() }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)
@@ -960,13 +962,15 @@ function SearchPicker({ projectId, onLinked, existingPaperIds, existingWebsiteId
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       try {
-        const [papers, websites] = await Promise.all([
+        const [papers, websites, repos] = await Promise.all([
           papersApi.list({ search: q }),
           websitesApi.list({ search: q }),
+          githubReposApi.list({ search: q }),
         ])
         const paperResults = (Array.isArray(papers) ? papers : papers?.items || []).map(p => ({ ...p, _type: 'paper' }))
         const websiteResults = (Array.isArray(websites) ? websites : websites?.items || []).map(w => ({ ...w, _type: 'website' }))
-        setResults([...paperResults.slice(0, 8), ...websiteResults.slice(0, 8)])
+        const repoResults = (Array.isArray(repos) ? repos : repos?.items || []).map(r => ({ ...r, _type: 'github_repo' }))
+        setResults([...paperResults.slice(0, 8), ...websiteResults.slice(0, 8), ...repoResults.slice(0, 8)])
         setOpen(true)
       } catch (err) {
         console.error('Search failed:', err)
@@ -976,11 +980,11 @@ function SearchPicker({ projectId, onLinked, existingPaperIds, existingWebsiteId
 
   async function handleSelect(item) {
     if (linking) return
-    const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : existingWebsiteIds.has(item.id)
+    const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : item._type === 'github_repo' ? existingRepoIds.has(item.id) : existingWebsiteIds.has(item.id)
     if (alreadyLinked) return
     setLinking(true)
     try {
-      const data = item._type === 'paper' ? { paperId: item.id } : { websiteId: item.id }
+      const data = item._type === 'paper' ? { paperId: item.id } : item._type === 'github_repo' ? { githubRepoId: item.id } : { websiteId: item.id }
       await projectPapersApi.link(projectId, data)
       onLinked()
       setQuery('')
@@ -1001,16 +1005,18 @@ function SearchPicker({ projectId, onLinked, existingPaperIds, existingWebsiteId
           value={query}
           onChange={handleQueryChange}
           onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery(''); setResults([]) } }}
-          placeholder="Search papers and websites..."
+          placeholder="Search papers, websites, and repos..."
           className="flex-1 text-sm text-slate-700 bg-transparent focus:outline-none"
         />
       </div>
       {open && results.length > 0 && (
         <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
           {results.map(item => {
-            const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : existingWebsiteIds.has(item.id)
+            const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : item._type === 'github_repo' ? existingRepoIds.has(item.id) : existingWebsiteIds.has(item.id)
             const title = item.title || 'Untitled'
             const authors = Array.isArray(item.authors) ? item.authors.slice(0, 2).join(', ') : ''
+            const typeLabel = item._type === 'paper' ? 'Paper' : item._type === 'github_repo' ? 'GitHub' : 'Website'
+            const typeClass = item._type === 'paper' ? 'bg-blue-100 text-blue-700' : item._type === 'github_repo' ? 'bg-violet-100 text-violet-700' : 'bg-purple-100 text-purple-700'
             return (
               <button
                 key={`${item._type}-${item.id}`}
@@ -1020,10 +1026,8 @@ function SearchPicker({ projectId, onLinked, existingPaperIds, existingWebsiteId
                   alreadyLinked ? 'opacity-50 cursor-default' : 'hover:bg-slate-50 cursor-pointer'
                 }`}
               >
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5 ${
-                  item._type === 'paper' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                }`}>
-                  {item._type === 'paper' ? 'Paper' : 'Website'}
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5 ${typeClass}`}>
+                  {typeLabel}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm text-slate-800 truncate">{title}</div>
@@ -1045,23 +1049,29 @@ function LiteratureTab({ projectId }) {
   const [links, setLinks] = useState([])
   const [paperLookup, setPaperLookup] = useState({})
   const [websiteLookup, setWebsiteLookup] = useState({})
+  const [repoLookup, setRepoLookup] = useState({})
   const [loading, setLoading] = useState(true)
 
   const fetchAll = useCallback(async () => {
     try {
-      const [linkRecords, papers, websites] = await Promise.all([
+      const [linkRecords, papers, websites, repos] = await Promise.all([
         projectPapersApi.list(projectId),
         papersApi.list(),
         websitesApi.list(),
+        githubReposApi.list(),
       ])
       const pLookup = {}
       const wLookup = {}
+      const rLookup = {}
       const paperList = Array.isArray(papers) ? papers : papers?.items || []
       const websiteList = Array.isArray(websites) ? websites : websites?.items || []
+      const repoList = Array.isArray(repos) ? repos : repos?.items || []
       paperList.forEach(p => { pLookup[p.id] = p })
       websiteList.forEach(w => { wLookup[w.id] = w })
+      repoList.forEach(r => { rLookup[r.id] = r })
       setPaperLookup(pLookup)
       setWebsiteLookup(wLookup)
+      setRepoLookup(rLookup)
       setLinks(Array.isArray(linkRecords) ? linkRecords : [])
     } catch (err) {
       console.error('Failed to fetch literature:', err)
@@ -1085,6 +1095,7 @@ function LiteratureTab({ projectId }) {
 
   const existingPaperIds = useMemo(() => new Set(links.filter(l => l.paperId).map(l => l.paperId)), [links])
   const existingWebsiteIds = useMemo(() => new Set(links.filter(l => l.websiteId).map(l => l.websiteId)), [links])
+  const existingRepoIds = useMemo(() => new Set(links.filter(l => l.githubRepoId).map(l => l.githubRepoId)), [links])
 
   function formatDate(iso) {
     if (!iso) return '—'
@@ -1121,6 +1132,7 @@ function LiteratureTab({ projectId }) {
         onLinked={fetchAll}
         existingPaperIds={existingPaperIds}
         existingWebsiteIds={existingWebsiteIds}
+        existingRepoIds={existingRepoIds}
       />
 
       {links.length === 0 ? (
@@ -1142,8 +1154,11 @@ function LiteratureTab({ projectId }) {
             <tbody>
               {links.map(link => {
                 const isPaper = !!link.paperId
-                const item = isPaper ? paperLookup[link.paperId] : websiteLookup[link.websiteId]
-                const title = item?.title || (isPaper ? link.paperId : link.websiteId) || 'Unknown'
+                const isRepo = !!link.githubRepoId
+                const item = isPaper ? paperLookup[link.paperId] : isRepo ? repoLookup[link.githubRepoId] : websiteLookup[link.websiteId]
+                const title = item?.title || link.paperId || link.websiteId || link.githubRepoId || 'Unknown'
+                const typeLabel = isPaper ? 'Paper' : isRepo ? 'GitHub' : 'Website'
+                const typeClass = isPaper ? 'bg-blue-100 text-blue-700' : isRepo ? 'bg-violet-100 text-violet-700' : 'bg-purple-100 text-purple-700'
                 return (
                   <tr key={link.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3">
@@ -1155,10 +1170,8 @@ function LiteratureTab({ projectId }) {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                        isPaper ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                      }`}>
-                        {isPaper ? 'Paper' : 'Website'}
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${typeClass}`}>
+                        {typeLabel}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-400">{formatDate(link.createdAt)}</td>

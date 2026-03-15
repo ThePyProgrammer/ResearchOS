@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { githubReposApi, notesApi, papersApi } from '../services/api'
+import { githubReposApi, notesApi, papersApi, projectsApi, projectPapersApi } from '../services/api'
 import { statusConfig, NamedLinks, EditableField, EditableTextArea, TagChips, CollectionsPicker } from '../components/PaperInfoPanel'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
@@ -8,6 +8,105 @@ import { useDragResize } from '../hooks/useDragResize'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
+}
+
+// ─── Link to project button ──────────────────────────────────────────────────
+
+function LinkToProjectButton({ githubRepoId }) {
+  const [open, setOpen] = useState(false)
+  const [projects, setProjects] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [linkedIds, setLinkedIds] = useState(new Set())
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  async function handleOpen() {
+    setOpen(o => !o)
+    if (!projects.length) {
+      setLoading(true)
+      try {
+        const data = await projectsApi.list()
+        setProjects(Array.isArray(data) ? data : data?.items || [])
+      } catch (err) {
+        console.error('Failed to fetch projects:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+  }
+
+  async function handleLink(project) {
+    if (linkedIds.has(project.id)) return
+    try {
+      await projectPapersApi.link(project.id, { githubRepoId })
+      setLinkedIds(prev => new Set([...prev, project.id]))
+    } catch (err) {
+      if (err.message?.includes('409') || err.message?.toLowerCase().includes('already') || err.message?.toLowerCase().includes('duplicate') || err.message?.toLowerCase().includes('unique')) {
+        setLinkedIds(prev => new Set([...prev, project.id]))
+      } else {
+        console.error('Failed to link to project:', err)
+      }
+    }
+  }
+
+  const projectStatusConfig = {
+    active:    'bg-emerald-100 text-emerald-700',
+    paused:    'bg-amber-100 text-amber-700',
+    completed: 'bg-blue-100 text-blue-700',
+    archived:  'bg-slate-100 text-slate-600',
+  }
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        onClick={handleOpen}
+        title="Link to project"
+        className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-500 hover:text-violet-600 hover:bg-slate-100 transition-colors text-xs font-medium"
+      >
+        <Icon name="link" className="text-[15px]" />
+        Link
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[200px] overflow-y-auto min-w-[180px]">
+          {loading ? (
+            <div className="px-4 py-3 text-xs text-slate-400 text-center animate-pulse">Loading projects…</div>
+          ) : projects.length === 0 ? (
+            <div className="px-4 py-3 text-xs text-slate-400 text-center">No projects found</div>
+          ) : (
+            projects.map(project => {
+              const isLinked = linkedIds.has(project.id)
+              return (
+                <button
+                  key={project.id}
+                  onClick={() => handleLink(project)}
+                  disabled={isLinked}
+                  className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors ${
+                    isLinked ? 'opacity-50 cursor-default bg-slate-50' : 'hover:bg-slate-50 cursor-pointer'
+                  }`}
+                >
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                    projectStatusConfig[project.status] || 'bg-slate-300'
+                  }`} />
+                  <span className="truncate">{project.name}</span>
+                  {isLinked && <Icon name="check" className="text-[14px] text-emerald-500 ml-auto" />}
+                </button>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +402,7 @@ export default function GitHubRepo() {
           )}
         </div>
         <div className="flex items-center gap-1.5 ml-auto">
+          <LinkToProjectButton githubRepoId={repo.id} />
           <button
             onClick={handleCopyBibtex}
             title="Copy BibTeX citation"
