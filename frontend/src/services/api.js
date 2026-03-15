@@ -198,6 +198,19 @@ export const activityApi = {
   },
 }
 
+export const projectsApi = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    ).toString()
+    return apiFetch(`/projects${qs ? `?${qs}` : ''}`)
+  },
+  get: (id) => apiFetch(`/projects/${id}`),
+  create: (data) => apiFetch('/projects', { method: 'POST', body: data }),
+  update: (id, data) => apiFetch(`/projects/${id}`, { method: 'PATCH', body: data }),
+  remove: (id) => apiFetch(`/projects/${id}`, { method: 'DELETE' }),
+}
+
 export const notesApi = {
   list: (paperId) => apiFetch(`/papers/${paperId}/notes`),
   create: (paperId, data) => apiFetch(`/papers/${paperId}/notes`, { method: 'POST', body: data }),
@@ -215,6 +228,8 @@ export const notesApi = {
     apiFetch(`/github-repos/${repoId}/notes/generate`, { method: 'POST', body: { library_id: libraryId || null } }),
   listForLibrary: (libraryId) => apiFetch(`/libraries/${libraryId}/notes`),
   createForLibrary: (libraryId, data) => apiFetch(`/libraries/${libraryId}/notes`, { method: 'POST', body: data }),
+  listForProject: (projectId) => apiFetch(`/projects/${projectId}/notes`),
+  createForProject: (projectId, data) => apiFetch(`/projects/${projectId}/notes`, { method: 'POST', body: data }),
 }
 
 export const chatApi = {
