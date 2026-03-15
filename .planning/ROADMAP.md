@@ -13,7 +13,7 @@ ResearchOS expands from a reference manager into a full research workflow platfo
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Project Foundation** - Complete project CRUD, navigation shell, and project notes (UAT gap closure) (completed 2026-03-15)
-- [ ] **Phase 2: Research Questions & Literature** - RQ hierarchy, hypothesis tracking, and paper-to-project linking (gap closure in progress)
+- [x] **Phase 2: Research Questions & Literature** - RQ hierarchy, hypothesis tracking, and paper-to-project linking (gap closure in progress) (completed 2026-03-15)
 - [ ] **Phase 3: Experiment Tree** - Hierarchical experiment nodes, leaf fields, status badges, experiment notes
 - [ ] **Phase 4: Experiment Differentiators** - Metric comparison, config diff, and experiment duplication
 
@@ -48,7 +48,7 @@ Plans:
   4. User can link papers and websites from the library to a project and see them listed on the project detail page
   5. User can see a gap indicator on any RQ that has no linked papers, prompting them to add supporting literature
   6. User can remove paper and website links from a project
-**Plans:** 6 plans (4 complete, 2 gap closure)
+**Plans:** 6/6 plans complete
 Plans:
 - [x] 02-01-PLAN.md — Backend: migration, models, services, routers for RQs and project-paper linking + frontend API client
 - [x] 02-02-PLAN.md — Frontend: recursive RQ tree on Overview tab with inline CRUD, status, hypothesis, delete
@@ -89,6 +89,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Foundation | 4/4 | Complete   | 2026-03-15 |
-| 2. Research Questions & Literature | 4/5 | Gap closure | - |
+| 2. Research Questions & Literature | 6/6 | Complete   | 2026-03-15 |
 | 3. Experiment Tree | 0/TBD | Not started | - |
 | 4. Experiment Differentiators | 0/TBD | Not started | - |
