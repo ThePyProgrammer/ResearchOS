@@ -48,7 +48,7 @@ Plans:
   4. User can link papers and websites from the library to a project and see them listed on the project detail page
   5. User can see a gap indicator on any RQ that has no linked papers, prompting them to add supporting literature
   6. User can remove paper and website links from a project
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 Plans:
 - [ ] 02-01-PLAN.md — Backend: migration, models, services, routers for RQs and project-paper linking + frontend API client
 - [ ] 02-02-PLAN.md — Frontend: recursive RQ tree on Overview tab with inline CRUD, status, hypothesis, delete
@@ -87,6 +87,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Foundation | 4/4 | Complete   | 2026-03-15 |
-| 2. Research Questions & Literature | 2/4 | In Progress|  |
+| 2. Research Questions & Literature | 3/4 | In Progress|  |
 | 3. Experiment Tree | 0/TBD | Not started | - |
 | 4. Experiment Differentiators | 0/TBD | Not started | - |

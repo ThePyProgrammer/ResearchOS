@@ -27,3 +27,5 @@ node_modules/
 # uv.lock
 data/
 ideas/
+# GSD planning docs (local-only)
+.planning/
