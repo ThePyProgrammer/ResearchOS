@@ -86,6 +86,34 @@ function flattenExperimentTree(nodes, parentId = null) {
   return result
 }
 
+// Recursively walk all descendants (leaves only) to collect status counts and metric ranges
+function aggregateDescendants(node) {
+  const counts = { planned: 0, running: 0, completed: 0, failed: 0 }
+  const metricAccum = {}  // key -> { min, max }
+
+  function walk(n) {
+    if (!n.children || n.children.length === 0) {
+      // Leaf node — count status
+      if (n.status) counts[n.status] = (counts[n.status] || 0) + 1
+      // Accumulate numeric metrics
+      Object.entries(n.metrics || {}).forEach(([k, v]) => {
+        if (typeof v === 'number') {
+          if (!metricAccum[k]) metricAccum[k] = { min: v, max: v }
+          else {
+            metricAccum[k].min = Math.min(metricAccum[k].min, v)
+            metricAccum[k].max = Math.max(metricAccum[k].max, v)
+          }
+        }
+      })
+    } else {
+      n.children.forEach(walk)
+    }
+  }
+
+  node.children.forEach(walk)
+  return { counts, metricAccum }
+}
+
 function detectType(raw) {
   const trimmed = String(raw).trim()
   if (trimmed === 'true') return true
@@ -1318,12 +1346,15 @@ function RQSection({ projectId, libraryId }) {
 
 // ─── Experiment Node (recursive) ──────────────────────────────────────────────
 
-function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay = false }) {
+function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [] }) {
   const [expanded, setExpanded] = useState(true)
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(experiment.name)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [expNotes, setExpNotes] = useState([])
+  const [showLinkPicker, setShowLinkPicker] = useState(false)
   const menuRef = useRef(null)
 
   const {
@@ -1348,6 +1379,14 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [menuOpen])
+
+  // Fetch notes when notes panel is opened
+  useEffect(() => {
+    if (!notesOpen) return
+    notesApi.listForExperiment(experiment.id)
+      .then(data => setExpNotes(Array.isArray(data) ? data : []))
+      .catch(err => console.error('Failed to fetch experiment notes:', err))
+  }, [notesOpen, experiment.id])
 
   async function saveName() {
     const trimmed = nameDraft.trim()
@@ -1386,8 +1425,48 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
     }
   }
 
+  async function handleExpLink(data) {
+    await experimentsApi.linkPaper(experiment.id, data)
+    try {
+      const updated = await experimentsApi.listPapers(experiment.id)
+      if (onExpPapersChange) onExpPapersChange(experiment.id, updated)
+    } catch (err) {
+      console.error('Failed to refresh experiment papers:', err)
+    }
+    setShowLinkPicker(false)
+  }
+
+  async function handleExpUnlink(linkId) {
+    try {
+      await experimentsApi.unlinkPaper(experiment.id, linkId)
+      const updated = await experimentsApi.listPapers(experiment.id)
+      if (onExpPapersChange) onExpPapersChange(experiment.id, updated)
+    } catch (err) {
+      console.error('Failed to unlink from experiment:', err)
+    }
+  }
+
   const hasChildren = experiment.children && experiment.children.length > 0
   const isLeaf = !hasChildren
+
+  // Parent aggregation: computed when node has children
+  const aggregated = hasChildren ? aggregateDescendants(experiment) : null
+
+  // Experiment linked papers from map
+  const expPapers = expPapersMap?.get(experiment.id) || []
+  const existingPaperIds = useMemo(() => new Set(expPapers.filter(p => p.paperId).map(p => p.paperId)), [expPapers])
+  const existingWebsiteIds = useMemo(() => new Set(expPapers.filter(p => p.websiteId).map(p => p.websiteId)), [expPapers])
+
+  // RQ badge: find the RQ this experiment is linked to
+  const linkedRq = rqList.find(rq => rq.id === experiment.rqId)
+
+  // Status pill colors for aggregation display
+  const statusPillConfig = {
+    planned:   'bg-blue-100 text-blue-700',
+    running:   'bg-amber-100 text-amber-700',
+    completed: 'bg-emerald-100 text-emerald-700',
+    failed:    'bg-red-100 text-red-700',
+  }
 
   const sortableStyle = isDragOverlay ? {} : {
     transform: CSS.Transform.toString(transform),
@@ -1457,9 +1536,52 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
             )}
 
             <ExperimentStatusDropdown status={experiment.status} onChange={saveStatus} />
+
+            {/* RQ link badge */}
+            {linkedRq && (
+              <span
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 flex-shrink-0 truncate max-w-[120px]"
+                title={`RQ: ${linkedRq.question}`}
+              >
+                RQ: {linkedRq.question.length > 20 ? linkedRq.question.slice(0, 20) + '…' : linkedRq.question}
+              </span>
+            )}
           </div>
 
-          {/* Expanded: config, metrics, children */}
+          {/* Parent aggregation summary (only when node has children) */}
+          {hasChildren && aggregated && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              {/* Status count pills */}
+              {Object.entries(aggregated.counts)
+                .filter(([, count]) => count > 0)
+                .map(([status, count]) => (
+                  <span
+                    key={status}
+                    className={`inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${statusPillConfig[status] || 'bg-slate-100 text-slate-600'}`}
+                    title={`${count} ${status}`}
+                  >
+                    {count} {experimentStatusConfig[status]?.label || status}
+                  </span>
+                ))
+              }
+              {/* Metric range chips (top 3 alphabetically) */}
+              {Object.keys(aggregated.metricAccum).length > 0 && (
+                <span className="text-[10px] text-slate-400 flex-shrink-0">
+                  {Object.entries(aggregated.metricAccum)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .slice(0, 3)
+                    .map(([key, { min, max }]) => {
+                      const fmt = n => Number.isInteger(n) ? String(n) : n.toFixed(2)
+                      return min === max ? `${key}: ${fmt(min)}` : `${key}: ${fmt(min)}-${fmt(max)}`
+                    })
+                    .join(' | ')
+                  }
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Expanded: config, metrics, linked papers, children */}
           {expanded && (
             <div className="mt-1.5 space-y-1">
               {/* Config KV editor */}
@@ -1490,6 +1612,58 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
                 }}
               />
 
+              {/* Linked papers list */}
+              {expPapers.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {expPapers.map(link => {
+                    const label = link.paperTitle || link.websiteTitle || link.paperId || link.websiteId || 'Unknown'
+                    const isWebsite = !!link.websiteId
+                    return (
+                      <span
+                        key={link.id}
+                        className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border flex-shrink-0 ${isWebsite ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}
+                        title={label}
+                      >
+                        <span className="truncate max-w-[140px]">{label}</span>
+                        <button
+                          onClick={() => handleExpUnlink(link.id)}
+                          className={`flex-shrink-0 ml-0.5 ${isWebsite ? 'text-purple-400 hover:text-purple-700' : 'text-blue-400 hover:text-blue-700'}`}
+                        >
+                          <Icon name="close" className="text-[11px]" />
+                        </button>
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Link paper picker */}
+              <div>
+                {showLinkPicker ? (
+                  <div className="flex items-center gap-2">
+                    <MiniSearchPicker
+                      onLink={handleExpLink}
+                      existingPaperIds={existingPaperIds}
+                      existingWebsiteIds={existingWebsiteIds}
+                    />
+                    <button
+                      onClick={() => setShowLinkPicker(false)}
+                      className="text-xs text-slate-400 hover:text-slate-600 flex-shrink-0"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowLinkPicker(true)}
+                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
+                  >
+                    <Icon name="link" className="text-[13px]" />
+                    Link paper
+                  </button>
+                )}
+              </div>
+
               {/* Children */}
               {hasChildren && (
                 <div className="space-y-0 mt-1">
@@ -1500,40 +1674,66 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
                       depth={0}
                       onRefresh={onRefresh}
                       projectId={projectId}
+                      expPapersMap={expPapersMap}
+                      onExpPapersChange={onExpPapersChange}
+                      rqList={rqList}
                     />
                   ))}
                 </div>
               )}
             </div>
           )}
-        </div>
 
-        {/* Three-dot menu */}
-        <div className="relative flex-shrink-0" ref={menuRef}>
-          <button
-            onClick={e => { e.stopPropagation(); setMenuOpen(m => !m) }}
-            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
-          >
-            <Icon name="more_vert" className="text-[16px]" />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-6 z-10 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-              <button
-                onClick={() => { setMenuOpen(false); setShowCreateModal(true) }}
-                className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
-              >
-                <Icon name="add" className="text-[14px] text-slate-400" />
-                Add sub-experiment
-              </button>
-              <div className="border-t border-slate-100 my-1" />
-              <button
-                onClick={handleDelete}
-                className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-              >
-                Delete
-              </button>
+          {/* Experiment notes panel (expandable inline) */}
+          {notesOpen && (
+            <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden" style={{ maxHeight: '24rem', overflowY: 'auto' }}>
+              <NotesPanel
+                notes={expNotes}
+                setNotes={setExpNotes}
+                createFn={(data) => notesApi.createForExperiment(experiment.id, data)}
+              />
             </div>
           )}
+        </div>
+
+        {/* Action buttons: notes toggle + three-dot menu */}
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          {/* Notes toggle button */}
+          <button
+            onClick={e => { e.stopPropagation(); setNotesOpen(o => !o) }}
+            className={`opacity-0 group-hover:opacity-100 transition-colors p-0.5 rounded ${notesOpen ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+            title="Toggle notes"
+          >
+            <Icon name="edit_note" className="text-[16px]" />
+          </button>
+
+          {/* Three-dot menu */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={e => { e.stopPropagation(); setMenuOpen(m => !m) }}
+              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
+            >
+              <Icon name="more_vert" className="text-[16px]" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-6 z-10 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+                <button
+                  onClick={() => { setMenuOpen(false); setShowCreateModal(true) }}
+                  className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
+                >
+                  <Icon name="add" className="text-[14px] text-slate-400" />
+                  Add sub-experiment
+                </button>
+                <div className="border-t border-slate-100 my-1" />
+                <button
+                  onClick={handleDelete}
+                  className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1558,6 +1758,8 @@ function ExperimentSection({ projectId }) {
   const [error, setError] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [activeId, setActiveId] = useState(null)
+  const [expPapersMap, setExpPapersMap] = useState(new Map())
+  const [rqList, setRqList] = useState([])
 
   const expTree = useMemo(() => buildExperimentTree(flatExperiments), [flatExperiments])
   const flatTree = useMemo(() => flattenExperimentTree(expTree), [expTree])
@@ -1566,11 +1768,29 @@ function ExperimentSection({ projectId }) {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
+  const fetchExpPapers = useCallback(async (exps) => {
+    if (!exps.length) { setExpPapersMap(new Map()); return }
+    try {
+      const results = await Promise.all(exps.map(e => experimentsApi.listPapers(e.id)))
+      const map = new Map()
+      exps.forEach((e, i) => map.set(e.id, Array.isArray(results[i]) ? results[i] : []))
+      setExpPapersMap(map)
+    } catch (err) {
+      console.error('Failed to fetch experiment papers:', err)
+    }
+  }, [])
+
   const fetchExperiments = useCallback(async () => {
     try {
-      const data = await experimentsApi.list(projectId)
-      setFlatExperiments(Array.isArray(data) ? data : [])
+      const [data, rqs] = await Promise.all([
+        experimentsApi.list(projectId),
+        researchQuestionsApi.list(projectId).catch(() => []),
+      ])
+      const exps = Array.isArray(data) ? data : []
+      setFlatExperiments(exps)
+      setRqList(Array.isArray(rqs) ? rqs : [])
       setError(null)
+      await fetchExpPapers(exps)
     } catch (err) {
       console.error('Failed to fetch experiments:', err)
       setError('Failed to load experiments')
@@ -1578,7 +1798,15 @@ function ExperimentSection({ projectId }) {
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [projectId, fetchExpPapers])
+
+  const handleExpPapersChange = useCallback((expId, papers) => {
+    setExpPapersMap(prev => {
+      const next = new Map(prev)
+      next.set(expId, papers)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     fetchExperiments()
@@ -1686,6 +1914,9 @@ function ExperimentSection({ projectId }) {
                   depth={0}
                   onRefresh={fetchExperiments}
                   projectId={projectId}
+                  expPapersMap={expPapersMap}
+                  onExpPapersChange={handleExpPapersChange}
+                  rqList={rqList}
                 />
               ))}
             </div>
