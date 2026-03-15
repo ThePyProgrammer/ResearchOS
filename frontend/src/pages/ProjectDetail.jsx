@@ -239,7 +239,7 @@ function AddRQInput({ projectId, parentId, onCreated }) {
 
 // ─── Mini Search Picker (for RQ-level paper linking) ─────────────────────────
 
-function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsiteIds = new Set(), existingRepoIds = new Set() }) {
+function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsiteIds = new Set(), existingRepoIds = new Set(), libraryId }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)
@@ -271,10 +271,11 @@ function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsit
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       try {
+        const libFilter = libraryId ? { search: q, library_id: libraryId } : { search: q }
         const [papers, websites, repos] = await Promise.all([
-          papersApi.list({ search: q }),
-          websitesApi.list({ search: q }),
-          githubReposApi.list({ search: q }),
+          papersApi.list(libFilter),
+          websitesApi.list(libFilter),
+          githubReposApi.list(libFilter),
         ])
         const paperResults = (Array.isArray(papers) ? papers : papers?.items || []).map(p => ({ ...p, _type: 'paper' }))
         const websiteResults = (Array.isArray(websites) ? websites : websites?.items || []).map(w => ({ ...w, _type: 'website' }))
@@ -354,7 +355,7 @@ function MiniSearchPicker({ onLink, existingPaperIds = new Set(), existingWebsit
 
 // ─── RQ Node (recursive) ──────────────────────────────────────────────────────
 
-function RQNode({ rq, depth, projectId, onRefresh, rqPapersMap, onRqPapersChange, isDragOverlay = false }) {
+function RQNode({ rq, depth, projectId, libraryId, onRefresh, rqPapersMap, onRqPapersChange, isDragOverlay = false }) {
   const [expanded, setExpanded] = useState(true)
   const [editingQuestion, setEditingQuestion] = useState(false)
   const [questionDraft, setQuestionDraft] = useState(rq.question)
@@ -613,6 +614,7 @@ function RQNode({ rq, depth, projectId, onRefresh, rqPapersMap, onRqPapersChange
                       onLink={handleRqLink}
                       existingPaperIds={existingPaperIds}
                       existingWebsiteIds={existingWebsiteIds}
+                      libraryId={libraryId}
                     />
                     <button
                       onClick={() => setShowLinkPicker(false)}
@@ -641,6 +643,7 @@ function RQNode({ rq, depth, projectId, onRefresh, rqPapersMap, onRqPapersChange
                       rq={child}
                       depth={0}
                       projectId={projectId}
+                      libraryId={libraryId}
                       onRefresh={onRefresh}
                       rqPapersMap={rqPapersMap}
                       onRqPapersChange={onRqPapersChange}
@@ -700,7 +703,7 @@ function flattenRqTree(nodes, parentId = null) {
 
 // ─── RQ Section ───────────────────────────────────────────────────────────────
 
-function RQSection({ projectId }) {
+function RQSection({ projectId, libraryId }) {
   const [flatRqs, setFlatRqs] = useState([])
   const [loading, setLoading] = useState(true)
   const [rqPapersMap, setRqPapersMap] = useState(new Map())
@@ -900,6 +903,7 @@ function RQSection({ projectId }) {
                     rq={rq}
                     depth={0}
                     projectId={projectId}
+                    libraryId={libraryId}
                     onRefresh={fetchRqs}
                     rqPapersMap={rqPapersMap}
                     onRqPapersChange={handleRqPapersChange}
@@ -935,7 +939,7 @@ function RQSection({ projectId }) {
 
 // ─── Search Picker (for Literature tab) ───────────────────────────────────────
 
-function SearchPicker({ projectId, onLinked, existingPaperIds, existingWebsiteIds, existingRepoIds = new Set() }) {
+function SearchPicker({ projectId, libraryId, onLinked, existingPaperIds, existingWebsiteIds, existingRepoIds = new Set() }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)
@@ -962,10 +966,11 @@ function SearchPicker({ projectId, onLinked, existingPaperIds, existingWebsiteId
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       try {
+        const libFilter = libraryId ? { search: q, library_id: libraryId } : { search: q }
         const [papers, websites, repos] = await Promise.all([
-          papersApi.list({ search: q }),
-          websitesApi.list({ search: q }),
-          githubReposApi.list({ search: q }),
+          papersApi.list(libFilter),
+          websitesApi.list(libFilter),
+          githubReposApi.list(libFilter),
         ])
         const paperResults = (Array.isArray(papers) ? papers : papers?.items || []).map(p => ({ ...p, _type: 'paper' }))
         const websiteResults = (Array.isArray(websites) ? websites : websites?.items || []).map(w => ({ ...w, _type: 'website' }))
@@ -1045,7 +1050,7 @@ function SearchPicker({ projectId, onLinked, existingPaperIds, existingWebsiteId
 
 // ─── Literature Tab ────────────────────────────────────────────────────────────
 
-function LiteratureTab({ projectId }) {
+function LiteratureTab({ projectId, libraryId }) {
   const [links, setLinks] = useState([])
   const [paperLookup, setPaperLookup] = useState({})
   const [websiteLookup, setWebsiteLookup] = useState({})
@@ -1054,11 +1059,12 @@ function LiteratureTab({ projectId }) {
 
   const fetchAll = useCallback(async () => {
     try {
+      const libFilter = libraryId ? { library_id: libraryId } : {}
       const [linkRecords, papers, websites, repos] = await Promise.all([
         projectPapersApi.list(projectId),
-        papersApi.list(),
-        websitesApi.list(),
-        githubReposApi.list(),
+        papersApi.list(libFilter),
+        websitesApi.list(libFilter),
+        githubReposApi.list(libFilter),
       ])
       const pLookup = {}
       const wLookup = {}
@@ -1078,7 +1084,7 @@ function LiteratureTab({ projectId }) {
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [projectId, libraryId])
 
   useEffect(() => {
     fetchAll()
@@ -1129,6 +1135,7 @@ function LiteratureTab({ projectId }) {
 
       <SearchPicker
         projectId={projectId}
+        libraryId={libraryId}
         onLinked={fetchAll}
         existingPaperIds={existingPaperIds}
         existingWebsiteIds={existingWebsiteIds}
@@ -1280,7 +1287,7 @@ function OverviewTab({ project, onUpdate }) {
       </div>
 
       {/* Research Questions */}
-      <RQSection projectId={project.id} />
+      <RQSection projectId={project.id} libraryId={project.libraryId} />
 
       {/* Phase 3: Experiments placeholder */}
       <div>
@@ -1411,7 +1418,7 @@ export default function ProjectDetail() {
             />
           )}
           {activeTab === 'literature' && (
-            <LiteratureTab projectId={project.id} />
+            <LiteratureTab projectId={project.id} libraryId={project.libraryId} />
           )}
           {activeTab === 'notes' && (
             <NotesPanel
