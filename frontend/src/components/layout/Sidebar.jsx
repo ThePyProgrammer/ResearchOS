@@ -5,6 +5,7 @@ import { proposalsApi, papersApi, websitesApi, projectsApi } from '../../service
 import { useLibrary } from '../../context/LibraryContext'
 import WindowModal from '../WindowModal'
 import BibtexExportModal from '../BibtexExportModal'
+import CreateProjectModal from '../CreateProjectModal'
 
 const user = { name: 'Dr. Researcher', org: 'Lab Alpha', initials: 'DR' }
 
@@ -717,8 +718,8 @@ function ProjectsTree({ collapsed }) {
   const { activeLibraryId } = useLibrary()
   const location = useLocation()
   const navigate = useNavigate()
-  const [expanded, setExpanded] = useState(true)
   const [projects, setProjects] = useState([])
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const fetchProjects = useCallback(() => {
     if (!activeLibraryId) return
@@ -761,19 +762,10 @@ function ProjectsTree({ collapsed }) {
     <div className="pt-2">
       {/* Header */}
       <div className="flex items-center px-3 pb-1">
+        <p className="flex-1 text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Projects</p>
         <button
-          onClick={() => setExpanded(e => !e)}
-          className="flex-1 flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-widest hover:text-slate-300 transition-colors"
-        >
-          <Icon
-            name={expanded ? 'expand_more' : 'chevron_right'}
-            className="text-[14px]"
-          />
-          Projects
-        </button>
-        <button
-          onClick={() => navigate('/projects')}
-          title="Browse all projects"
+          onClick={() => setShowCreateModal(true)}
+          title="New project"
           className="p-0.5 rounded text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
         >
           <Icon name="add" className="text-[18px]" />
@@ -781,8 +773,21 @@ function ProjectsTree({ collapsed }) {
       </div>
 
       {/* Project links */}
-      {expanded && (
-        <div className="space-y-0.5">
+      <div className="space-y-0.5">
+          <NavLink
+            to="/projects"
+            end
+            className={({ isActive }) =>
+              `flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+                isActive
+                  ? 'bg-white/10 text-white font-medium'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+              }`
+            }
+          >
+            <Icon name="home" className="text-[16px] flex-shrink-0" />
+            <span className="flex-1 text-[13px]">Home</span>
+          </NavLink>
           {projects.map(project => {
             const isActive = location.pathname === `/projects/${project.id}`
             const dotClass = projectStatusDotClass[project.status] || projectStatusDotClass.active
@@ -797,7 +802,9 @@ function ProjectsTree({ collapsed }) {
                     : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                 }`}
               >
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass}`} />
+                <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                  <span className={`w-2 h-2 rounded-full ${dotClass}`} />
+                </span>
                 <span className="flex-1 truncate text-[13px]">{project.name}</span>
               </NavLink>
             )
@@ -806,6 +813,16 @@ function ProjectsTree({ collapsed }) {
             <p className="px-3 py-1 text-[12px] text-slate-600 italic">No projects yet</p>
           )}
         </div>
+      {showCreateModal && (
+        <CreateProjectModal
+          libraryId={activeLibraryId}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={project => {
+            setShowCreateModal(false)
+            fetchProjects()
+            navigate(`/projects/${project.id}`)
+          }}
+        />
       )}
     </div>
   )
