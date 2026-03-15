@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 02-06-PLAN.md
-last_updated: "2026-03-15T12:09:00Z"
-last_activity: "2026-03-15 — Completed plan 02-06 (gap-closure: verified root-onto-root RQ demote fully implemented, RQ-06 confirmed complete)"
+status: in_progress
+stopped_at: "Completed Phase 03-01 (experiment infrastructure: migration, models, service, router, frontend API)"
+last_updated: "2026-03-15T14:34:25Z"
+last_activity: "2026-03-15 — Completed plan 03-01 (experiment backend infrastructure + frontend API client)"
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 10
-  completed_plans: 10
-  percent: 70
+  completed_plans: 11
+  percent: 66
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2025-07-17)
 
 ## Current Position
 
-Phase: 2 of 4 (Research Questions & Literature)
-Plan: 6 of 6 in current phase — Phase Complete
-Status: Phase 02 complete — all 6 plans delivered including gap-closure plan 02-06
-Last activity: 2026-03-15 — Completed plan 02-06 (gap-closure: verified root-onto-root RQ demote fully implemented, RQ-06 confirmed complete)
+Phase: 3 of 4 (Experiment Tree)
+Plan: 1 of ? in current phase
+Status: Phase 03 in progress — plan 03-01 delivered (experiment backend infrastructure)
+Last activity: 2026-03-15 — Completed plan 03-01 (experiments migration, models, service, router, frontend API client)
 
-Progress: [██████░░░░] 63%
+Progress: [██████░░░░] 66%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [██████░░░░] 63%
 | Phase 02-research-questions-literature P04 | 30 | 2 tasks | 5 files |
 | Phase 02-research-questions-literature P05 | 2 min | 1 tasks | 1 files |
 | Phase 02-research-questions-literature P06 | 2 min | 1 tasks | 0 files |
+| Phase 03-experiment-tree P01 | 8 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,9 @@ Recent decisions affecting current work:
 - [Phase 02-research-questions-literature]: project_id from URL path param is authoritative for RQ creation — body value overridden server-side to prevent cross-project writes
   - [Phase 02-research-questions-literature]: Middle 50% zone heuristic chosen for root-onto-root DnD nesting (center = demote, edges = reorder)
   - [Phase 02-research-questions-literature]: Gap-closure plan 02-06 — implementation verified pre-existing from 02-05; all done criteria confirmed in code
+- [Phase 03-experiment-tree]: experiment_id added to note_service._SOURCE_FIELDS so note reassignment to experiment nulls other source FKs (consistent with existing pattern)
+- [Phase 03-experiment-tree]: notesApi experiment extensions added inline to existing notesApi object to avoid duplicate export error
+- [Phase 03-experiment-tree]: experiment_papers join table uses CHECK constraint enforcing exactly-one-of paper_id/website_id/github_repo_id (same pattern as rq_papers)
 
 ### Pending Todos
 
@@ -104,5 +108,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T12:09:00Z
-Stopped at: Completed 02-06-PLAN.md
+Last session: 2026-03-15T14:34:25Z
+Stopped at: Completed Phase 03-01 (experiment infrastructure: migration, models, service, router, frontend API)
