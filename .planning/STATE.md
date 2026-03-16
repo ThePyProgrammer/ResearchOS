@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed Phase 03-03 plan (human-verify approved; all 3 experiment-tree plans complete)
-last_updated: "2026-03-15T15:12:26.505Z"
-last_activity: 2026-03-15 — Completed plan 03-03 Task 1 (parent aggregation summaries, experiment notes, literature linking)
+status: completed
+stopped_at: Completed 04-00-PLAN.md
+last_updated: "2026-03-16T11:59:04.289Z"
+last_activity: 2026-03-16 — Completed plan 04-00 (Wave 0 test scaffolds for EXP-07, EXP-08, EXP-09)
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
+  total_plans: 16
+  completed_plans: 14
+  percent: 88
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2025-07-17)
 
 ## Current Position
 
-Phase: 3 of 4 (Experiment Tree) — COMPLETE
-Plan: All 3 plans in Phase 03 complete
-Status: Phase 03 fully complete — all plans and human verification passed; ready for Phase 04
-Last activity: 2026-03-15 — Completed plan 03-03 (human-verify checkpoint approved; Phase 3 complete)
+Phase: 4 of 4 (Experiment Differentiators) — IN PROGRESS
+Plan: 1 of 3 plans in Phase 04 complete (04-00 done)
+Status: Phase 04 started — Wave 0 test scaffolds complete; Plans 04-01 and 04-02 ready to execute
+Last activity: 2026-03-16 — Completed plan 04-00 (Wave 0 test scaffolds for EXP-07, EXP-08, EXP-09)
 
-Progress: [██████████] 100%
+Progress: [██████████░░] 88%
 
 ## Performance Metrics
 
@@ -104,6 +104,8 @@ Recent decisions affecting current work:
 - [Phase 03-experiment-tree]: aggregateDescendants walks only leaf nodes (no children) to avoid double-counting at intermediate levels
 - [Phase 03-experiment-tree]: expPapersMap fetched in batch in ExperimentSection (same pattern as rqPapersMap) — not per-node on render
 - [Phase 03-experiment-tree]: Experiment notes panel expands inline with max-h-96 / overflow-auto to keep tree navigable; edit_note button color signals open state
+- [Phase 04-experiment-differentiators]: [Phase 04-experiment-differentiators]: xfail marks used for Wave 0 backend stubs so xpass is visible once Plan 01 ships the duplicate endpoint
+- [Phase 04-experiment-differentiators]: [Phase 04-experiment-differentiators]: Frontend test helpers inlined in test file to define API contract before Plan 02 extracts them into CompareModal
 
 ### Pending Todos
 
@@ -116,5 +118,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T15:12:26.500Z
-Stopped at: Completed Phase 03-03 plan (human-verify approved; all 3 experiment-tree plans complete)
+Last session: 2026-03-16T11:59:04.286Z
+Stopped at: Completed 04-00-PLAN.md
