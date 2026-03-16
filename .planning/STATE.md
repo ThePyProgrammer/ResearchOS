@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 06-01-PLAN.md (CSV import wizard + backend bulk endpoint)
-last_updated: "2026-03-17T00:00:00.000Z"
-last_activity: 2026-03-17 — Completed plan 06-01 (CSVImportModal 4-step wizard, bulk_create_experiment_tree backend, POST import-csv endpoint)
+status: executing
+stopped_at: "Checkpoint: 06-02 Task 2 human-verify pending"
+last_updated: "2026-03-16T16:08:08.493Z"
+last_activity: 2026-03-17 — Completed plan 06-01 (CSVImportModal 4-step wizard, bulk_create_experiment_tree, POST /api/projects/{id}/experiments/import-csv)
 progress:
   total_phases: 7
-  completed_phases: 5
-  total_plans: 20
-  completed_plans: 19
-  percent: 95
+  completed_phases: 6
+  total_plans: 24
+  completed_plans: 20
+  percent: 100
 ---
 
 # Project State
@@ -126,6 +126,8 @@ Recent decisions affecting current work:
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Single-phase import (no parse-then-confirm roundtrip) — frontend builds tree client-side before POSTing final BFS payload
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: BFS flatten at Step 4 call time (not Step 3) so user renames/excludes are applied as the final transformation
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Preview tree fully resets on Back from Step 3 — avoids stale collision/rename/exclude state (research pitfall 2)
+- [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Group tri-state derived entirely from excludedIds set — no separate group state; groupCheckState() computes all/mixed/none on render
+- [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Tri-state checkbox via ref callback sets el.indeterminate directly — React does not support indeterminate as a controlled prop
 
 ### Roadmap Evolution
 
@@ -143,5 +145,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T00:00:00.000Z
-Stopped at: Completed 06-01-PLAN.md (CSV import wizard + backend bulk endpoint)
+Last session: 2026-03-16T16:07:57.132Z
+Stopped at: Checkpoint: 06-02 Task 2 human-verify pending

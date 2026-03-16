@@ -114,7 +114,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Experiment Tree | 3/3 | Complete   | 2026-03-15 |
 | 4. Experiment Differentiators | 3/3 | Complete   | 2026-03-16 |
 | 5. Integration Polish | 1/1 | Complete   | 2026-03-16 |
-| 6. CSV Loading Framework | 1/3 | In Progress | — |
+| 6. CSV Loading Framework | 3/3 | Complete   | 2026-03-16 |
 | 7. Experiment Table View | 0/4 | Planning   | — |
 
 ### Phase 6: CSV Loading Framework for Experiments
@@ -129,7 +129,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
   5. User can preview the import tree, rename groups/experiments, and exclude rows before confirming
   6. Collision detection warns on name matches within the same parent scope with per-match resolution (Create/Update/Skip)
   7. Backend bulk-creates experiments in parent-before-child order with correct hierarchy
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 06-00-PLAN.md — TDD: test scaffolds + pure utility functions (buildImportTree, autoGenerateName, detectCollision, bfsFlatten, autoDetectRoles, mergeMetrics)
