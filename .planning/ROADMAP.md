@@ -16,6 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Research Questions & Literature** - RQ hierarchy, hypothesis tracking, and paper-to-project linking (gap closure in progress) (completed 2026-03-15)
 - [x] **Phase 3: Experiment Tree** - Hierarchical experiment nodes, leaf fields, status badges, experiment notes (completed 2026-03-15)
 - [x] **Phase 4: Experiment Differentiators** - Metric comparison, config diff, and experiment duplication (completed 2026-03-16)
+- [ ] **Phase 5: Integration Polish** - Fix experiment library scoping and add experiment counts to project cards (gap closure)
 
 ## Phase Details
 
@@ -89,10 +90,20 @@ Plans:
 - [ ] 04-01-PLAN.md — Backend duplicate endpoint + frontend duplicate UX in ExperimentNode context menu
 - [ ] 04-02-PLAN.md — Checkbox selection, floating action bar, CompareModal with Metrics and Config tabs + human verification
 
+### Phase 5: Integration Polish
+**Goal**: Fix integration gaps found during milestone audit — library-scoped experiment search and experiment counts on project cards
+**Depends on**: Phase 4
+**Requirements**: LIT-02, PROJ-02
+**Gap Closure**: Closes INT-01 and INT-02 from v1.0-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. Experiment literature search (MiniSearchPicker in ExperimentNode) returns only papers/websites from the project's library
+  2. Project cards on the projects list page display the number of experiments in each project
+**Plans:** 0/0 plans complete
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -100,3 +111,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 2. Research Questions & Literature | 6/6 | Complete   | 2026-03-15 |
 | 3. Experiment Tree | 3/3 | Complete   | 2026-03-15 |
 | 4. Experiment Differentiators | 3/3 | Complete   | 2026-03-16 |
+| 5. Integration Polish | 0/0 | Not started | - |
