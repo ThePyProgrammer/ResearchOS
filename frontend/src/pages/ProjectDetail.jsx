@@ -578,10 +578,12 @@ function KVEditor({ data, label, onSave }) {
 
 // ─── Experiment Create Modal ──────────────────────────────────────────────────
 
-function ExperimentCreateModal({ projectId, parentId, onCreated, onClose }) {
-  const [name, setName] = useState('')
+function ExperimentCreateModal({ projectId, parentId, onCreated, onClose, initialName = '', initialConfig = {} }) {
+  const [name, setName] = useState(initialName)
   const [status, setStatus] = useState('planned')
-  const [configRows, setConfigRows] = useState([])
+  const [configRows, setConfigRows] = useState(
+    Object.entries(initialConfig).map(([k, v]) => ({ key: k, value: String(v) }))
+  )
   const [submitting, setSubmitting] = useState(false)
   const nameRef = useRef(null)
 
@@ -630,7 +632,7 @@ function ExperimentCreateModal({ projectId, parentId, onCreated, onClose }) {
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-800">
-            {parentId ? 'Add Sub-Experiment' : 'New Experiment'}
+            {initialName ? 'Duplicate Experiment' : parentId ? 'Add Sub-Experiment' : 'New Experiment'}
           </h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
             <Icon name="close" className="text-[20px]" />
@@ -1346,12 +1348,14 @@ function RQSection({ projectId, libraryId }) {
 
 // ─── Experiment Node (recursive) ──────────────────────────────────────────────
 
-function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [] }) {
+function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [], parentId = null }) {
   const [expanded, setExpanded] = useState(true)
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(experiment.name)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [expNotes, setExpNotes] = useState([])
   const [showLinkPicker, setShowLinkPicker] = useState(false)
@@ -1422,6 +1426,26 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
       onRefresh()
     } catch (err) {
       console.error('Failed to delete experiment:', err)
+    }
+  }
+
+  function handleDuplicate() {
+    // Leaf: open pre-filled create modal so user can tweak before saving
+    setMenuOpen(false)
+    setShowDuplicateModal(true)
+  }
+
+  async function handleDuplicateDeep() {
+    // Parent with children: deep-clone entire subtree directly via API
+    setMenuOpen(false)
+    setDuplicating(true)
+    try {
+      await experimentsApi.duplicate(experiment.id, { deep: true })
+      onRefresh()
+    } catch (err) {
+      console.error('Failed to duplicate experiment with children:', err)
+    } finally {
+      setDuplicating(false)
     }
   }
 
@@ -1677,6 +1701,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
                       expPapersMap={expPapersMap}
                       onExpPapersChange={onExpPapersChange}
                       rqList={rqList}
+                      parentId={experiment.id}
                     />
                   ))}
                 </div>
@@ -1716,7 +1741,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
               <Icon name="more_vert" className="text-[16px]" />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-6 z-10 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+              <div className="absolute right-0 top-6 z-10 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[180px]">
                 <button
                   onClick={() => { setMenuOpen(false); setShowCreateModal(true) }}
                   className="w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
@@ -1724,6 +1749,24 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
                   <Icon name="add" className="text-[14px] text-slate-400" />
                   Add sub-experiment
                 </button>
+                <div className="border-t border-slate-100 my-1" />
+                <button
+                  onClick={() => { setMenuOpen(false); handleDuplicate() }}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 rounded"
+                >
+                  <span className="material-symbols-outlined text-[14px] text-slate-400">content_copy</span>
+                  Duplicate
+                </button>
+                {hasChildren && (
+                  <button
+                    onClick={handleDuplicateDeep}
+                    disabled={duplicating}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 rounded disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[14px] text-slate-400">account_tree</span>
+                    {duplicating ? 'Duplicating...' : 'Duplicate with children'}
+                  </button>
+                )}
                 <div className="border-t border-slate-100 my-1" />
                 <button
                   onClick={handleDelete}
@@ -1744,6 +1787,18 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
           parentId={experiment.id}
           onCreated={onRefresh}
           onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {/* Duplicate modal (pre-filled, creates a sibling) */}
+      {showDuplicateModal && (
+        <ExperimentCreateModal
+          projectId={projectId}
+          parentId={parentId}
+          initialName={experiment.name + ' (copy)'}
+          initialConfig={experiment.config || {}}
+          onCreated={onRefresh}
+          onClose={() => setShowDuplicateModal(false)}
         />
       )}
     </div>
@@ -1917,6 +1972,7 @@ function ExperimentSection({ projectId }) {
                   expPapersMap={expPapersMap}
                   onExpPapersChange={handleExpPapersChange}
                   rqList={rqList}
+                  parentId={null}
                 />
               ))}
             </div>
