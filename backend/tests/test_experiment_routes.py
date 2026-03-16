@@ -1,8 +1,6 @@
 """Route-level tests for POST /api/experiments/:id/duplicate endpoint.
 
 Uses monkeypatching to avoid DB calls — tests only the HTTP layer.
-All tests are marked xfail because Plan 04-01 has not yet implemented the endpoint.
-Once 04-01 ships, these tests will pass (xpass) and the xfail marks should be removed.
 """
 from __future__ import annotations
 
@@ -32,7 +30,6 @@ _EXPERIMENT_PAYLOAD = {
 # POST /api/experiments/:id/duplicate — shallow clone (EXP-09)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(reason="Plan 04-01 not yet implemented")
 def test_duplicate_experiment_shallow(client, mocker):
     """Shallow duplicate copies name + config; metrics empty, status planned."""
     mocker.patch(
@@ -47,7 +44,6 @@ def test_duplicate_experiment_shallow(client, mocker):
     assert body["status"] == "planned"
 
 
-@pytest.mark.xfail(reason="Plan 04-01 not yet implemented")
 def test_duplicate_experiment_deep(client, mocker):
     """Deep clone flag is forwarded to the service layer."""
     mock_dup = mocker.patch(
@@ -63,7 +59,6 @@ def test_duplicate_experiment_deep(client, mocker):
     assert True in call_kwargs.args or call_kwargs.kwargs.get("deep") is True
 
 
-@pytest.mark.xfail(reason="Plan 04-01 not yet implemented")
 def test_duplicate_experiment_not_found(client, mocker):
     """Returns 404 when the source experiment does not exist."""
     mocker.patch(

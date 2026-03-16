@@ -92,6 +92,63 @@ def reorder_experiments(exp_ids: list[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Experiment duplication
+# ---------------------------------------------------------------------------
+
+def _deep_clone_children(
+    source_parent_id: str,
+    new_parent_id: str,
+    project_id: str,
+    all_exps: list[Experiment],
+) -> None:
+    """Recursively clone all children of source_parent_id under new_parent_id."""
+    children = sorted(
+        [e for e in all_exps if e.parent_id == source_parent_id],
+        key=lambda e: e.position,
+    )
+    for child in children:
+        cloned = create_experiment(ExperimentCreate(
+            project_id=project_id,
+            parent_id=new_parent_id,
+            rq_id=child.rq_id,
+            name=child.name,
+            status="planned",
+            config=child.config,
+            metrics={},
+        ))
+        _deep_clone_children(child.id, cloned.id, project_id, all_exps)
+
+
+def duplicate_experiment(exp_id: str, deep: bool = False) -> Optional[Experiment]:
+    """Clone an experiment (shallow or deep).
+
+    Shallow: copies name + " (copy)", same config, empty metrics, status "planned".
+    Deep: additionally recursively clones all child experiments (without the " (copy)" suffix).
+    Returns the new root experiment, or None if the source does not exist.
+    """
+    source = get_experiment(exp_id)
+    if source is None:
+        return None
+
+    new_exp = create_experiment(ExperimentCreate(
+        project_id=source.project_id,
+        parent_id=source.parent_id,
+        rq_id=source.rq_id,
+        name=source.name + " (copy)",
+        status="planned",
+        config=source.config,
+        metrics={},
+    ))
+    logger.info("Duplicated experiment %s → %s (deep=%s)", exp_id, new_exp.id, deep)
+
+    if deep:
+        all_exps = list_experiments(source.project_id)
+        _deep_clone_children(source.id, new_exp.id, source.project_id, all_exps)
+
+    return new_exp
+
+
+# ---------------------------------------------------------------------------
 # Experiment-paper links
 # ---------------------------------------------------------------------------
 

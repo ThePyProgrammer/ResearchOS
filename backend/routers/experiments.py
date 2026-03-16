@@ -77,6 +77,15 @@ async def reorder_experiments(exp_id: str, body: ReorderRequest):
     experiment_service.reorder_experiments(body.ids)
 
 
+@router.post("/api/experiments/{exp_id}/duplicate", status_code=201)
+async def duplicate_experiment_route(exp_id: str, deep: bool = False):
+    """Duplicate an experiment (shallow or deep via ?deep=true)."""
+    result = experiment_service.duplicate_experiment(exp_id, deep=deep)
+    if result is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    return JSONResponse(result.model_dump(by_alias=True), status_code=201)
+
+
 # ---------------------------------------------------------------------------
 # Experiment-paper link endpoints
 # ---------------------------------------------------------------------------

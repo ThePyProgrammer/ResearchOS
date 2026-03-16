@@ -349,6 +349,8 @@ export const experimentsApi = {
   update: (expId, data) => apiFetch(`/experiments/${expId}`, { method: 'PATCH', body: data }),
   remove: (expId) => apiFetch(`/experiments/${expId}`, { method: 'DELETE' }),
   reorder: (expId, ids) => apiFetch(`/experiments/${expId}/reorder`, { method: 'POST', body: { ids } }),
+  duplicate: (expId, { deep = false } = {}) =>
+    apiFetch(`/experiments/${expId}/duplicate?deep=${deep}`, { method: 'POST' }),
   listPapers: (expId) => apiFetch(`/experiments/${expId}/papers`),
   linkPaper: (expId, data) => apiFetch(`/experiments/${expId}/papers`, { method: 'POST', body: data }),
   unlinkPaper: (expId, linkId) => apiFetch(`/experiments/${expId}/papers/${linkId}`, { method: 'DELETE' }),
