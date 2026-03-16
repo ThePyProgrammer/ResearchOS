@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Project Foundation** - Complete project CRUD, navigation shell, and project notes (UAT gap closure) (completed 2026-03-15)
 - [x] **Phase 2: Research Questions & Literature** - RQ hierarchy, hypothesis tracking, and paper-to-project linking (gap closure in progress) (completed 2026-03-15)
-- [ ] **Phase 3: Experiment Tree** - Hierarchical experiment nodes, leaf fields, status badges, experiment notes
+- [x] **Phase 3: Experiment Tree** - Hierarchical experiment nodes, leaf fields, status badges, experiment notes (completed 2026-03-15)
 - [ ] **Phase 4: Experiment Differentiators** - Metric comparison, config diff, and experiment duplication
 
 ## Phase Details
@@ -69,7 +69,7 @@ Plans:
   5. Experiment tree nodes show color-coded status badges distinguishing planned, running, completed, and failed states
   6. User can attach notes to an individual experiment using the same tiptap editor used for papers
   7. User can link a specific paper or website to an individual experiment as supporting literature
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 03-01-PLAN.md — Backend: migration, models, service, router, app.py wiring, frontend API client
 - [ ] 03-02-PLAN.md — Frontend: experiment tree UI with ExperimentSection, ExperimentNode, KVEditor, create modal, status dropdown, DnD
@@ -83,7 +83,11 @@ Plans:
   1. User can select multiple leaf experiments and view their metrics side-by-side in a comparison table
   2. User can view a config diff between two experiments in the same group, seeing which parameters changed
   3. User can duplicate an experiment, producing a new planned sibling with the same config that can be modified before running
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 04-00-PLAN.md — Wave 0: test scaffolds for experiment routes (EXP-09) and compare-modal helpers (EXP-07, EXP-08)
+- [ ] 04-01-PLAN.md — Backend duplicate endpoint + frontend duplicate UX in ExperimentNode context menu
+- [ ] 04-02-PLAN.md — Checkbox selection, floating action bar, CompareModal with Metrics and Config tabs + human verification
 
 ## Progress
 
@@ -94,5 +98,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Project Foundation | 4/4 | Complete   | 2026-03-15 |
 | 2. Research Questions & Literature | 6/6 | Complete   | 2026-03-15 |
-| 3. Experiment Tree | 2/3 | In Progress|  |
-| 4. Experiment Differentiators | 0/TBD | Not started | - |
+| 3. Experiment Tree | 3/3 | Complete   | 2026-03-15 |
+| 4. Experiment Differentiators | 0/3 | Not started | - |
