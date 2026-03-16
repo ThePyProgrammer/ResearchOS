@@ -47,7 +47,7 @@ def create_project(data: ProjectCreate) -> Project:
         updated_at=now,
         **data.model_dump(by_alias=False),
     )
-    get_client().table(_TABLE).insert(project.model_dump(by_alias=False)).execute()
+    get_client().table(_TABLE).insert(project.model_dump(by_alias=False, exclude={"experiment_count"})).execute()
     logger.info("Created project %s: %s", project.id, project.name)
     return project
 
