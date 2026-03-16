@@ -2294,7 +2294,7 @@ function ColumnPicker({ allColumns, colState, setColState }) {
 
 // ─── SortableColumnHeader ──────────────────────────────────────────────────────
 
-function SortableColumnHeader({ col, sort, onSort, onResizeStart, headerBgClass }) {
+function SortableColumnHeader({ col, sort, onSort, onResizeStart, headerBgClass, highlightBest, lowerIsBetter, onToggleLowerIsBetter }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.id })
   const style = {
     transform: transform ? `translate3d(${transform.x}px, 0, 0)` : undefined,
@@ -2329,6 +2329,19 @@ function SortableColumnHeader({ col, sort, onSort, onResizeStart, headerBgClass 
             name={sort.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'}
             className="text-[12px] text-blue-500"
           />
+        )}
+        {highlightBest && col.type === 'metric' && (
+          <button
+            onClick={e => { e.stopPropagation(); onToggleLowerIsBetter?.(col.key) }}
+            className={`ml-0.5 text-[9px] px-1 py-0.5 rounded transition-colors leading-none ${
+              lowerIsBetter?.[col.key]
+                ? 'bg-emerald-200 text-emerald-700'
+                : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+            }`}
+            title={lowerIsBetter?.[col.key] ? 'Lower is better (click to toggle)' : 'Higher is better (click to toggle)'}
+          >
+            {lowerIsBetter?.[col.key] ? '↓' : '↑'}
+          </button>
         )}
       </div>
       {/* Resize handle */}
@@ -2398,12 +2411,433 @@ function EditableCell({ value, onSave }) {
   )
 }
 
+// ─── Filter helpers ────────────────────────────────────────────────────────────
+
+function formatFilterValue(filter) {
+  if (!filter.value && filter.value !== 0) return ''
+  if (['empty', 'notempty'].includes(filter.operator)) return ''
+  if (Array.isArray(filter.value)) {
+    if (filter.operator === 'between') {
+      return `${filter.value[0] ?? ''} – ${filter.value[1] ?? ''}`
+    }
+    return filter.value.join(', ')
+  }
+  return String(filter.value)
+}
+
+// ─── FilterChip ────────────────────────────────────────────────────────────────
+
+function FilterChip({ filter, allColumns, isEditing, onEdit, onUpdate, onRemove, onClose }) {
+  const col = allColumns.find(c => c.id === filter.column)
+  const ref = useRef(null)
+
+  const isStatusFilter = filter.column === 'status'
+  const isNumeric = col?.type === 'metric'
+
+  const operators = isStatusFilter
+    ? [{ id: 'is', label: 'is' }, { id: 'isnot', label: 'is not' }]
+    : isNumeric
+    ? [
+        { id: 'eq', label: '=' }, { id: 'neq', label: '!=' },
+        { id: 'gt', label: '>' }, { id: 'lt', label: '<' },
+        { id: 'between', label: 'between' },
+        { id: 'empty', label: 'is empty' }, { id: 'notempty', label: 'is not empty' },
+      ]
+    : [
+        { id: 'eq', label: '=' }, { id: 'neq', label: '!=' },
+        { id: 'contains', label: 'contains' },
+        { id: 'empty', label: 'is empty' }, { id: 'notempty', label: 'is not empty' },
+      ]
+
+  // Close on outside click
+  useEffect(() => {
+    if (!isEditing) return
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) onClose()
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [isEditing, onClose])
+
+  const displayValue = formatFilterValue(filter)
+  const opLabel = operators.find(o => o.id === filter.operator)?.label || filter.operator
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={onEdit}
+        className="flex items-center gap-1 text-xs bg-slate-100 border border-slate-200 rounded-full px-2.5 py-1 hover:bg-slate-200 group"
+      >
+        <span className="text-slate-500">{col?.label || filter.column}</span>
+        <span className="text-slate-400 mx-0.5">{opLabel}</span>
+        {displayValue && <span className="text-slate-700 font-medium">{displayValue}</span>}
+        <span
+          onClick={e => { e.stopPropagation(); onRemove() }}
+          className="text-slate-300 hover:text-red-400 ml-0.5 cursor-pointer leading-none"
+        >&times;</span>
+      </button>
+      {isEditing && (
+        <div className="absolute left-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 w-64 p-3 space-y-2">
+          <select
+            value={filter.operator}
+            onChange={e => {
+              const newOp = e.target.value
+              // Reset value when switching between compound/simple operators
+              let newVal = filter.value
+              if (newOp === 'between' && !Array.isArray(newVal)) newVal = [0, 0]
+              if (newOp !== 'between' && Array.isArray(newVal) && !isStatusFilter) newVal = ''
+              onUpdate({ operator: newOp, value: newVal })
+            }}
+            className="w-full text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-blue-400"
+          >
+            {operators.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+          {isStatusFilter ? (
+            <div className="space-y-1">
+              {['planned', 'running', 'completed', 'failed'].map(s => (
+                <label key={s} className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={(filter.value || []).includes(s)}
+                    onChange={() => {
+                      const cur = filter.value || []
+                      const next = cur.includes(s) ? cur.filter(x => x !== s) : [...cur, s]
+                      onUpdate({ value: next })
+                    }}
+                  />
+                  {experimentStatusConfig[s]?.label || s}
+                </label>
+              ))}
+            </div>
+          ) : filter.operator === 'between' ? (
+            <div className="flex gap-2">
+              <input
+                type="number"
+                value={filter.value?.[0] ?? ''}
+                onChange={e => onUpdate({ value: [Number(e.target.value), filter.value?.[1] ?? 0] })}
+                className="w-1/2 text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-blue-400"
+                placeholder="min"
+              />
+              <input
+                type="number"
+                value={filter.value?.[1] ?? ''}
+                onChange={e => onUpdate({ value: [filter.value?.[0] ?? 0, Number(e.target.value)] })}
+                className="w-1/2 text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-blue-400"
+                placeholder="max"
+              />
+            </div>
+          ) : !['empty', 'notempty'].includes(filter.operator) ? (
+            <input
+              type={isNumeric ? 'number' : 'text'}
+              value={filter.value ?? ''}
+              onChange={e => onUpdate({ value: isNumeric ? Number(e.target.value) : e.target.value })}
+              className="w-full text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-blue-400"
+              placeholder="Value..."
+            />
+          ) : null}
+          <button onClick={onClose} className="text-xs text-blue-600 hover:text-blue-700">Done</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── FilterBar ─────────────────────────────────────────────────────────────────
+
+function FilterBar({ filters, setFilters, allColumns }) {
+  const [addingFilter, setAddingFilter] = useState(false)
+  const [editingFilterId, setEditingFilterId] = useState(null)
+  const addRef = useRef(null)
+
+  // Close add dropdown on outside click
+  useEffect(() => {
+    if (!addingFilter) return
+    function handleClick(e) {
+      if (addRef.current && !addRef.current.contains(e.target)) setAddingFilter(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [addingFilter])
+
+  function addFilter(colId) {
+    const col = allColumns.find(c => c.id === colId)
+    const defaultOp = col?.type === 'metric' ? 'gt' : colId === 'status' ? 'is' : 'eq'
+    const defaultVal = colId === 'status' ? ['completed'] : ''
+    const newFilter = { id: Date.now().toString(), column: colId, operator: defaultOp, value: defaultVal }
+    setFilters(prev => [...prev, newFilter])
+    setEditingFilterId(newFilter.id)
+    setAddingFilter(false)
+  }
+
+  function updateFilter(id, updates) {
+    setFilters(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f))
+  }
+
+  function removeFilter(id) {
+    setFilters(prev => prev.filter(f => f.id !== id))
+    if (editingFilterId === id) setEditingFilterId(null)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-1 py-2">
+      {filters.map(f => (
+        <FilterChip
+          key={f.id}
+          filter={f}
+          allColumns={allColumns}
+          isEditing={editingFilterId === f.id}
+          onEdit={() => setEditingFilterId(f.id)}
+          onUpdate={updates => updateFilter(f.id, updates)}
+          onRemove={() => removeFilter(f.id)}
+          onClose={() => setEditingFilterId(null)}
+        />
+      ))}
+      <div className="relative" ref={addRef}>
+        <button
+          onClick={() => setAddingFilter(o => !o)}
+          className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 border border-dashed border-slate-200 rounded px-2 py-1"
+        >
+          <Icon name="add" className="text-[12px]" /> Filter
+        </button>
+        {addingFilter && (
+          <div className="absolute left-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 w-48 max-h-48 overflow-y-auto p-1">
+            {allColumns.filter(c => c.sortable).map(col => (
+              <button
+                key={col.id}
+                onClick={() => addFilter(col.id)}
+                className="block w-full text-left px-2 py-1 text-xs hover:bg-slate-50 rounded"
+              >
+                <span className={col.type === 'config' ? 'text-blue-600' : col.type === 'metric' ? 'text-emerald-600' : 'text-slate-700'}>
+                  {col.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {filters.length > 0 && (
+        <button
+          onClick={() => setFilters([])}
+          className="text-xs text-slate-400 hover:text-red-500 ml-1"
+        >
+          Clear all
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── ExperimentDetailPanel ─────────────────────────────────────────────────────
+
+function ExperimentDetailPanel({ experiment, flatTree, onClose, onRefresh, libraryId, expPapersMap, onExpPapersChange, rqList }) {
+  const [expNotes, setExpNotes] = useState([])
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [showLinkPicker, setShowLinkPicker] = useState(false)
+
+  const linkedPapers = expPapersMap?.get(experiment.id) || []
+
+  useEffect(() => {
+    if (!notesOpen) return
+    notesApi.listForExperiment(experiment.id)
+      .then(data => setExpNotes(Array.isArray(data) ? data : []))
+      .catch(err => console.error('Failed to fetch experiment notes:', err))
+  }, [notesOpen, experiment.id])
+
+  // Refresh notes when experiment changes
+  useEffect(() => {
+    setNotesOpen(false)
+    setExpNotes([])
+  }, [experiment.id])
+
+  async function handleExpLink(data) {
+    await experimentsApi.linkPaper(experiment.id, data)
+    try {
+      const updated = await experimentsApi.listPapers(experiment.id)
+      onExpPapersChange?.(experiment.id, Array.isArray(updated) ? updated : [])
+    } catch (err) {
+      console.error('Failed to refresh experiment papers:', err)
+    }
+  }
+
+  async function handleUnlink(paperId, websiteId) {
+    await experimentsApi.unlinkPaper(experiment.id, { paper_id: paperId || null, website_id: websiteId || null })
+    try {
+      const updated = await experimentsApi.listPapers(experiment.id)
+      onExpPapersChange?.(experiment.id, Array.isArray(updated) ? updated : [])
+    } catch (err) {
+      console.error('Failed to refresh experiment papers after unlink:', err)
+    }
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white sticky top-0 z-10">
+        <div className="flex items-center gap-2 min-w-0">
+          <Icon
+            name={experiment.children?.length > 0 ? 'folder' : 'science'}
+            className="text-[18px] text-slate-400 flex-shrink-0"
+          />
+          <h3 className="text-sm font-semibold text-slate-800 truncate">{experiment.name}</h3>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 flex-shrink-0 ml-2">
+          <Icon name="close" className="text-[18px]" />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Status */}
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 block">Status</label>
+          <ExperimentStatusDropdown
+            status={experiment.status}
+            onChange={async newStatus => {
+              await experimentsApi.update(experiment.id, { status: newStatus })
+              onRefresh()
+            }}
+          />
+        </div>
+
+        {/* Parent group */}
+        {experiment._parentId && (
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 block">Group</label>
+            <span className="text-xs text-slate-600">
+              {flatTree.find(e => e.id === experiment._parentId)?.name || '—'}
+            </span>
+          </div>
+        )}
+
+        {/* Created date */}
+        {experiment.created_at && (
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 block">Created</label>
+            <span className="text-xs text-slate-600">
+              {new Date(experiment.created_at).toLocaleDateString()}
+            </span>
+          </div>
+        )}
+
+        {/* Config */}
+        <div>
+          <KVEditor
+            data={experiment.config || {}}
+            label="Configuration"
+            onSave={async updated => {
+              await experimentsApi.update(experiment.id, { config: updated })
+              await onRefresh()
+            }}
+          />
+        </div>
+
+        {/* Metrics */}
+        <div>
+          <KVEditor
+            data={experiment.metrics || {}}
+            label="Metrics"
+            onSave={async updated => {
+              await experimentsApi.update(experiment.id, { metrics: updated })
+              await onRefresh()
+            }}
+          />
+        </div>
+
+        {/* Notes */}
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Notes</span>
+            <button
+              onClick={() => setNotesOpen(o => !o)}
+              className={`text-xs px-1.5 py-0.5 rounded transition-colors ${notesOpen ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              {notesOpen ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          {notesOpen && (
+            <div className="border border-slate-100 rounded-lg overflow-hidden">
+              <NotesPanel
+                notes={expNotes}
+                onNotesChange={setExpNotes}
+                createFn={data => notesApi.createForExperiment(experiment.id, data)}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Literature */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Literature</span>
+            <button
+              onClick={() => setShowLinkPicker(o => !o)}
+              className="text-slate-400 hover:text-blue-600 transition-colors"
+              title="Link paper"
+            >
+              <Icon name="add" className="text-[13px]" />
+            </button>
+          </div>
+          {showLinkPicker && libraryId && (
+            <MiniSearchPicker
+              libraryId={libraryId}
+              rqList={rqList || []}
+              onLink={async data => {
+                await handleExpLink(data)
+                setShowLinkPicker(false)
+              }}
+              onClose={() => setShowLinkPicker(false)}
+            />
+          )}
+          {linkedPapers.length === 0 ? (
+            <p className="text-xs text-slate-400 italic">No linked papers</p>
+          ) : (
+            <div className="space-y-1">
+              {linkedPapers.map(lp => {
+                const isPaper = !!lp.paper_id
+                const item = isPaper ? lp.paper : lp.website
+                if (!item) return null
+                return (
+                  <div key={lp.paper_id || lp.website_id} className="flex items-start gap-1 group/lit">
+                    <Icon
+                      name={isPaper ? 'description' : 'link'}
+                      className="text-[13px] text-slate-300 flex-shrink-0 mt-0.5"
+                    />
+                    <span className="text-xs text-slate-600 flex-1 leading-snug line-clamp-2">
+                      {item.title || item.url || '—'}
+                    </span>
+                    <button
+                      onClick={() => handleUnlink(lp.paper_id, lp.website_id)}
+                      className="opacity-0 group-hover/lit:opacity-100 text-slate-300 hover:text-red-400 transition-colors flex-shrink-0"
+                    >
+                      <Icon name="close" className="text-[13px]" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── ExperimentTableView ───────────────────────────────────────────────────────
 
-function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperiments, projectId, libraryId }) {
+function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperiments, projectId, libraryId, expPapersMap, onExpPapersChange, rqList }) {
   const [sort, setSort] = useState(null) // { columnId, direction }
   const [newRowName, setNewRowName] = useState('')
   const [newRowError, setNewRowError] = useState(false)
+
+  // Filter state persisted to localStorage per project
+  const [filters, setFilters] = useLocalStorage(`researchos.exp.table.filters.${projectId}`, [])
+
+  // Detail panel state
+  const [detailExpId, setDetailExpId] = useState(null)
+
+  // Best-metric highlight state
+  const [highlightBest, setHighlightBest] = useState(false)
+  const [lowerIsBetter, setLowerIsBetter] = useState({}) // { [metricKey]: boolean }
 
   // Column state persisted to localStorage per project
   const [colState, setColState] = useLocalStorage(
@@ -2444,6 +2878,15 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
     const extras = (colState.customColumns || []).filter(c => !dataColIds.has(c.id))
     return [...allDataColumns, ...extras]
   }, [allDataColumns, colState.customColumns])
+
+  // Drop stale filters (columns that no longer exist)
+  useEffect(() => {
+    const validColIds = new Set(allColumns.map(c => c.id))
+    setFilters(prev => {
+      const valid = prev.filter(f => validColIds.has(f.column))
+      return valid.length === prev.length ? prev : valid
+    })
+  }, [allColumns]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Derive visible columns applying hidden, order, widths
   const visibleColumns = useMemo(() => {
@@ -2542,7 +2985,14 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
     setAddColKey('')
   }
 
-  const sortedRows = useMemo(() => sortRows(flatTree, sort), [flatTree, sort])
+  const filteredRows = useMemo(() => {
+    const sorted = sortRows(flatTree, sort)
+    if (filters.length === 0) return sorted
+    return sorted.filter(exp => filters.every(f => applyFilter(exp, f)))
+  }, [flatTree, sort, filters])
+
+  // Derive detail experiment from flatTree (keeps up-to-date after refresh)
+  const detailExp = detailExpId ? flatTree.find(e => e.id === detailExpId) : null
 
   function headerBgClass(colType) {
     if (colType === 'config') return 'bg-blue-50/60'
@@ -2617,16 +3067,16 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   }
 
   // Select-all logic
-  const allSelected = sortedRows.length > 0 && sortedRows.every(r => selectedLeafIds.has(r.id))
-  const someSelected = !allSelected && sortedRows.some(r => selectedLeafIds.has(r.id))
+  const allSelected = filteredRows.length > 0 && filteredRows.every(r => selectedLeafIds.has(r.id))
+  const someSelected = !allSelected && filteredRows.some(r => selectedLeafIds.has(r.id))
 
   function handleSelectAllChange() {
     if (allSelected) {
-      sortedRows.forEach(r => {
+      filteredRows.forEach(r => {
         if (selectedLeafIds.has(r.id)) onToggle(r)
       })
     } else {
-      sortedRows.forEach(r => {
+      filteredRows.forEach(r => {
         if (!selectedLeafIds.has(r.id)) onToggle(r)
       })
     }
@@ -2652,12 +3102,35 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   const fixedNameCol = visibleColumns.find(c => c.id === 'name')
   const reorderableCols = visibleColumns.filter(c => c.id !== 'type_icon' && c.id !== 'name')
 
+  // Metric columns in visible set (for lower-is-better toggles in header)
+  const metricColumnsVisible = visibleColumns.filter(c => c.type === 'metric')
+
   return (
-    <div>
+    <div className="flex gap-0">
+      {/* Left: table area */}
+      <div className={`flex-1 overflow-hidden min-w-0 transition-all ${detailExp ? 'max-w-[calc(100%-360px)]' : 'w-full'}`}>
       {/* Toolbar */}
       <div className="flex items-center justify-end gap-2 mb-2">
+        <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={highlightBest}
+            onChange={e => setHighlightBest(e.target.checked)}
+          />
+          Highlight best
+        </label>
         <ColumnPicker allColumns={allColumns} colState={colState} setColState={setColState} />
       </div>
+
+      {/* Filter bar */}
+      <FilterBar filters={filters} setFilters={setFilters} allColumns={allColumns} />
+
+      {/* Row count */}
+      {filters.length > 0 && (
+        <div className="text-xs text-slate-400 mb-1 px-1">
+          {filteredRows.length} of {flatTree.length} experiments
+        </div>
+      )}
 
       <div className="overflow-auto max-h-[calc(100vh-340px)] border border-slate-200 rounded-lg">
         <table className="border-collapse text-sm w-max min-w-full" style={{ tableLayout: 'fixed' }}>
@@ -2725,6 +3198,9 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
                       onSort={handleSort}
                       onResizeStart={handleResizeStart}
                       headerBgClass={headerBgClass}
+                      highlightBest={highlightBest}
+                      lowerIsBetter={lowerIsBetter}
+                      onToggleLowerIsBetter={key => setLowerIsBetter(prev => ({ ...prev, [key]: !prev[key] }))}
                     />
                   ))}
 
@@ -2803,10 +3279,20 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
             </DndContext>
           </thead>
           <tbody>
-            {sortedRows.map(exp => (
-              <tr key={exp.id} className="hover:bg-slate-50/50 border-b border-slate-100 cursor-pointer">
+            {filteredRows.map(exp => (
+              <tr
+                key={exp.id}
+                className={`hover:bg-slate-50/50 border-b border-slate-100 cursor-pointer ${
+                  detailExpId === exp.id ? 'bg-blue-50/40' : ''
+                }`}
+                onClick={() => setDetailExpId(prev => prev === exp.id ? null : exp.id)}
+              >
                 {/* Checkbox — sticky left */}
-                <td className="sticky left-0 z-10 bg-white border-r border-slate-100 px-2 py-2" style={{ width: 40, minWidth: 40 }}>
+                <td
+                  className="sticky left-0 z-10 bg-white border-r border-slate-100 px-2 py-2"
+                  style={{ width: 40, minWidth: 40 }}
+                  onClick={e => e.stopPropagation()}
+                >
                   <input
                     type="checkbox"
                     checked={selectedLeafIds.has(exp.id)}
@@ -2814,18 +3300,24 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
                     className="cursor-pointer"
                   />
                 </td>
-                {visibleColumns.map(col => (
-                  <td
-                    key={col.id}
-                    className={`px-3 py-2 text-xs text-slate-700 whitespace-nowrap${
-                      col.id === 'name' ? ' sticky left-10 z-10 bg-white border-r border-slate-100 font-medium' : ''
-                    }`}
-                    style={{ width: col.width, minWidth: col.width }}
-                    onClick={col.id === 'status' ? e => e.stopPropagation() : undefined}
-                  >
-                    {renderCellValue(col, exp)}
-                  </td>
-                ))}
+                {visibleColumns.map(col => {
+                  const isHighlighted = highlightBest && col.type === 'metric'
+                  const cellValue = isHighlighted ? exp.metrics?.[col.key] : undefined
+                  const bestValue = isHighlighted ? getBestValue(col.key, filteredRows, lowerIsBetter[col.key] || false) : undefined
+                  const highlightCls = isHighlighted ? metricCellClass(col.key, cellValue, bestValue, true) : ''
+                  return (
+                    <td
+                      key={col.id}
+                      className={`px-3 py-2 text-xs text-slate-700 whitespace-nowrap${
+                        col.id === 'name' ? ' sticky left-10 z-10 bg-white border-r border-slate-100 font-medium' : ''
+                      }${highlightCls ? ` ${highlightCls}` : ''}`}
+                      style={{ width: col.width, minWidth: col.width }}
+                      onClick={col.id === 'status' ? e => e.stopPropagation() : undefined}
+                    >
+                      {renderCellValue(col, exp)}
+                    </td>
+                  )
+                })}
                 {/* Empty cell for the '+' column */}
                 <td style={{ width: 36, minWidth: 36 }} />
               </tr>
@@ -2878,6 +3370,23 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
           </tbody>
         </table>
       </div>
+      </div>{/* end flex-1 table area */}
+
+      {/* Right: detail panel */}
+      {detailExp && (
+        <div className="w-[360px] flex-shrink-0 border-l border-slate-200 overflow-y-auto max-h-[calc(100vh-300px)]">
+          <ExperimentDetailPanel
+            experiment={detailExp}
+            flatTree={flatTree}
+            onClose={() => setDetailExpId(null)}
+            onRefresh={fetchExperiments}
+            libraryId={libraryId}
+            expPapersMap={expPapersMap}
+            onExpPapersChange={onExpPapersChange}
+            rqList={rqList}
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -3083,6 +3592,9 @@ function ExperimentSection({ projectId, libraryId }) {
           fetchExperiments={fetchExperiments}
           projectId={projectId}
           libraryId={libraryId}
+          expPapersMap={expPapersMap}
+          onExpPapersChange={handleExpPapersChange}
+          rqList={rqList}
         />
       ) : (
         <DndContext
