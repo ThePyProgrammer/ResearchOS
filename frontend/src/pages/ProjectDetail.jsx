@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi, githubReposApi, experimentsApi } from '../services/api'
 import NotesPanel from '../components/NotesPanel'
 import WindowModal from '../components/WindowModal'
+import CSVImportModal from './CSVImportModal'
 import {
   DndContext,
   closestCenter,
@@ -2119,6 +2120,7 @@ function ExperimentSection({ projectId, libraryId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCsvModal, setShowCsvModal] = useState(false)
   const [activeId, setActiveId] = useState(null)
   const [expPapersMap, setExpPapersMap] = useState(new Map())
   const [rqList, setRqList] = useState([])
@@ -2247,13 +2249,22 @@ function ExperimentSection({ projectId, libraryId }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Icon name="add" className="text-[16px]" />
-          Add Experiment
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCsvModal(true)}
+            className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <Icon name="upload_file" className="text-[16px]" />
+            Import CSV
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Icon name="add" className="text-[16px]" />
+            Add Experiment
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -2353,6 +2364,16 @@ function ExperimentSection({ projectId, libraryId }) {
           parentId={null}
           onCreated={fetchExperiments}
           onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {/* CSV import modal */}
+      {showCsvModal && (
+        <CSVImportModal
+          projectId={projectId}
+          existingExperiments={flatExperiments}
+          onImported={fetchExperiments}
+          onClose={() => setShowCsvModal(false)}
         />
       )}
 
