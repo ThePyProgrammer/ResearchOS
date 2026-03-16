@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 06-00-PLAN.md (CSV import utilities + tests)
-last_updated: "2026-03-16T15:53:00.256Z"
-last_activity: 2026-03-16 — Completed plan 05-01 (library-scoped experiment literature search, experiment counts on project cards)
+stopped_at: Completed 06-01-PLAN.md (CSV import wizard + backend bulk endpoint)
+last_updated: "2026-03-17T00:00:00.000Z"
+last_activity: 2026-03-17 — Completed plan 06-01 (CSVImportModal 4-step wizard, bulk_create_experiment_tree backend, POST import-csv endpoint)
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 20
-  completed_plans: 18
-  percent: 100
+  completed_plans: 19
+  percent: 95
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2025-07-17)
 
 ## Current Position
 
-Phase: 5 of 5 (Integration Polish) — COMPLETE
-Plan: 1 of 1 plans in Phase 05 complete (05-01 done)
-Status: Phase 05 complete — Integration gaps closed (library-scoped experiment search, experiment counts on project cards)
-Last activity: 2026-03-16 — Completed plan 05-01 (library-scoped experiment literature search, experiment counts on project cards)
+Phase: 6 of 7 (CSV Loading Framework) — IN PROGRESS
+Plan: 1 of 3 plans in Phase 06 complete (06-01 done)
+Status: Phase 06 in progress — CSV import wizard and backend endpoint shipped
+Last activity: 2026-03-17 — Completed plan 06-01 (CSVImportModal 4-step wizard, bulk_create_experiment_tree, POST /api/projects/{id}/experiments/import-csv)
 
 Progress: [████████████] 100%
 
@@ -63,6 +63,7 @@ Progress: [████████████] 100%
 | Phase 04-experiment-differentiators P02 | 45 min | 2 tasks | 1 files |
 | Phase 05-integration-polish P01 | 10 min | 2 tasks | 4 files |
 | Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design P00 | 8 | 2 tasks | 4 files |
+| Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design P01 | 20 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -122,6 +123,9 @@ Recent decisions affecting current work:
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: detectType reused verbatim from ProjectDetail.jsx — single source of truth for CSV import utilities
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: buildImportTree stores group column KVs on BOTH group nodes AND leaf experiments — enables comparison modal without tree traversal
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Path-keyed Map (|col=val string) used for O(1) group node deduplication in buildImportTree
+- [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Single-phase import (no parse-then-confirm roundtrip) — frontend builds tree client-side before POSTing final BFS payload
+- [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: BFS flatten at Step 4 call time (not Step 3) so user renames/excludes are applied as the final transformation
+- [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Preview tree fully resets on Back from Step 3 — avoids stale collision/rename/exclude state (research pitfall 2)
 
 ### Roadmap Evolution
 
@@ -139,5 +143,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T15:53:00.253Z
-Stopped at: Completed 06-00-PLAN.md (CSV import utilities + tests)
+Last session: 2026-03-17T00:00:00.000Z
+Stopped at: Completed 06-01-PLAN.md (CSV import wizard + backend bulk endpoint)

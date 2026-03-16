@@ -114,7 +114,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Experiment Tree | 3/3 | Complete   | 2026-03-15 |
 | 4. Experiment Differentiators | 3/3 | Complete   | 2026-03-16 |
 | 5. Integration Polish | 1/1 | Complete   | 2026-03-16 |
-| 6. CSV Loading Framework | 0/3 | Planning   | — |
+| 6. CSV Loading Framework | 1/3 | In Progress | — |
 
 ### Phase 6: CSV Loading Framework for Experiments
 **Goal**: Researchers can import CSV files containing experiment results into the experiment tree, with a multi-step wizard for column mapping, tree preview with interactive editing, and collision resolution for re-imports
@@ -131,8 +131,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 **Plans:** 3 plans
 
 Plans:
-- [ ] 06-00-PLAN.md — TDD: test scaffolds + pure utility functions (buildImportTree, autoGenerateName, detectCollision, bfsFlatten, autoDetectRoles, mergeMetrics)
-- [ ] 06-01-PLAN.md — Backend bulk import endpoint + CSVImportModal wizard (Upload, Map Columns, Preview, Confirm)
+- [x] 06-00-PLAN.md — TDD: test scaffolds + pure utility functions (buildImportTree, autoGenerateName, detectCollision, bfsFlatten, autoDetectRoles, mergeMetrics)
+- [x] 06-01-PLAN.md — Backend bulk import endpoint + CSVImportModal wizard (Upload, Map Columns, Preview, Confirm)
 - [ ] 06-02-PLAN.md — Interactive preview editing (rename, exclude, collision resolution) + human verification
 
 ### Phase 7: Implement an alternative table view for the experiment view that looks like a spreadsheet with filters and sorts available
