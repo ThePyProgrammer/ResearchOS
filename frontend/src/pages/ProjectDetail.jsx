@@ -16,6 +16,7 @@ import {
 import {
   SortableContext,
   verticalListSortingStrategy,
+  horizontalListSortingStrategy,
   useSortable,
   arrayMove,
 } from '@dnd-kit/sortable'
@@ -2227,13 +2228,242 @@ function CompareModal({ experiments, open, onClose, flatTree }) {
   )
 }
 
+// ─── ColumnPicker ──────────────────────────────────────────────────────────────
+
+function ColumnPicker({ allColumns, colState, setColState }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  function toggleHidden(colId) {
+    setColState(prev => {
+      const hidden = prev.hidden.includes(colId)
+        ? prev.hidden.filter(id => id !== colId)
+        : [...prev.hidden, colId]
+      return { ...prev, hidden }
+    })
+  }
+
+  function resetColumns() {
+    setColState({ order: [], hidden: [], widths: {}, customColumns: [] })
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded px-2 py-1 bg-white transition-colors"
+      >
+        <Icon name="view_column" className="text-[14px]" /> Columns
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 w-56 max-h-64 overflow-y-auto p-2">
+          {allColumns.filter(c => c.id !== 'type_icon').map(col => (
+            <label key={col.id} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 rounded text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!colState.hidden.includes(col.id)}
+                onChange={() => toggleHidden(col.id)}
+              />
+              <span className={col.type === 'config' ? 'text-blue-600' : col.type === 'metric' ? 'text-emerald-600' : 'text-slate-700'}>
+                {col.label || col.id}
+              </span>
+            </label>
+          ))}
+          <div className="border-t border-slate-100 mt-1 pt-1">
+            <button
+              onClick={resetColumns}
+              className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 w-full text-left transition-colors"
+            >
+              Reset columns
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── SortableColumnHeader ──────────────────────────────────────────────────────
+
+function SortableColumnHeader({ col, sort, onSort, onResizeStart, headerBgClass }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.id })
+  const style = {
+    transform: transform ? `translate3d(${transform.x}px, 0, 0)` : undefined,
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    width: col.width,
+    minWidth: col.width,
+    position: 'relative',
+  }
+
+  return (
+    <th
+      ref={setNodeRef}
+      style={style}
+      className={`sticky top-0 z-20 border-b border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${headerBgClass(col.type)}`}
+      onClick={() => col.sortable && onSort(col.id)}
+    >
+      <div className={`flex items-center gap-1 ${col.sortable ? 'cursor-pointer select-none' : ''}`}>
+        {/* Drag grip — only this triggers DnD, not the label */}
+        <span
+          {...attributes}
+          {...listeners}
+          onClick={e => e.stopPropagation()}
+          className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 flex-shrink-0"
+          title="Drag to reorder"
+        >
+          <Icon name="drag_indicator" className="text-[10px]" />
+        </span>
+        {col.label}
+        {sort?.columnId === col.id && (
+          <Icon
+            name={sort.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+            className="text-[12px] text-blue-500"
+          />
+        )}
+      </div>
+      {/* Resize handle */}
+      <div
+        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 transition-colors"
+        onMouseDown={e => { e.stopPropagation(); onResizeStart(e, col.id, col.width) }}
+        onClick={e => e.stopPropagation()}
+      />
+    </th>
+  )
+}
+
+// ─── EditableCell ──────────────────────────────────────────────────────────────
+
+function EditableCell({ value, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  function activate() {
+    setEditing(true)
+    setDraft(String(value ?? ''))
+  }
+
+  async function commit() {
+    setEditing(false)
+    const parsed = detectType(draft)
+    if (parsed !== value) {
+      try {
+        await onSave(parsed)
+      } catch (err) {
+        console.error('EditableCell save failed:', err)
+      }
+    }
+  }
+
+  function cancel() {
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit() }
+          if (e.key === 'Escape') cancel()
+        }}
+        className="w-full bg-white border border-blue-400 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+        onClick={e => e.stopPropagation()}
+      />
+    )
+  }
+
+  return (
+    <span
+      onDoubleClick={e => { e.stopPropagation(); activate() }}
+      className="block w-full cursor-text min-h-[1.25rem]"
+    >
+      {value != null && value !== ''
+        ? String(value)
+        : <span className="text-slate-300 italic">--</span>
+      }
+    </span>
+  )
+}
+
 // ─── ExperimentTableView ───────────────────────────────────────────────────────
 
 function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperiments, projectId, libraryId }) {
   const [sort, setSort] = useState(null) // { columnId, direction }
+  const [newRowName, setNewRowName] = useState('')
+  const [newRowError, setNewRowError] = useState(false)
 
-  const allColumns = useMemo(() => buildColumns(flatTree), [flatTree])
-  const visibleColumns = allColumns
+  // Column state persisted to localStorage per project
+  const [colState, setColState] = useLocalStorage(
+    `researchos.exp.table.cols.${projectId}`,
+    { order: [], hidden: [], widths: {}, customColumns: [] }
+  )
+
+  // Add-column popover state
+  const [addColOpen, setAddColOpen] = useState(false)
+  const [addColType, setAddColType] = useState(null) // 'config' | 'metric'
+  const [addColKey, setAddColKey] = useState('')
+  const addColRef = useRef(null)
+
+  // DnD sensors for column reordering (separate from tree DnD)
+  const colDndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  )
+
+  // Close add-column popover on outside click
+  useEffect(() => {
+    if (!addColOpen) return
+    function handleClick(e) {
+      if (addColRef.current && !addColRef.current.contains(e.target)) {
+        setAddColOpen(false)
+        setAddColType(null)
+        setAddColKey('')
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [addColOpen])
+
+  const allDataColumns = useMemo(() => buildColumns(flatTree), [flatTree])
+
+  // Merge custom columns from colState into allColumns
+  const allColumns = useMemo(() => {
+    const dataColIds = new Set(allDataColumns.map(c => c.id))
+    const extras = (colState.customColumns || []).filter(c => !dataColIds.has(c.id))
+    return [...allDataColumns, ...extras]
+  }, [allDataColumns, colState.customColumns])
+
+  // Derive visible columns applying hidden, order, widths
+  const visibleColumns = useMemo(() => {
+    const hidden = new Set(colState.hidden)
+    let cols = allColumns.filter(c => !hidden.has(c.id))
+    if (colState.order.length > 0) {
+      const orderMap = Object.fromEntries(colState.order.map((id, i) => [id, i]))
+      const fixedFirst = cols.filter(c => c.id === 'type_icon' || c.id === 'name')
+      const reorderable = cols.filter(c => c.id !== 'type_icon' && c.id !== 'name')
+      reorderable.sort((a, b) => (orderMap[a.id] ?? 999) - (orderMap[b.id] ?? 999))
+      cols = [...fixedFirst, ...reorderable]
+    }
+    return cols.map(c => ({ ...c, width: colState.widths[c.id] || c.width }))
+  }, [allColumns, colState])
+
+  // Reorderable columns (exclude fixed type_icon and name columns)
+  const reorderableColIds = useMemo(
+    () => visibleColumns.filter(c => c.id !== 'type_icon' && c.id !== 'name').map(c => c.id),
+    [visibleColumns]
+  )
 
   // Build a map of parentId -> parent name for the Group column
   const parentNameMap = useMemo(() => {
@@ -2255,6 +2485,63 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
     })
   }
 
+  // Column resize
+  function handleResizeStart(e, colId, startWidth) {
+    e.preventDefault()
+    const startX = e.clientX
+
+    function onMouseMove(moveEvent) {
+      const delta = moveEvent.clientX - startX
+      const newWidth = Math.max(60, startWidth + delta)
+      setColState(prev => ({
+        ...prev,
+        widths: { ...prev.widths, [colId]: newWidth },
+      }))
+    }
+
+    function onMouseUp() {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }
+
+  // Column DnD reorder
+  function handleColDragEnd(event) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = reorderableColIds.indexOf(active.id)
+    const newIndex = reorderableColIds.indexOf(over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const newOrder = arrayMove(reorderableColIds, oldIndex, newIndex)
+    setColState(prev => ({ ...prev, order: newOrder }))
+  }
+
+  // Add new column
+  function handleAddColSubmit() {
+    const key = addColKey.trim()
+    if (!key || !addColType) return
+    const id = `${addColType}::${key}`
+    const newCol = {
+      id,
+      label: key,
+      type: addColType,
+      field: addColType === 'config' ? 'config' : 'metrics',
+      key,
+      width: 120,
+      sortable: true,
+    }
+    setColState(prev => ({
+      ...prev,
+      customColumns: [...(prev.customColumns || []).filter(c => c.id !== id), newCol],
+    }))
+    setAddColOpen(false)
+    setAddColType(null)
+    setAddColKey('')
+  }
+
   const sortedRows = useMemo(() => sortRows(flatTree, sort), [flatTree, sort])
 
   function headerBgClass(colType) {
@@ -2269,14 +2556,27 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
       return <Icon name={isGroup ? 'folder' : 'science'} className="text-[16px] text-slate-400" />
     }
     if (col.id === 'name') {
-      return <span className="font-medium text-slate-800">{exp.name}</span>
+      return (
+        <EditableCell
+          value={exp.name}
+          onSave={async v => {
+            if (v && String(v).trim()) {
+              await experimentsApi.update(exp.id, { name: String(v).trim() })
+              await fetchExperiments()
+            }
+          }}
+        />
+      )
     }
     if (col.id === 'status') {
-      const cfg = experimentStatusConfig[exp.status] || experimentStatusConfig.planned
       return (
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${cfg.class}`}>
-          {cfg.label}
-        </span>
+        <ExperimentStatusDropdown
+          status={exp.status}
+          onChange={async newStatus => {
+            await experimentsApi.update(exp.id, { status: newStatus })
+            await fetchExperiments()
+          }}
+        />
       )
     }
     if (col.id === 'parent') {
@@ -2292,12 +2592,26 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
       }
     }
     if (col.type === 'config') {
-      const val = exp.config?.[col.key]
-      return val !== undefined && val !== null ? String(val) : <span className="text-slate-300">—</span>
+      return (
+        <EditableCell
+          value={exp.config?.[col.key]}
+          onSave={async v => {
+            await experimentsApi.update(exp.id, { config: { ...(exp.config || {}), [col.key]: v } })
+            await fetchExperiments()
+          }}
+        />
+      )
     }
     if (col.type === 'metric') {
-      const val = exp.metrics?.[col.key]
-      return val !== undefined && val !== null ? String(val) : <span className="text-slate-300">—</span>
+      return (
+        <EditableCell
+          value={exp.metrics?.[col.key]}
+          onSave={async v => {
+            await experimentsApi.update(exp.id, { metrics: { ...(exp.metrics || {}), [col.key]: v } })
+            await fetchExperiments()
+          }}
+        />
+      )
     }
     return '—'
   }
@@ -2308,12 +2622,10 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
 
   function handleSelectAllChange() {
     if (allSelected) {
-      // Deselect all visible rows
       sortedRows.forEach(r => {
         if (selectedLeafIds.has(r.id)) onToggle(r)
       })
     } else {
-      // Select all unselected visible rows
       sortedRows.forEach(r => {
         if (!selectedLeafIds.has(r.id)) onToggle(r)
       })
@@ -2327,74 +2639,245 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
     }
   }, [someSelected])
 
-  if (sortedRows.length === 0) {
+  if (flatTree.length === 0) {
     return (
       <div className="border border-slate-200 rounded-lg p-8 text-center text-sm text-slate-400">
-        No matching experiments
+        No experiments yet
       </div>
     )
   }
 
+  // Fixed headers (type_icon and name are always rendered outside the sortable context)
+  const fixedTypeIconCol = visibleColumns.find(c => c.id === 'type_icon')
+  const fixedNameCol = visibleColumns.find(c => c.id === 'name')
+  const reorderableCols = visibleColumns.filter(c => c.id !== 'type_icon' && c.id !== 'name')
+
   return (
-    <div className="overflow-auto max-h-[calc(100vh-300px)] border border-slate-200 rounded-lg">
-      <table className="border-collapse text-sm w-max min-w-full" style={{ tableLayout: 'fixed' }}>
-        <thead>
-          <tr>
-            {/* Select-all checkbox — sticky top+left */}
-            <th className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200 px-2 py-2" style={{ width: 40, minWidth: 40 }}>
-              <input
-                ref={selectAllRef}
-                type="checkbox"
-                checked={allSelected}
-                onChange={handleSelectAllChange}
-                className="cursor-pointer"
-              />
-            </th>
-            {visibleColumns.map(col => (
-              <th
-                key={col.id}
-                className={`sticky top-0 z-20 border-b border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${headerBgClass(col.type)}${col.id === 'name' ? ' sticky left-10 z-30' : ''}`}
-                style={{ width: col.width, minWidth: col.width }}
-                onClick={() => col.sortable && handleSort(col.id)}
-              >
-                <div className={`flex items-center gap-1 ${col.sortable ? 'cursor-pointer select-none' : ''}`}>
-                  {col.label}
-                  {sort?.columnId === col.id && (
-                    <Icon
-                      name={sort.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'}
-                      className="text-[12px] text-blue-500"
+    <div>
+      {/* Toolbar */}
+      <div className="flex items-center justify-end gap-2 mb-2">
+        <ColumnPicker allColumns={allColumns} colState={colState} setColState={setColState} />
+      </div>
+
+      <div className="overflow-auto max-h-[calc(100vh-340px)] border border-slate-200 rounded-lg">
+        <table className="border-collapse text-sm w-max min-w-full" style={{ tableLayout: 'fixed' }}>
+          <thead>
+            <DndContext
+              id="column-dnd"
+              sensors={colDndSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleColDragEnd}
+            >
+              <SortableContext items={reorderableColIds} strategy={horizontalListSortingStrategy}>
+                <tr>
+                  {/* Select-all checkbox — sticky top+left */}
+                  <th className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200 px-2 py-2" style={{ width: 40, minWidth: 40 }}>
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={handleSelectAllChange}
+                      className="cursor-pointer"
                     />
+                  </th>
+
+                  {/* Fixed: type_icon */}
+                  {fixedTypeIconCol && (
+                    <th
+                      className={`sticky top-0 z-20 border-b border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${headerBgClass('fixed')}`}
+                      style={{ width: fixedTypeIconCol.width, minWidth: fixedTypeIconCol.width, position: 'relative' }}
+                    >
+                      <div style={{ width: fixedTypeIconCol.width - 24 }} />
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 transition-colors"
+                        onMouseDown={e => handleResizeStart(e, fixedTypeIconCol.id, fixedTypeIconCol.width)}
+                      />
+                    </th>
                   )}
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedRows.map(exp => (
-            <tr key={exp.id} className="hover:bg-slate-50/50 border-b border-slate-100 cursor-pointer">
-              {/* Checkbox — sticky left */}
-              <td className="sticky left-0 z-10 bg-white border-r border-slate-100 px-2 py-2" style={{ width: 40, minWidth: 40 }}>
-                <input
-                  type="checkbox"
-                  checked={selectedLeafIds.has(exp.id)}
-                  onChange={() => onToggle(exp)}
-                  className="cursor-pointer"
-                />
-              </td>
-              {visibleColumns.map(col => (
-                <td
-                  key={col.id}
-                  className={`px-3 py-2 text-xs text-slate-700 whitespace-nowrap${col.id === 'name' ? ' sticky left-10 z-10 bg-white border-r border-slate-100 font-medium' : ''}`}
-                  style={{ width: col.width, minWidth: col.width }}
-                >
-                  {renderCellValue(col, exp)}
+
+                  {/* Fixed: name — sticky */}
+                  {fixedNameCol && (
+                    <th
+                      className={`sticky top-0 left-10 z-30 border-b border-r border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${headerBgClass('fixed')}`}
+                      style={{ width: fixedNameCol.width, minWidth: fixedNameCol.width, position: 'relative' }}
+                      onClick={() => fixedNameCol.sortable && handleSort(fixedNameCol.id)}
+                    >
+                      <div className={`flex items-center gap-1 ${fixedNameCol.sortable ? 'cursor-pointer select-none' : ''}`}>
+                        {fixedNameCol.label}
+                        {sort?.columnId === fixedNameCol.id && (
+                          <Icon name={sort.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-500" />
+                        )}
+                      </div>
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 transition-colors"
+                        onMouseDown={e => { e.stopPropagation(); handleResizeStart(e, fixedNameCol.id, fixedNameCol.width) }}
+                        onClick={e => e.stopPropagation()}
+                      />
+                    </th>
+                  )}
+
+                  {/* Reorderable columns */}
+                  {reorderableCols.map(col => (
+                    <SortableColumnHeader
+                      key={col.id}
+                      col={col}
+                      sort={sort}
+                      onSort={handleSort}
+                      onResizeStart={handleResizeStart}
+                      headerBgClass={headerBgClass}
+                    />
+                  ))}
+
+                  {/* '+' button to add new column */}
+                  <th
+                    className="sticky top-0 z-20 border-b border-slate-200 px-2 py-2 bg-slate-50"
+                    style={{ width: 36, minWidth: 36 }}
+                  >
+                    <div className="relative" ref={addColRef}>
+                      <button
+                        onClick={() => setAddColOpen(o => !o)}
+                        className="text-slate-400 hover:text-blue-600 transition-colors"
+                        title="Add column"
+                      >
+                        <Icon name="add" className="text-[16px]" />
+                      </button>
+                      {addColOpen && (
+                        <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 w-52 p-2">
+                          {!addColType ? (
+                            <>
+                              <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                                Column type
+                              </div>
+                              <button
+                                onClick={() => setAddColType('config')}
+                                className="w-full text-left px-2 py-1.5 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              >
+                                Config key
+                              </button>
+                              <button
+                                onClick={() => setAddColType('metric')}
+                                className="w-full text-left px-2 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                              >
+                                Metric key
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                                {addColType === 'config' ? 'Config' : 'Metric'} key name
+                              </div>
+                              <input
+                                autoFocus
+                                value={addColKey}
+                                onChange={e => setAddColKey(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') handleAddColSubmit()
+                                  if (e.key === 'Escape') { setAddColOpen(false); setAddColType(null); setAddColKey('') }
+                                }}
+                                placeholder="Key name..."
+                                className="w-full text-xs border border-slate-200 rounded px-2 py-1 mb-2 focus:outline-none focus:border-blue-400"
+                              />
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={handleAddColSubmit}
+                                  disabled={!addColKey.trim()}
+                                  className="flex-1 text-xs px-2 py-1 bg-blue-600 text-white rounded disabled:opacity-50 hover:bg-blue-700 transition-colors"
+                                >
+                                  Add
+                                </button>
+                                <button
+                                  onClick={() => { setAddColType(null); setAddColKey('') }}
+                                  className="text-xs text-slate-400 hover:text-slate-600"
+                                >
+                                  Back
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </th>
+                </tr>
+              </SortableContext>
+            </DndContext>
+          </thead>
+          <tbody>
+            {sortedRows.map(exp => (
+              <tr key={exp.id} className="hover:bg-slate-50/50 border-b border-slate-100 cursor-pointer">
+                {/* Checkbox — sticky left */}
+                <td className="sticky left-0 z-10 bg-white border-r border-slate-100 px-2 py-2" style={{ width: 40, minWidth: 40 }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedLeafIds.has(exp.id)}
+                    onChange={() => onToggle(exp)}
+                    className="cursor-pointer"
+                  />
                 </td>
+                {visibleColumns.map(col => (
+                  <td
+                    key={col.id}
+                    className={`px-3 py-2 text-xs text-slate-700 whitespace-nowrap${
+                      col.id === 'name' ? ' sticky left-10 z-10 bg-white border-r border-slate-100 font-medium' : ''
+                    }`}
+                    style={{ width: col.width, minWidth: col.width }}
+                    onClick={col.id === 'status' ? e => e.stopPropagation() : undefined}
+                  >
+                    {renderCellValue(col, exp)}
+                  </td>
+                ))}
+                {/* Empty cell for the '+' column */}
+                <td style={{ width: 36, minWidth: 36 }} />
+              </tr>
+            ))}
+
+            {/* Inline new row */}
+            <tr className="border-t border-slate-200 bg-slate-50/30">
+              <td className="sticky left-0 z-10 bg-slate-50/30 px-2 py-2" style={{ width: 40, minWidth: 40 }} />
+              {fixedTypeIconCol && (
+                <td className="px-3 py-2" style={{ width: fixedTypeIconCol.width, minWidth: fixedTypeIconCol.width }}>
+                  <Icon name="add" className="text-[16px] text-slate-300" />
+                </td>
+              )}
+              {fixedNameCol && (
+                <td
+                  className="sticky left-10 z-10 bg-slate-50/30 px-3 py-2"
+                  style={{ width: fixedNameCol.width, minWidth: fixedNameCol.width }}
+                >
+                  <input
+                    value={newRowName}
+                    onChange={e => { setNewRowName(e.target.value); setNewRowError(false) }}
+                    onKeyDown={async e => {
+                      if (e.key === 'Enter') {
+                        const trimmed = newRowName.trim()
+                        if (!trimmed) { setNewRowError(true); return }
+                        try {
+                          await experimentsApi.create(projectId, { name: trimmed, status: 'planned' })
+                          setNewRowName('')
+                          setNewRowError(false)
+                          await fetchExperiments()
+                        } catch (err) {
+                          console.error('Failed to create experiment:', err)
+                          setNewRowError(true)
+                        }
+                      }
+                      if (e.key === 'Escape') { setNewRowName(''); setNewRowError(false) }
+                    }}
+                    placeholder="New experiment..."
+                    className={`w-full text-xs bg-transparent border-none focus:outline-none placeholder:text-slate-300 ${
+                      newRowError ? 'text-red-500' : 'text-slate-500'
+                    }`}
+                  />
+                </td>
+              )}
+              {reorderableCols.map(col => (
+                <td key={col.id} className="px-3 py-2" style={{ width: col.width, minWidth: col.width }} />
               ))}
+              <td style={{ width: 36, minWidth: 36 }} />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

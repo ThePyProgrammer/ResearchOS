@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 07-00-PLAN.md"
-last_updated: "2026-03-17T16:37:00Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-16T16:47:18.112Z"
 last_activity: 2026-03-17 — Completed plan 07-00 (Extract useLocalStorage hook, table view test scaffolds RED phase)
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 24
-  completed_plans: 20
+  completed_plans: 22
   percent: 100
 ---
 
@@ -65,6 +65,7 @@ Progress: [████████████] 100%
 | Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design P00 | 8 | 2 tasks | 4 files |
 | Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design P01 | 20 min | 2 tasks | 6 files |
 | Phase 07-experiment-table-view P00 | 3 min | 2 tasks | 3 files |
+| Phase 07-experiment-table-view P01 | 8 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -131,6 +132,8 @@ Recent decisions affecting current work:
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Tri-state checkbox via ref callback sets el.indeterminate directly — React does not support indeterminate as a controlled prop
 - [Phase 07-experiment-table-view]: useLocalStorage extracted to hooks/useLocalStorage.js as shared named export; NoteGraphView now imports from there
 - [Phase 07-experiment-table-view]: Table view test file imports buildColumns/applyFilter/sortRows from ProjectDetail.jsx in RED state — Plan 01 must export them to turn GREEN
+- [Phase 07-experiment-table-view]: applyFilter/sortRows signatures match 07-00 RED test contracts exactly (exp, filter) and (rows, sort) with .columnId field
+- [Phase 07-experiment-table-view]: ExperimentTableView select-all uses useRef+useEffect to set el.indeterminate directly — React does not support indeterminate as controlled prop
 
 ### Roadmap Evolution
 
@@ -148,5 +151,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T16:07:57.132Z
-Stopped at: Checkpoint: 06-02 Task 2 human-verify pending
+Last session: 2026-03-16T16:47:18.108Z
+Stopped at: Completed 07-01-PLAN.md

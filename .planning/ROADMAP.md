@@ -115,7 +115,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Experiment Differentiators | 3/3 | Complete   | 2026-03-16 |
 | 5. Integration Polish | 1/1 | Complete   | 2026-03-16 |
 | 6. CSV Loading Framework | 3/3 | Complete   | 2026-03-16 |
-| 7. Experiment Table View | 1/4 | In Progress|  |
+| 7. Experiment Table View | 2/4 | In Progress|  |
 
 ### Phase 6: CSV Loading Framework for Experiments
 **Goal**: Researchers can import CSV files containing experiment results into the experiment tree, with a multi-step wizard for column mapping, tree preview with interactive editing, and collision resolution for re-imports
@@ -153,7 +153,7 @@ Plans:
   10. User can quickly add experiments via inline new row at the bottom
   11. Checkbox selection is shared between tree and table views for comparison workflow
   12. Best metric values can be highlighted with a toggle and per-metric lower-is-better option
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 
 Plans:
 - [ ] 07-00-PLAN.md — TDD: extract useLocalStorage hook + test scaffolds for buildColumns, applyFilter, sortRows
