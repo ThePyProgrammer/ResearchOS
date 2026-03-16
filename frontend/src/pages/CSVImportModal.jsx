@@ -278,6 +278,45 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
     return count
   }
 
+  /** Collect all leaf _tmpIds that are descendants of a node (including itself if leaf). */
+  function collectLeafIds(node) {
+    const ids = []
+    function walk(n) {
+      if (n._type === 'leaf') ids.push(n._tmpId)
+      if (n.children?.length) n.children.forEach(walk)
+    }
+    walk(node)
+    return ids
+  }
+
+  /** Determine tri-state for a group node: 'all' | 'none' | 'mixed' */
+  function groupCheckState(node) {
+    const leafIds = collectLeafIds(node)
+    if (leafIds.length === 0) return 'all'
+    const excluded = leafIds.filter((id) => excludedIds.has(id)).length
+    if (excluded === 0) return 'all'
+    if (excluded === leafIds.length) return 'none'
+    return 'mixed'
+  }
+
+  /** Toggle all leaf descendants of a group node. */
+  function toggleGroupNode(node) {
+    const leafIds = collectLeafIds(node)
+    if (leafIds.length === 0) return
+    const state = groupCheckState(node)
+    setExcludedIds((prev) => {
+      const next = new Set(prev)
+      if (state === 'all' || state === 'mixed') {
+        // Exclude all
+        leafIds.forEach((id) => next.add(id))
+      } else {
+        // Include all
+        leafIds.forEach((id) => next.delete(id))
+      }
+      return next
+    })
+  }
+
   // ── Step 4: Import ───────────────────────────────────────────────────────
 
   async function handleImport() {
@@ -509,11 +548,16 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
 
   function renderPreviewNode(node, depth = 0) {
     const name = renames[node._tmpId] ?? node.name
-    const excluded = excludedIds.has(node._tmpId)
-    const isEditing = editingNode === node._tmpId
     const isLeaf = node._type === 'leaf'
+    const excluded = isLeaf
+      ? excludedIds.has(node._tmpId)
+      : groupCheckState(node) === 'none'
+    const isEditing = editingNode === node._tmpId
     const hasCollision = isLeaf && node._collision
     const collisionAction = collisionActions[node._tmpId] ?? 'create'
+
+    // For group nodes: determine tri-state
+    const checkState = isLeaf ? (excluded ? 'none' : 'all') : groupCheckState(node)
 
     return (
       <div key={node._tmpId} style={{ paddingLeft: depth * 18 }}>
@@ -526,18 +570,25 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
               : 'hover:bg-slate-50'
           }`}
         >
-          {/* Exclude checkbox */}
+          {/* Exclude checkbox — leaf: direct toggle; group: tri-state toggle all descendants */}
           <input
             type="checkbox"
-            checked={!excluded}
-            onChange={() =>
-              setExcludedIds((prev) => {
-                const next = new Set(prev)
-                if (next.has(node._tmpId)) next.delete(node._tmpId)
-                else next.add(node._tmpId)
-                return next
-              })
-            }
+            checked={checkState === 'all'}
+            ref={(el) => {
+              if (el) el.indeterminate = checkState === 'mixed'
+            }}
+            onChange={() => {
+              if (isLeaf) {
+                setExcludedIds((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(node._tmpId)) next.delete(node._tmpId)
+                  else next.add(node._tmpId)
+                  return next
+                })
+              } else {
+                toggleGroupNode(node)
+              }
+            }}
             className="accent-blue-600 flex-shrink-0"
           />
 
@@ -570,7 +621,9 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
             />
           ) : (
             <span
-              className="text-xs text-slate-800 truncate flex-1 min-w-0 cursor-pointer"
+              className={`text-xs text-slate-800 truncate flex-1 min-w-0 cursor-pointer ${
+                excluded ? 'line-through' : ''
+              }`}
               onDoubleClick={() => setEditingNode(node._tmpId)}
               title="Double-click to rename"
             >
@@ -623,7 +676,8 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
   }
 
   function renderStep3() {
-    const leafCount = countLeaves(previewTree) - excludedIds.size
+    const totalLeaves = countLeaves(previewTree)
+    const selectedLeaves = totalLeaves - excludedIds.size
     const groupCount = countGroups(previewTree)
 
     return (
@@ -633,7 +687,7 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
             Review the experiments to be created. Double-click any name to rename.
           </p>
           <span className="text-xs text-slate-500 flex-shrink-0">
-            {leafCount} experiments, {groupCount} groups
+            {groupCount} groups
           </span>
         </div>
 
@@ -645,9 +699,14 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
           )}
         </div>
 
-        <p className="text-xs text-slate-400">
-          Uncheck rows to exclude them from import. Use collision dropdowns for name conflicts.
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-400">
+            Uncheck rows to exclude them from import. Use collision dropdowns for name conflicts.
+          </p>
+          <span className="text-xs font-medium text-slate-600 flex-shrink-0">
+            {selectedLeaves} of {totalLeaves} experiment{totalLeaves !== 1 ? 's' : ''} selected for import
+          </span>
+        </div>
       </div>
     )
   }
@@ -660,6 +719,18 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
     const parentName = parentGroupId
       ? existingExperiments.find((e) => e.id === parentGroupId)?.name ?? 'selected group'
       : 'project root'
+
+    // Count by collision action for included leaves
+    const includedLeaves = included.filter((n) => n._type === 'leaf')
+    const creatingCount = includedLeaves.filter(
+      (n) => !n._collision || (collisionActions[n._tmpId] ?? 'create') === 'create'
+    ).length
+    const updatingCount = includedLeaves.filter(
+      (n) => n._collision && (collisionActions[n._tmpId] ?? 'create') === 'update'
+    ).length
+    const skippingCount = includedLeaves.filter(
+      (n) => n._collision && (collisionActions[n._tmpId] ?? 'create') === 'skip'
+    ).length
 
     if (importResult) {
       return (
@@ -690,10 +761,27 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
       <div className="space-y-4">
         <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-2 text-sm text-slate-700">
           <p>
-            <span className="font-medium">{leafCount}</span> experiments and{' '}
-            <span className="font-medium">{groupCount}</span> groups will be created under{' '}
+            <span className="font-medium">{groupCount}</span> group{groupCount !== 1 ? 's' : ''} and{' '}
+            <span className="font-medium">{leafCount}</span> experiment{leafCount !== 1 ? 's' : ''} will be imported under{' '}
             <span className="font-medium">{parentName}</span>.
           </p>
+          {leafCount > 0 && (
+            <p className="text-xs text-slate-500">
+              {creatingCount > 0 && <span className="text-emerald-700">Creating {creatingCount} new</span>}
+              {updatingCount > 0 && (
+                <span className={creatingCount > 0 ? 'text-slate-400' : ''}>
+                  {creatingCount > 0 ? ', ' : ''}
+                  <span className="text-blue-700">updating {updatingCount}</span>
+                </span>
+              )}
+              {skippingCount > 0 && (
+                <span>
+                  {(creatingCount > 0 || updatingCount > 0) ? ', ' : ''}
+                  <span className="text-slate-500">skipping {skippingCount}</span>
+                </span>
+              )}
+            </p>
+          )}
           <p>
             Metric merge mode:{' '}
             <span className="font-medium">

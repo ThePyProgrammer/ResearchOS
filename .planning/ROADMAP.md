@@ -105,7 +105,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -115,6 +115,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 4. Experiment Differentiators | 3/3 | Complete   | 2026-03-16 |
 | 5. Integration Polish | 1/1 | Complete   | 2026-03-16 |
 | 6. CSV Loading Framework | 1/3 | In Progress | — |
+| 7. Experiment Table View | 0/4 | Planning   | — |
 
 ### Phase 6: CSV Loading Framework for Experiments
 **Goal**: Researchers can import CSV files containing experiment results into the experiment tree, with a multi-step wizard for column mapping, tree preview with interactive editing, and collision resolution for re-imports
@@ -135,12 +136,27 @@ Plans:
 - [x] 06-01-PLAN.md — Backend bulk import endpoint + CSVImportModal wizard (Upload, Map Columns, Preview, Confirm)
 - [ ] 06-02-PLAN.md — Interactive preview editing (rename, exclude, collision resolution) + human verification
 
-### Phase 7: Implement an alternative table view for the experiment view that looks like a spreadsheet with filters and sorts available
-
-**Goal:** [To be planned]
-**Requirements**: TBD
+### Phase 7: Experiment Table View
+**Goal**: Researchers can view and interact with experiments in a spreadsheet-style table with dynamic columns, filtering, sorting, inline editing, and column management — complementing the existing tree view
 **Depends on:** Phase 6
-**Plans:** 0 plans
+**Requirements**: TABLE-01, TABLE-02, TABLE-03, TABLE-04, TABLE-05, TABLE-06, TABLE-07, TABLE-08, TABLE-09, TABLE-10, TABLE-11, TABLE-12
+**Success Criteria** (what must be TRUE):
+  1. User can toggle between tree and table views in the Experiments section, with preference persisted per project
+  2. Table shows all experiments flat with type icon, name, status, parent group, created date, and dynamic config/metric columns
+  3. Config headers have blue tint and metric headers have green tint for instant visual grouping
+  4. Header row and name column remain sticky when scrolling
+  5. User can sort by any column (ascending/descending/clear) and see sort indicators
+  6. User can filter experiments using Notion-style filter chips with full operator support
+  7. User can show/hide, resize, reorder, and add columns with settings persisted in localStorage
+  8. User can double-click cells to edit config/metric values inline and single-click status to change it
+  9. User can click a row to open a detail side panel with full experiment info
+  10. User can quickly add experiments via inline new row at the bottom
+  11. Checkbox selection is shared between tree and table views for comparison workflow
+  12. Best metric values can be highlighted with a toggle and per-metric lower-is-better option
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 7 to break down)
+- [ ] 07-00-PLAN.md — TDD: extract useLocalStorage hook + test scaffolds for buildColumns, applyFilter, sortRows
+- [ ] 07-01-PLAN.md — Core table rendering: ExperimentTableView with view toggle, columns, sorting, sticky layout, selection
+- [ ] 07-02-PLAN.md — Column management (picker, resize, DnD reorder, add new) + inline editing + inline new row
+- [ ] 07-03-PLAN.md — Filter bar, detail side panel, best-metric highlighting + human verification
