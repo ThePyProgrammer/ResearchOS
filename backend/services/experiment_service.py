@@ -7,6 +7,8 @@ from models.experiment import (
     Experiment,
     ExperimentCreate,
     ExperimentUpdate,
+    ExperimentImportItem,
+    ExperimentImportResult,
     ExperimentPaper,
     ExperimentPaperCreate,
 )
@@ -146,6 +148,95 @@ def duplicate_experiment(exp_id: str, deep: bool = False) -> Optional[Experiment
         _deep_clone_children(source.id, new_exp.id, source.project_id, all_exps)
 
     return new_exp
+
+
+# ---------------------------------------------------------------------------
+# Bulk CSV import
+# ---------------------------------------------------------------------------
+
+def bulk_create_experiment_tree(
+    project_id: str,
+    items: list[ExperimentImportItem],
+    parent_id: Optional[str],
+    merge_metrics: bool,
+) -> list[ExperimentImportResult]:
+    """Create a set of experiments from BFS-ordered import items.
+
+    Processes items in order, maintaining a tmp_id → real_id map so parent
+    references are resolved correctly as children are created.
+
+    Args:
+        project_id: Project to create experiments in.
+        items: BFS-ordered list of items (parents come before children).
+        parent_id: Root target group ID (None = project top level).
+        merge_metrics: If True, merge incoming metrics with existing ones
+                       (incoming wins conflicts). If False, overwrite.
+
+    Returns:
+        List of ExperimentImportResult in the same order as items.
+    """
+    results: list[ExperimentImportResult] = []
+    id_map: dict[str, str] = {}  # tmp_id -> real experiment id
+
+    for item in items:
+        # Resolve real parent_id
+        if item.parent_tmp_id is not None:
+            real_parent_id = id_map.get(item.parent_tmp_id)
+        else:
+            real_parent_id = parent_id
+
+        if item.collision_action == "skip":
+            results.append(ExperimentImportResult(
+                tmp_id=item.tmp_id,
+                status="skipped",
+                id=item.existing_id,
+            ))
+            if item.existing_id:
+                id_map[item.tmp_id] = item.existing_id
+            continue
+
+        if item.collision_action == "update" and item.existing_id:
+            existing = get_experiment(item.existing_id)
+            if existing is not None:
+                if merge_metrics:
+                    merged = {**existing.metrics, **item.metrics}
+                else:
+                    merged = dict(item.metrics)
+                update_experiment(item.existing_id, ExperimentUpdate(metrics=merged))
+                id_map[item.tmp_id] = item.existing_id
+                results.append(ExperimentImportResult(
+                    tmp_id=item.tmp_id,
+                    status="updated",
+                    id=item.existing_id,
+                ))
+                logger.info(
+                    "Bulk import: updated experiment %s (merge=%s)", item.existing_id, merge_metrics
+                )
+                continue
+            # Fall through to create if existing experiment not found
+            logger.warning(
+                "Bulk import: existing_id %s not found for update — creating instead",
+                item.existing_id,
+            )
+
+        # Create new experiment
+        new_exp = create_experiment(ExperimentCreate(
+            project_id=project_id,
+            parent_id=real_parent_id,
+            name=item.name,
+            status="planned",
+            config=item.config,
+            metrics=item.metrics,
+        ))
+        id_map[item.tmp_id] = new_exp.id
+        results.append(ExperimentImportResult(
+            tmp_id=item.tmp_id,
+            status="created",
+            id=new_exp.id,
+        ))
+        logger.info("Bulk import: created experiment %s (%s)", new_exp.id, item.name)
+
+    return results
 
 
 # ---------------------------------------------------------------------------

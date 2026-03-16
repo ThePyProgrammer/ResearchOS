@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from models.experiment import ExperimentCreate, ExperimentUpdate, ExperimentPaperCreate
+from models.experiment import ExperimentCreate, ExperimentUpdate, ExperimentPaperCreate, ExperimentImportRequest
 from services import experiment_service, note_service, project_service
 from models.note import NoteCreate
 
@@ -42,6 +42,20 @@ async def create_experiment(project_id: str, data: ExperimentCreate):
     )
     exp = experiment_service.create_experiment(canonical)
     return JSONResponse(exp.model_dump(by_alias=True), status_code=201)
+
+
+@router.post("/api/projects/{project_id}/experiments/import-csv", status_code=201)
+async def import_csv(project_id: str, req: ExperimentImportRequest):
+    """Bulk-create experiments from a BFS-ordered import list."""
+    if project_service.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND_PROJECT)
+    results = experiment_service.bulk_create_experiment_tree(
+        project_id=project_id,
+        items=req.items,
+        parent_id=req.parent_id,
+        merge_metrics=req.merge_metrics,
+    )
+    return JSONResponse([r.model_dump(by_alias=True) for r in results], status_code=201)
 
 
 @router.get("/api/projects/{project_id}/experiments")

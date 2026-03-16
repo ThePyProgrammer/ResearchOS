@@ -354,5 +354,7 @@ export const experimentsApi = {
   listPapers: (expId) => apiFetch(`/experiments/${expId}/papers`),
   linkPaper: (expId, data) => apiFetch(`/experiments/${expId}/papers`, { method: 'POST', body: data }),
   unlinkPaper: (expId, linkId) => apiFetch(`/experiments/${expId}/papers/${linkId}`, { method: 'DELETE' }),
+  importCsv: (projectId, data) =>
+    apiFetch(`/projects/${projectId}/experiments/import-csv`, { method: 'POST', body: data }),
 }
 
