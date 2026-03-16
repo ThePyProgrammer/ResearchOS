@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-03-16T16:56:06.288Z"
+stopped_at: "Paused at checkpoint 07-03 Task 3: human-verify"
+last_updated: "2026-03-16T17:07:40.965Z"
 last_activity: 2026-03-17 — Completed plan 07-00 (Extract useLocalStorage hook, table view test scaffolds RED phase)
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 24
-  completed_plans: 23
+  completed_plans: 24
   percent: 100
 ---
 
@@ -138,6 +138,9 @@ Recent decisions affecting current work:
 - [Phase 07-experiment-table-view]: Separate DnD context ID ('column-dnd') for column headers — avoids any collision with tree view's DnD
 - [Phase 07-experiment-table-view]: EditableCell calls detectType(draft) on save to preserve numeric/boolean values matching CSV import convention
 - [Phase 07-experiment-table-view]: customColumns in colState allows showing user-added columns before any experiment has that key in data
+- [Phase 07-experiment-table-view]: formatFilterValue helper renders human-readable chip value labels (array join, between range, empty string for empty/notempty operators)
+- [Phase 07-experiment-table-view]: filteredRows replaces sortedRows throughout — select-all, metric highlighting, and new-row creation all work on filtered set
+- [Phase 07-experiment-table-view]: Row click toggles detail panel (click same row again to close) to avoid requiring a separate close-only affordance
 
 ### Roadmap Evolution
 
@@ -155,5 +158,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T16:56:06.285Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-03-16T17:07:15.567Z
+Stopped at: Paused at checkpoint 07-03 Task 3: human-verify
