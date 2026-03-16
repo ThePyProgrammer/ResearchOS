@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Phase 6 context gathered
-last_updated: "2026-03-16T15:02:47.345Z"
+stopped_at: Completed 06-00-PLAN.md (CSV import utilities + tests)
+last_updated: "2026-03-16T15:53:00.256Z"
 last_activity: 2026-03-16 — Completed plan 05-01 (library-scoped experiment literature search, experiment counts on project cards)
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 5
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 20
+  completed_plans: 18
   percent: 100
 ---
 
@@ -62,6 +62,7 @@ Progress: [████████████] 100%
 | Phase 04-experiment-differentiators P01 | 10 min | 2 tasks | 5 files |
 | Phase 04-experiment-differentiators P02 | 45 min | 2 tasks | 1 files |
 | Phase 05-integration-polish P01 | 10 min | 2 tasks | 4 files |
+| Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design P00 | 8 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -118,10 +119,14 @@ Recent decisions affecting current work:
 - [Phase 05-integration-polish]: experiment_count computed in list_projects via second query (fetch rows, count client-side) — Supabase Python client does not support GROUP BY in select
 - [Phase 05-integration-polish]: experiment_count defaults to 0 in Project model so single-project fetches work without a join
 - [Phase 05-integration-polish]: libraryId threading to MiniSearchPicker follows exact same pattern as RQSection (prop threaded from section → node → picker)
+- [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: detectType reused verbatim from ProjectDetail.jsx — single source of truth for CSV import utilities
+- [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: buildImportTree stores group column KVs on BOTH group nodes AND leaf experiments — enables comparison modal without tree traversal
+- [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Path-keyed Map (|col=val string) used for O(1) group node deduplication in buildImportTree
 
 ### Roadmap Evolution
 
 - Phase 6 added: Implement a CSV loading framework to nest into the experimental design
+- Phase 7 added: Implement an alternative table view for experiments with spreadsheet-like filters and sorts
 
 ### Pending Todos
 
@@ -134,5 +139,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T15:02:47.339Z
-Stopped at: Phase 6 context gathered
+Last session: 2026-03-16T15:53:00.253Z
+Stopped at: Completed 06-00-PLAN.md (CSV import utilities + tests)
