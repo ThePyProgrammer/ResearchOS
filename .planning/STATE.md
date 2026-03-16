@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Checkpoint: 06-02 Task 2 human-verify pending"
-last_updated: "2026-03-16T16:08:08.493Z"
-last_activity: 2026-03-17 — Completed plan 06-01 (CSVImportModal 4-step wizard, bulk_create_experiment_tree, POST /api/projects/{id}/experiments/import-csv)
+stopped_at: "Completed 07-00-PLAN.md"
+last_updated: "2026-03-17T16:37:00Z"
+last_activity: 2026-03-17 — Completed plan 07-00 (Extract useLocalStorage hook, table view test scaffolds RED phase)
 progress:
   total_phases: 7
   completed_phases: 6
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2025-07-17)
 
 ## Current Position
 
-Phase: 6 of 7 (CSV Loading Framework) — IN PROGRESS
-Plan: 1 of 3 plans in Phase 06 complete (06-01 done)
-Status: Phase 06 in progress — CSV import wizard and backend endpoint shipped
-Last activity: 2026-03-17 — Completed plan 06-01 (CSVImportModal 4-step wizard, bulk_create_experiment_tree, POST /api/projects/{id}/experiments/import-csv)
+Phase: 7 of 7 (Experiment Table View) — IN PROGRESS
+Plan: 0 of 3 plans in Phase 07 complete (07-00 done)
+Status: Phase 07 in progress — useLocalStorage extracted, table view test scaffolds created (RED)
+Last activity: 2026-03-17 — Completed plan 07-00 (Extract useLocalStorage hook, table view test scaffolds RED phase)
 
 Progress: [████████████] 100%
 
@@ -64,6 +64,7 @@ Progress: [████████████] 100%
 | Phase 05-integration-polish P01 | 10 min | 2 tasks | 4 files |
 | Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design P00 | 8 | 2 tasks | 4 files |
 | Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design P01 | 20 min | 2 tasks | 6 files |
+| Phase 07-experiment-table-view P00 | 3 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,8 @@ Recent decisions affecting current work:
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Preview tree fully resets on Back from Step 3 — avoids stale collision/rename/exclude state (research pitfall 2)
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Group tri-state derived entirely from excludedIds set — no separate group state; groupCheckState() computes all/mixed/none on render
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: Tri-state checkbox via ref callback sets el.indeterminate directly — React does not support indeterminate as a controlled prop
+- [Phase 07-experiment-table-view]: useLocalStorage extracted to hooks/useLocalStorage.js as shared named export; NoteGraphView now imports from there
+- [Phase 07-experiment-table-view]: Table view test file imports buildColumns/applyFilter/sortRows from ProjectDetail.jsx in RED state — Plan 01 must export them to turn GREEN
 
 ### Roadmap Evolution
 
