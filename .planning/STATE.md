@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 04-00-PLAN.md
-last_updated: "2026-03-16T11:59:04.289Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-03-16T12:08:45.448Z"
 last_activity: 2026-03-16 — Completed plan 04-00 (Wave 0 test scaffolds for EXP-07, EXP-08, EXP-09)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 88
 ---
 
@@ -59,6 +59,7 @@ Progress: [██████████░░] 88%
 | Phase 03-experiment-tree P01 | 8 min | 2 tasks | 8 files |
 | Phase 03-experiment-tree P02 | 4 | 1 tasks | 1 files |
 | Phase 03-experiment-tree P03 | 10 min | 1 tasks | 1 files |
+| Phase 04-experiment-differentiators P01 | 10 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,9 @@ Recent decisions affecting current work:
 - [Phase 03-experiment-tree]: Experiment notes panel expands inline with max-h-96 / overflow-auto to keep tree navigable; edit_note button color signals open state
 - [Phase 04-experiment-differentiators]: [Phase 04-experiment-differentiators]: xfail marks used for Wave 0 backend stubs so xpass is visible once Plan 01 ships the duplicate endpoint
 - [Phase 04-experiment-differentiators]: [Phase 04-experiment-differentiators]: Frontend test helpers inlined in test file to define API contract before Plan 02 extracts them into CompareModal
+- [Phase 04-experiment-differentiators]: Leaf duplicate opens pre-filled ExperimentCreateModal (not direct API) so user can rename/tweak config before saving
+- [Phase 04-experiment-differentiators]: Parent deep-clone calls API directly and refreshes — no modal since editing entire subtree at once is impractical
+- [Phase 04-experiment-differentiators]: parentId prop threaded through ExperimentNode so Duplicate creates a sibling (not a child)
 
 ### Pending Todos
 
@@ -118,5 +122,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T11:59:04.286Z
-Stopped at: Completed 04-00-PLAN.md
+Last session: 2026-03-16T12:08:31.663Z
+Stopped at: Completed 04-01-PLAN.md

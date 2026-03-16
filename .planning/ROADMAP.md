@@ -83,7 +83,7 @@ Plans:
   1. User can select multiple leaf experiments and view their metrics side-by-side in a comparison table
   2. User can view a config diff between two experiments in the same group, seeing which parameters changed
   3. User can duplicate an experiment, producing a new planned sibling with the same config that can be modified before running
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 Plans:
 - [ ] 04-00-PLAN.md — Wave 0: test scaffolds for experiment routes (EXP-09) and compare-modal helpers (EXP-07, EXP-08)
 - [ ] 04-01-PLAN.md — Backend duplicate endpoint + frontend duplicate UX in ExperimentNode context menu
@@ -99,4 +99,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Project Foundation | 4/4 | Complete   | 2026-03-15 |
 | 2. Research Questions & Literature | 6/6 | Complete   | 2026-03-15 |
 | 3. Experiment Tree | 3/3 | Complete   | 2026-03-15 |
-| 4. Experiment Differentiators | 1/3 | In Progress|  |
+| 4. Experiment Differentiators | 2/3 | In Progress|  |
