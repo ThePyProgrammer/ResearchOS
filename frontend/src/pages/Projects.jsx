@@ -148,9 +148,13 @@ function ProjectCard({ project, onDelete, onArchive }) {
       )}
 
       {/* Footer */}
-      <div className="mt-auto pt-1">
+      <div className="flex items-center gap-3 mt-auto pt-1">
+        <span className="flex items-center gap-1 text-xs text-slate-400">
+          <Icon name="science" className="text-[14px]" />
+          {project.experimentCount ?? 0}
+        </span>
         <span className="text-xs text-slate-400">
-          Updated {formatRelativeDate(project.updatedAt) || '—'}
+          Updated {formatRelativeDate(project.updatedAt) || '\u2014'}
         </span>
       </div>
 

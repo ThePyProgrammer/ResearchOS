@@ -11,6 +11,7 @@ class Project(CamelModel):
     library_id: str
     created_at: str
     updated_at: str
+    experiment_count: int = 0
 
 
 class ProjectCreate(CamelModel):

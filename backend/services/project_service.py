@@ -16,7 +16,20 @@ def list_projects(library_id: Optional[str] = None) -> list[Project]:
     if library_id:
         query = query.eq("library_id", library_id)
     result = query.execute()
-    return [Project.model_validate(r) for r in result.data]
+    projects = [Project.model_validate(r) for r in result.data]
+    if not projects:
+        return projects
+
+    # Count experiments per project
+    project_ids = [p.id for p in projects]
+    exp_result = get_client().table("experiments").select("project_id").in_("project_id", project_ids).execute()
+    count_map: dict[str, int] = {}
+    for row in exp_result.data:
+        pid = row["project_id"]
+        count_map[pid] = count_map.get(pid, 0) + 1
+    for p in projects:
+        p.experiment_count = count_map.get(p.id, 0)
+    return projects
 
 
 def get_project(project_id: str) -> Optional[Project]:
