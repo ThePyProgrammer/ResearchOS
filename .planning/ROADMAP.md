@@ -98,7 +98,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Experiment literature search (MiniSearchPicker in ExperimentNode) returns only papers/websites from the project's library
   2. Project cards on the projects list page display the number of experiments in each project
-**Plans:** 0/0 plans complete
+**Plans:** 1 plan
+Plans:
+- [ ] 05-01-PLAN.md — Thread libraryId to experiment search picker + add experiment counts to project cards
 
 ## Progress
 
@@ -111,4 +113,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Research Questions & Literature | 6/6 | Complete   | 2026-03-15 |
 | 3. Experiment Tree | 3/3 | Complete   | 2026-03-15 |
 | 4. Experiment Differentiators | 3/3 | Complete   | 2026-03-16 |
-| 5. Integration Polish | 0/0 | Not started | - |
+| 5. Integration Polish | 0/1 | Not started | - |

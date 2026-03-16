@@ -1349,7 +1349,7 @@ function RQSection({ projectId, libraryId }) {
 
 // ─── Experiment Node (recursive) ──────────────────────────────────────────────
 
-function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [], parentId = null, selectedLeafIds = new Set(), onToggle }) {
+function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [], parentId = null, selectedLeafIds = new Set(), onToggle }) {
   const [expanded, setExpanded] = useState(true)
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(experiment.name)
@@ -1689,6 +1689,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
                       onLink={handleExpLink}
                       existingPaperIds={existingPaperIds}
                       existingWebsiteIds={existingWebsiteIds}
+                      libraryId={libraryId}
                     />
                     <button
                       onClick={() => setShowLinkPicker(false)}
@@ -1718,6 +1719,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
                       depth={0}
                       onRefresh={onRefresh}
                       projectId={projectId}
+                      libraryId={libraryId}
                       expPapersMap={expPapersMap}
                       onExpPapersChange={onExpPapersChange}
                       rqList={rqList}
@@ -2112,7 +2114,7 @@ function CompareModal({ experiments, open, onClose, flatTree }) {
 
 // ─── Experiment Section ────────────────────────────────────────────────────────
 
-function ExperimentSection({ projectId }) {
+function ExperimentSection({ projectId, libraryId }) {
   const [flatExperiments, setFlatExperiments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -2292,6 +2294,7 @@ function ExperimentSection({ projectId }) {
                   depth={0}
                   onRefresh={fetchExperiments}
                   projectId={projectId}
+                  libraryId={libraryId}
                   expPapersMap={expPapersMap}
                   onExpPapersChange={handleExpPapersChange}
                   rqList={rqList}
@@ -2829,7 +2832,7 @@ export default function ProjectDetail() {
             <LiteratureTab projectId={project.id} libraryId={project.libraryId} />
           )}
           {activeTab === 'experiments' && (
-            <ExperimentSection projectId={project.id} />
+            <ExperimentSection projectId={project.id} libraryId={project.libraryId} />
           )}
           {activeTab === 'notes' && (
             <NotesPanel
