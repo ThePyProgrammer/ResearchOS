@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Research Questions & Literature** - RQ hierarchy, hypothesis tracking, and paper-to-project linking (gap closure in progress) (completed 2026-03-15)
 - [x] **Phase 3: Experiment Tree** - Hierarchical experiment nodes, leaf fields, status badges, experiment notes (completed 2026-03-15)
 - [x] **Phase 4: Experiment Differentiators** - Metric comparison, config diff, and experiment duplication (completed 2026-03-16)
-- [ ] **Phase 5: Integration Polish** - Fix experiment library scoping and add experiment counts to project cards (gap closure)
+- [x] **Phase 5: Integration Polish** - Fix experiment library scoping and add experiment counts to project cards (gap closure) (completed 2026-03-16)
 
 ## Phase Details
 
@@ -98,7 +98,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Experiment literature search (MiniSearchPicker in ExperimentNode) returns only papers/websites from the project's library
   2. Project cards on the projects list page display the number of experiments in each project
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 05-01-PLAN.md — Thread libraryId to experiment search picker + add experiment counts to project cards
 
@@ -113,4 +113,14 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Research Questions & Literature | 6/6 | Complete   | 2026-03-15 |
 | 3. Experiment Tree | 3/3 | Complete   | 2026-03-15 |
 | 4. Experiment Differentiators | 3/3 | Complete   | 2026-03-16 |
-| 5. Integration Polish | 0/1 | Not started | - |
+| 5. Integration Polish | 1/1 | Complete   | 2026-03-16 |
+
+### Phase 6: Implement a CSV loading framework to nest into the experimental design
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 6 to break down)

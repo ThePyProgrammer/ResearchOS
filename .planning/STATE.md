@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-16T14:16:42.894Z"
-last_activity: 2026-03-16 — Completed plan 04-02 (checkbox selection, floating action bar, CompareModal with Metrics + Config tabs, config inheritance)
+status: in_progress
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-16T14:52:06Z"
+last_activity: 2026-03-16 — Completed plan 05-01 (library-scoped experiment literature search, experiment counts on project cards)
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
-  total_plans: 16
-  completed_plans: 16
+  total_plans: 17
+  completed_plans: 17
   percent: 100
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2025-07-17)
 
 ## Current Position
 
-Phase: 4 of 4 (Experiment Differentiators) — COMPLETE
-Plan: 3 of 3 plans in Phase 04 complete (04-00, 04-01, 04-02 done)
-Status: Phase 04 complete — Experiment differentiators shipped (checkbox selection, CompareModal, config inheritance)
-Last activity: 2026-03-16 — Completed plan 04-02 (checkbox selection, floating action bar, CompareModal with Metrics + Config tabs, config inheritance)
+Phase: 5 of 5 (Integration Polish) — COMPLETE
+Plan: 1 of 1 plans in Phase 05 complete (05-01 done)
+Status: Phase 05 complete — Integration gaps closed (library-scoped experiment search, experiment counts on project cards)
+Last activity: 2026-03-16 — Completed plan 05-01 (library-scoped experiment literature search, experiment counts on project cards)
 
 Progress: [████████████] 100%
 
@@ -61,6 +61,7 @@ Progress: [████████████] 100%
 | Phase 03-experiment-tree P03 | 10 min | 1 tasks | 1 files |
 | Phase 04-experiment-differentiators P01 | 10 min | 2 tasks | 5 files |
 | Phase 04-experiment-differentiators P02 | 45 min | 2 tasks | 1 files |
+| Phase 05-integration-polish P01 | 10 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -114,6 +115,13 @@ Recent decisions affecting current work:
 - [Phase 04-experiment-differentiators]: getEffectiveConfig() merges parent config into child at compare time — no DB changes needed, resolved client-side using the flatTree prop passed to CompareModal
 - [Phase 04-experiment-differentiators]: Any-node selection (not leaf-only) — parent experiments can be selected alongside leaf experiments for comparison
 - [Phase 04-experiment-differentiators]: Config inheritance uses child-wins semantics — explicit child override always beats parent value
+- [Phase 05-integration-polish]: experiment_count computed in list_projects via second query (fetch rows, count client-side) — Supabase Python client does not support GROUP BY in select
+- [Phase 05-integration-polish]: experiment_count defaults to 0 in Project model so single-project fetches work without a join
+- [Phase 05-integration-polish]: libraryId threading to MiniSearchPicker follows exact same pattern as RQSection (prop threaded from section → node → picker)
+
+### Roadmap Evolution
+
+- Phase 6 added: Implement a CSV loading framework to nest into the experimental design
 
 ### Pending Todos
 
