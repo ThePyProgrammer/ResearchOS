@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi, githubReposApi, experimentsApi } from '../services/api'
 import NotesPanel from '../components/NotesPanel'
+import WindowModal from '../components/WindowModal'
 import {
   DndContext,
   closestCenter,
@@ -1348,7 +1349,7 @@ function RQSection({ projectId, libraryId }) {
 
 // ─── Experiment Node (recursive) ──────────────────────────────────────────────
 
-function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [], parentId = null }) {
+function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [], parentId = null, selectedLeafIds = new Set(), onToggle }) {
   const [expanded, setExpanded] = useState(true)
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(experiment.name)
@@ -1498,6 +1499,21 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
     opacity: isDragging ? 0.4 : 1,
   }
 
+  // Checkbox state computation
+  const leafIds = collectLeafIds(experiment)
+  const checkedCount = leafIds.filter(id => selectedLeafIds.has(id)).length
+  const allChecked = checkedCount === leafIds.length && leafIds.length > 0
+  const someChecked = checkedCount > 0 && !allChecked
+  const anySelected = selectedLeafIds.size > 0
+
+  const checkboxIconName = allChecked
+    ? 'check_box'
+    : someChecked
+      ? 'indeterminate_check_box'
+      : 'check_box_outline_blank'
+  const checkboxColorClass = (allChecked || someChecked) ? 'text-blue-600' : 'text-slate-400'
+  const checkboxVisibility = anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+
   return (
     <div ref={isDragOverlay ? undefined : setNodeRef} style={{ paddingLeft: depth * 24, ...sortableStyle }}>
       {/* Row */}
@@ -1509,6 +1525,17 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
         >
           <Icon name="drag_indicator" className="text-[16px]" />
         </span>
+
+        {/* Checkbox */}
+        {onToggle && (
+          <button
+            onClick={e => { e.stopPropagation(); onToggle(experiment) }}
+            className={`flex-shrink-0 mt-0.5 transition-opacity ${checkboxVisibility} ${checkboxColorClass}`}
+            title={allChecked ? 'Deselect' : 'Select for comparison'}
+          >
+            <span className="material-symbols-outlined text-[16px]">{checkboxIconName}</span>
+          </button>
+        )}
 
         {/* Expand/collapse chevron */}
         <button
@@ -1702,6 +1729,8 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
                       onExpPapersChange={onExpPapersChange}
                       rqList={rqList}
                       parentId={experiment.id}
+                      selectedLeafIds={selectedLeafIds}
+                      onToggle={onToggle}
                     />
                   ))}
                 </div>
@@ -1805,6 +1834,255 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
   )
 }
 
+// ─── Compare Modal helpers ─────────────────────────────────────────────────────
+
+function collectLeafIds(node) {
+  if (!node.children || node.children.length === 0) return [node.id]
+  return node.children.flatMap(collectLeafIds)
+}
+
+function unionKeys(objects) {
+  const keySet = new Set()
+  for (const obj of objects) {
+    for (const k of Object.keys(obj ?? {})) {
+      keySet.add(k)
+    }
+  }
+  return Array.from(keySet).sort()
+}
+
+function metricCellClass(key, value, bestValue, highlightBest) {
+  if (!highlightBest || typeof value !== 'number' || bestValue === null || bestValue === undefined) return ''
+  return value === bestValue ? 'font-bold text-emerald-700 bg-emerald-50' : ''
+}
+
+function configCellClass(key, expValue, allValues) {
+  if (expValue === undefined || expValue === null) return 'text-slate-300 italic'
+  const definedVals = allValues.filter(v => v !== undefined && v !== null)
+  const allSame = definedVals.length > 0 && definedVals.every(v => String(v) === String(definedVals[0]))
+  if (allSame) return ''
+  const presentCount = definedVals.length
+  if (presentCount < allValues.length) return 'bg-emerald-50 text-emerald-800'
+  return 'bg-amber-50 text-amber-800'
+}
+
+function getBestValue(key, experiments, lowerIsBetter) {
+  const values = experiments.map(e => e.metrics?.[key]).filter(v => typeof v === 'number')
+  if (values.length === 0) return null
+  return lowerIsBetter[key] ? Math.min(...values) : Math.max(...values)
+}
+
+// ─── CompareModal ──────────────────────────────────────────────────────────────
+
+function CompareModal({ experiments, open, onClose }) {
+  const [activeTab, setActiveTab] = useState('metrics')
+  const [highlightBest, setHighlightBest] = useState(true)
+  const [lowerIsBetter, setLowerIsBetter] = useState({})
+  const [changedOnly, setChangedOnly] = useState(false)
+
+  const metricKeys = useMemo(
+    () => unionKeys(experiments.map(e => e.metrics || {})),
+    [experiments]
+  )
+  const configKeys = useMemo(
+    () => unionKeys(experiments.map(e => e.config || {})),
+    [experiments]
+  )
+
+  const visibleConfigKeys = useMemo(() => {
+    if (!changedOnly) return configKeys
+    return configKeys.filter(key => {
+      const vals = experiments.map(e => e.config?.[key])
+      const definedVals = vals.filter(v => v !== undefined && v !== null)
+      if (definedVals.length !== vals.length) return true // some missing = changed
+      return !definedVals.every(v => String(v) === String(definedVals[0]))
+    })
+  }, [configKeys, experiments, changedOnly])
+
+  function toggleLowerIsBetter(key) {
+    setLowerIsBetter(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  return (
+    <WindowModal
+      open={open}
+      onClose={onClose}
+      title={`Compare ${experiments.length} Experiments`}
+      iconName="compare_arrows"
+      iconWrapClassName="bg-blue-100"
+      iconClassName="text-[16px] text-blue-600"
+      normalPanelClassName="w-full max-w-4xl rounded-2xl"
+      fullscreenPanelClassName="w-[calc(100vw-1rem)] h-[calc(100vh-1rem)] rounded-xl"
+    >
+      {/* Tab bar */}
+      <div className="flex items-center gap-1 px-6 pb-2 border-b border-slate-100">
+        <button
+          onClick={() => setActiveTab('metrics')}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${activeTab === 'metrics' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+        >
+          Metrics
+        </button>
+        <button
+          onClick={() => setActiveTab('config')}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${activeTab === 'config' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+        >
+          Config
+        </button>
+      </div>
+
+      {/* Tab content */}
+      <div className="px-6 py-4 overflow-auto" style={{ maxHeight: 'calc(80vh - 120px)' }}>
+        {activeTab === 'metrics' && (
+          <>
+            {/* Controls */}
+            <div className="flex items-center gap-4 mb-3">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={highlightBest}
+                  onChange={e => setHighlightBest(e.target.checked)}
+                  className="rounded"
+                />
+                Highlight best
+              </label>
+            </div>
+
+            {metricKeys.length === 0 ? (
+              <p className="text-sm text-slate-400 italic">No metrics recorded yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left px-3 py-2 text-slate-500 font-medium sticky left-0 bg-white" style={{ minWidth: 160 }}>
+                        Metric
+                      </th>
+                      {experiments.map(exp => (
+                        <th key={exp.id} className="text-left px-3 py-2 text-slate-700 font-medium" style={{ minWidth: 120 }}>
+                          <div className="truncate max-w-[140px]" title={exp.name}>{exp.name}</div>
+                          {exp.status && (
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${experimentStatusConfig[exp.status]?.class || 'bg-slate-100 text-slate-600'}`}>
+                              {experimentStatusConfig[exp.status]?.label || exp.status}
+                            </span>
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metricKeys.map(key => {
+                      const bestValue = highlightBest ? getBestValue(key, experiments, lowerIsBetter) : null
+                      return (
+                        <tr key={key} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                          <td className="px-3 py-2 font-medium text-slate-600 sticky left-0 bg-white" style={{ minWidth: 160 }}>
+                            <div className="flex items-center gap-1">
+                              <span className="truncate">{key}</span>
+                              <button
+                                onClick={() => toggleLowerIsBetter(key)}
+                                className="flex-shrink-0 text-slate-400 hover:text-blue-600 transition-colors"
+                                title={lowerIsBetter[key] ? 'Lower is better (click to toggle)' : 'Higher is better (click to toggle)'}
+                              >
+                                <span className="material-symbols-outlined text-[13px]">
+                                  {lowerIsBetter[key] ? 'arrow_downward' : 'arrow_upward'}
+                                </span>
+                              </button>
+                            </div>
+                          </td>
+                          {experiments.map(exp => {
+                            const value = exp.metrics?.[key]
+                            const cls = metricCellClass(key, value, bestValue, highlightBest)
+                            return (
+                              <td key={exp.id} className={`px-3 py-2 ${cls}`} style={{ minWidth: 120 }}>
+                                {value !== undefined && value !== null
+                                  ? String(value)
+                                  : <span className="text-slate-300 italic">---</span>
+                                }
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'config' && (
+          <>
+            {/* Controls */}
+            <div className="flex items-center gap-4 mb-3">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={changedOnly}
+                  onChange={e => setChangedOnly(e.target.checked)}
+                  className="rounded"
+                />
+                Changed only
+              </label>
+            </div>
+
+            {configKeys.length === 0 ? (
+              <p className="text-sm text-slate-400 italic">No config recorded yet.</p>
+            ) : visibleConfigKeys.length === 0 ? (
+              <p className="text-sm text-slate-400 italic">No changed config keys. Toggle off "Changed only" to see all.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left px-3 py-2 text-slate-500 font-medium sticky left-0 bg-white" style={{ minWidth: 160 }}>
+                        Config Key
+                      </th>
+                      {experiments.map(exp => (
+                        <th key={exp.id} className="text-left px-3 py-2 text-slate-700 font-medium" style={{ minWidth: 120 }}>
+                          <div className="truncate max-w-[140px]" title={exp.name}>{exp.name}</div>
+                          {exp.status && (
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${experimentStatusConfig[exp.status]?.class || 'bg-slate-100 text-slate-600'}`}>
+                              {experimentStatusConfig[exp.status]?.label || exp.status}
+                            </span>
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleConfigKeys.map(key => {
+                      const allValues = experiments.map(e => e.config?.[key])
+                      return (
+                        <tr key={key} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                          <td className="px-3 py-2 font-medium text-slate-600 sticky left-0 bg-white" style={{ minWidth: 160 }}>
+                            <span className="truncate block">{key}</span>
+                          </td>
+                          {experiments.map((exp, idx) => {
+                            const value = exp.config?.[key]
+                            const cls = configCellClass(key, value, allValues)
+                            return (
+                              <td key={exp.id} className={`px-3 py-2 ${cls}`} style={{ minWidth: 120 }}>
+                                {value !== undefined && value !== null
+                                  ? <span className="font-mono">{String(value)}</span>
+                                  : <span className="text-slate-300 italic">---</span>
+                                }
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </WindowModal>
+  )
+}
+
 // ─── Experiment Section ────────────────────────────────────────────────────────
 
 function ExperimentSection({ projectId }) {
@@ -1815,9 +2093,29 @@ function ExperimentSection({ projectId }) {
   const [activeId, setActiveId] = useState(null)
   const [expPapersMap, setExpPapersMap] = useState(new Map())
   const [rqList, setRqList] = useState([])
+  const [selectedLeafIds, setSelectedLeafIds] = useState(new Set())
+  const [compareOpen, setCompareOpen] = useState(false)
 
   const expTree = useMemo(() => buildExperimentTree(flatExperiments), [flatExperiments])
   const flatTree = useMemo(() => flattenExperimentTree(expTree), [expTree])
+
+  function handleToggleNode(exp) {
+    const leaves = collectLeafIds(exp)
+    setSelectedLeafIds(prev => {
+      const allSelected = leaves.every(id => prev.has(id))
+      const next = new Set(prev)
+      if (allSelected) {
+        leaves.forEach(id => next.delete(id))
+      } else {
+        leaves.forEach(id => next.add(id))
+      }
+      return next
+    })
+  }
+
+  const compareExperiments = useMemo(() => {
+    return flatTree.filter(e => selectedLeafIds.has(e.id))
+  }, [flatTree, selectedLeafIds])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -1973,6 +2271,8 @@ function ExperimentSection({ projectId }) {
                   onExpPapersChange={handleExpPapersChange}
                   rqList={rqList}
                   parentId={null}
+                  selectedLeafIds={selectedLeafIds}
+                  onToggle={handleToggleNode}
                 />
               ))}
             </div>
@@ -1996,6 +2296,28 @@ function ExperimentSection({ projectId }) {
         </DndContext>
       )}
 
+      {/* Floating action bar when 2+ experiments selected */}
+      {selectedLeafIds.size >= 2 && (
+        <div className="sticky bottom-0 flex items-center gap-3 px-4 py-2 bg-blue-50 border-t border-blue-200 mt-4 rounded-lg">
+          <span className="text-xs font-semibold text-blue-700">
+            {selectedLeafIds.size} experiments selected
+          </span>
+          <button
+            onClick={() => setCompareOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[14px]">compare_arrows</span>
+            Compare ({selectedLeafIds.size})
+          </button>
+          <button
+            onClick={() => setSelectedLeafIds(new Set())}
+            className="text-xs text-slate-500 hover:text-slate-700 ml-auto"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Root-level create modal */}
       {showCreateModal && (
         <ExperimentCreateModal
@@ -2003,6 +2325,15 @@ function ExperimentSection({ projectId }) {
           parentId={null}
           onCreated={fetchExperiments}
           onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {/* Compare modal */}
+      {compareOpen && (
+        <CompareModal
+          experiments={compareExperiments}
+          open={compareOpen}
+          onClose={() => setCompareOpen(false)}
         />
       )}
     </div>
