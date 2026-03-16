@@ -4,6 +4,7 @@ import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersAp
 import NotesPanel from '../components/NotesPanel'
 import WindowModal from '../components/WindowModal'
 import CSVImportModal from './CSVImportModal'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
   DndContext,
   closestCenter,
@@ -1871,6 +1872,119 @@ function unionKeys(objects) {
   return Array.from(keySet).sort()
 }
 
+// ─── Table view helpers (exported for tests) ──────────────────────────────────
+
+function buildColumns(flatTree) {
+  const fixedColumns = [
+    { id: 'type_icon', label: '', type: 'fixed', field: 'type_icon', width: 40, sortable: false },
+    { id: 'name', label: 'Name', type: 'fixed', field: 'name', width: 220, sortable: true },
+    { id: 'status', label: 'Status', type: 'fixed', field: 'status', width: 110, sortable: true },
+    { id: 'parent', label: 'Group', type: 'fixed', field: 'parent', width: 140, sortable: true },
+    { id: 'created_at', label: 'Created', type: 'fixed', field: 'created_at', width: 100, sortable: true },
+  ]
+  const configKeys = unionKeys(flatTree.map(e => e.config || {}))
+  const metricKeys = unionKeys(flatTree.map(e => e.metrics || {}))
+  const configColumns = configKeys.map(key => ({
+    id: `config::${key}`,
+    label: key,
+    type: 'config',
+    field: 'config',
+    key,
+    width: 120,
+    sortable: true,
+  }))
+  const metricColumns = metricKeys.map(key => ({
+    id: `metric::${key}`,
+    label: key,
+    type: 'metric',
+    field: 'metrics',
+    key,
+    width: 120,
+    sortable: true,
+  }))
+  return [...fixedColumns, ...configColumns, ...metricColumns]
+}
+
+function getCellValue(columnId, exp, parentMap) {
+  if (columnId === 'name') return exp.name ?? null
+  if (columnId === 'status') return exp.status ?? null
+  if (columnId === 'created_at') return exp.created_at ?? null
+  if (columnId === 'type_icon') return exp.children?.length > 0 ? 'folder' : 'science'
+  if (columnId === 'parent') {
+    if (!parentMap) return exp._parentId ?? null
+    // parentMap can be { id -> _parentId } or a Map of { id -> name }
+    if (parentMap instanceof Map) return parentMap.get(exp._parentId) ?? null
+    return exp._parentId ?? null
+  }
+  if (columnId.startsWith('config::')) {
+    const key = columnId.slice('config::'.length)
+    return exp.config?.[key] ?? null
+  }
+  if (columnId.startsWith('metric::')) {
+    const key = columnId.slice('metric::'.length)
+    return exp.metrics?.[key] ?? null
+  }
+  return null
+}
+
+function applyFilter(exp, filter) {
+  const { columnId, operator, value } = filter
+  let cellVal
+  if (columnId === 'name') cellVal = exp.name
+  else if (columnId === 'status') cellVal = exp.status
+  else if (columnId === 'parent') cellVal = exp._parentId ?? exp.parent_id
+  else if (columnId === 'created_at') cellVal = exp.created_at
+  else if (columnId.startsWith('config::')) {
+    const key = columnId.slice('config::'.length)
+    cellVal = exp.config?.[key]
+  } else if (columnId.startsWith('metric::')) {
+    const key = columnId.slice('metric::'.length)
+    cellVal = exp.metrics?.[key]
+  }
+
+  if (operator === 'empty') return cellVal === undefined || cellVal === null || cellVal === ''
+  if (operator === 'notempty') return cellVal !== undefined && cellVal !== null && cellVal !== ''
+
+  const numericCell = typeof cellVal === 'number' ? cellVal : Number(cellVal)
+
+  if (operator === 'eq') return String(cellVal) === String(value)
+  if (operator === 'neq') return String(cellVal) !== String(value)
+  if (operator === 'gt') return numericCell > Number(value)
+  if (operator === 'lt') return numericCell < Number(value)
+  if (operator === 'between') {
+    const [low, high] = Array.isArray(value) ? value : [value[0], value[1]]
+    return numericCell >= Number(low) && numericCell <= Number(high)
+  }
+  if (operator === 'is') return Array.isArray(value) && value.includes(cellVal)
+  if (operator === 'isnot') return Array.isArray(value) && !value.includes(cellVal)
+  if (operator === 'contains') return String(cellVal ?? '').includes(String(value))
+
+  return true
+}
+
+function sortRows(rows, sort) {
+  if (!sort) return rows
+  const { columnId, direction } = sort
+  const sorted = [...rows]
+  sorted.sort((a, b) => {
+    const aVal = getCellValue(columnId, a, null)
+    const bVal = getCellValue(columnId, b, null)
+    // Nulls sort last regardless of direction
+    if (aVal === null || aVal === undefined) return 1
+    if (bVal === null || bVal === undefined) return -1
+    // Numeric comparison
+    if (typeof aVal === 'number' && typeof bVal === 'number') {
+      return direction === 'asc' ? aVal - bVal : bVal - aVal
+    }
+    // String comparison
+    const cmp = String(aVal).localeCompare(String(bVal))
+    return direction === 'asc' ? cmp : -cmp
+  })
+  return sorted
+}
+
+export { buildColumns, applyFilter, sortRows, getCellValue }
+
 function metricCellClass(key, value, bestValue, highlightBest) {
   if (!highlightBest || typeof value !== 'number' || bestValue === null || bestValue === undefined) return ''
   return value === bestValue ? 'font-bold text-emerald-700 bg-emerald-50' : ''
@@ -2113,6 +2227,178 @@ function CompareModal({ experiments, open, onClose, flatTree }) {
   )
 }
 
+// ─── ExperimentTableView ───────────────────────────────────────────────────────
+
+function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperiments, projectId, libraryId }) {
+  const [sort, setSort] = useState(null) // { columnId, direction }
+
+  const allColumns = useMemo(() => buildColumns(flatTree), [flatTree])
+  const visibleColumns = allColumns
+
+  // Build a map of parentId -> parent name for the Group column
+  const parentNameMap = useMemo(() => {
+    const map = new Map()
+    const byId = Object.fromEntries(flatTree.map(e => [e.id, e]))
+    for (const exp of flatTree) {
+      if (exp._parentId && byId[exp._parentId]) {
+        map.set(exp._parentId, byId[exp._parentId].name)
+      }
+    }
+    return map
+  }, [flatTree])
+
+  function handleSort(colId) {
+    setSort(prev => {
+      if (!prev || prev.columnId !== colId) return { columnId: colId, direction: 'asc' }
+      if (prev.direction === 'asc') return { columnId: colId, direction: 'desc' }
+      return null
+    })
+  }
+
+  const sortedRows = useMemo(() => sortRows(flatTree, sort), [flatTree, sort])
+
+  function headerBgClass(colType) {
+    if (colType === 'config') return 'bg-blue-50/60'
+    if (colType === 'metric') return 'bg-emerald-50/60'
+    return 'bg-slate-50'
+  }
+
+  function renderCellValue(col, exp) {
+    if (col.id === 'type_icon') {
+      const isGroup = exp.children && exp.children.length > 0
+      return <Icon name={isGroup ? 'folder' : 'science'} className="text-[16px] text-slate-400" />
+    }
+    if (col.id === 'name') {
+      return <span className="font-medium text-slate-800">{exp.name}</span>
+    }
+    if (col.id === 'status') {
+      const cfg = experimentStatusConfig[exp.status] || experimentStatusConfig.planned
+      return (
+        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${cfg.class}`}>
+          {cfg.label}
+        </span>
+      )
+    }
+    if (col.id === 'parent') {
+      const parentName = exp._parentId ? (parentNameMap.get(exp._parentId) ?? '—') : '—'
+      return <span className="text-slate-500">{parentName}</span>
+    }
+    if (col.id === 'created_at') {
+      if (!exp.created_at) return '—'
+      try {
+        return new Date(exp.created_at).toLocaleDateString()
+      } catch {
+        return '—'
+      }
+    }
+    if (col.type === 'config') {
+      const val = exp.config?.[col.key]
+      return val !== undefined && val !== null ? String(val) : <span className="text-slate-300">—</span>
+    }
+    if (col.type === 'metric') {
+      const val = exp.metrics?.[col.key]
+      return val !== undefined && val !== null ? String(val) : <span className="text-slate-300">—</span>
+    }
+    return '—'
+  }
+
+  // Select-all logic
+  const allSelected = sortedRows.length > 0 && sortedRows.every(r => selectedLeafIds.has(r.id))
+  const someSelected = !allSelected && sortedRows.some(r => selectedLeafIds.has(r.id))
+
+  function handleSelectAllChange() {
+    if (allSelected) {
+      // Deselect all visible rows
+      sortedRows.forEach(r => {
+        if (selectedLeafIds.has(r.id)) onToggle(r)
+      })
+    } else {
+      // Select all unselected visible rows
+      sortedRows.forEach(r => {
+        if (!selectedLeafIds.has(r.id)) onToggle(r)
+      })
+    }
+  }
+
+  const selectAllRef = useRef(null)
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelected
+    }
+  }, [someSelected])
+
+  if (sortedRows.length === 0) {
+    return (
+      <div className="border border-slate-200 rounded-lg p-8 text-center text-sm text-slate-400">
+        No matching experiments
+      </div>
+    )
+  }
+
+  return (
+    <div className="overflow-auto max-h-[calc(100vh-300px)] border border-slate-200 rounded-lg">
+      <table className="border-collapse text-sm w-max min-w-full" style={{ tableLayout: 'fixed' }}>
+        <thead>
+          <tr>
+            {/* Select-all checkbox — sticky top+left */}
+            <th className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200 px-2 py-2" style={{ width: 40, minWidth: 40 }}>
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allSelected}
+                onChange={handleSelectAllChange}
+                className="cursor-pointer"
+              />
+            </th>
+            {visibleColumns.map(col => (
+              <th
+                key={col.id}
+                className={`sticky top-0 z-20 border-b border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${headerBgClass(col.type)}${col.id === 'name' ? ' sticky left-10 z-30' : ''}`}
+                style={{ width: col.width, minWidth: col.width }}
+                onClick={() => col.sortable && handleSort(col.id)}
+              >
+                <div className={`flex items-center gap-1 ${col.sortable ? 'cursor-pointer select-none' : ''}`}>
+                  {col.label}
+                  {sort?.columnId === col.id && (
+                    <Icon
+                      name={sort.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+                      className="text-[12px] text-blue-500"
+                    />
+                  )}
+                </div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sortedRows.map(exp => (
+            <tr key={exp.id} className="hover:bg-slate-50/50 border-b border-slate-100 cursor-pointer">
+              {/* Checkbox — sticky left */}
+              <td className="sticky left-0 z-10 bg-white border-r border-slate-100 px-2 py-2" style={{ width: 40, minWidth: 40 }}>
+                <input
+                  type="checkbox"
+                  checked={selectedLeafIds.has(exp.id)}
+                  onChange={() => onToggle(exp)}
+                  className="cursor-pointer"
+                />
+              </td>
+              {visibleColumns.map(col => (
+                <td
+                  key={col.id}
+                  className={`px-3 py-2 text-xs text-slate-700 whitespace-nowrap${col.id === 'name' ? ' sticky left-10 z-10 bg-white border-r border-slate-100 font-medium' : ''}`}
+                  style={{ width: col.width, minWidth: col.width }}
+                >
+                  {renderCellValue(col, exp)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ─── Experiment Section ────────────────────────────────────────────────────────
 
 function ExperimentSection({ projectId, libraryId }) {
@@ -2126,6 +2412,7 @@ function ExperimentSection({ projectId, libraryId }) {
   const [rqList, setRqList] = useState([])
   const [selectedLeafIds, setSelectedLeafIds] = useState(new Set())
   const [compareOpen, setCompareOpen] = useState(false)
+  const [viewMode, setViewMode] = useLocalStorage(`researchos.exp.view.${projectId}`, 'tree')
 
   const expTree = useMemo(() => buildExperimentTree(flatExperiments), [flatExperiments])
   const flatTree = useMemo(() => flattenExperimentTree(expTree), [expTree])
@@ -2250,6 +2537,23 @@ function ExperimentSection({ projectId, libraryId }) {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
         <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center gap-0 border border-slate-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setViewMode('tree')}
+              title="Tree view"
+              className={`px-2 py-1.5 transition-colors ${viewMode === 'tree' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <Icon name="account_tree" className="text-[16px]" />
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              title="Table view"
+              className={`px-2 py-1.5 transition-colors ${viewMode === 'table' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <Icon name="table_chart" className="text-[16px]" />
+            </button>
+          </div>
           <button
             onClick={() => setShowCsvModal(true)}
             className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
@@ -2288,6 +2592,15 @@ function ExperimentSection({ projectId, libraryId }) {
             Create your first experiment
           </button>
         </div>
+      ) : viewMode === 'table' ? (
+        <ExperimentTableView
+          flatTree={flatTree}
+          selectedLeafIds={selectedLeafIds}
+          onToggle={handleToggleNode}
+          fetchExperiments={fetchExperiments}
+          projectId={projectId}
+          libraryId={libraryId}
+        />
       ) : (
         <DndContext
           sensors={sensors}
