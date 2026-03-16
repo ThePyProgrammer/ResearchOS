@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-16T12:08:45.448Z"
-last_activity: 2026-03-16 — Completed plan 04-00 (Wave 0 test scaffolds for EXP-07, EXP-08, EXP-09)
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-16T13:44:42Z"
+last_activity: 2026-03-16 — Completed plan 04-02 (checkbox selection, floating action bar, CompareModal with config inheritance)
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 16
-  completed_plans: 15
-  percent: 88
+  completed_plans: 16
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2025-07-17)
 
 ## Current Position
 
-Phase: 4 of 4 (Experiment Differentiators) — IN PROGRESS
-Plan: 1 of 3 plans in Phase 04 complete (04-00 done)
-Status: Phase 04 started — Wave 0 test scaffolds complete; Plans 04-01 and 04-02 ready to execute
-Last activity: 2026-03-16 — Completed plan 04-00 (Wave 0 test scaffolds for EXP-07, EXP-08, EXP-09)
+Phase: 4 of 4 (Experiment Differentiators) — COMPLETE
+Plan: 3 of 3 plans in Phase 04 complete (04-00, 04-01, 04-02 done)
+Status: Phase 04 complete — Experiment differentiators shipped (checkbox selection, CompareModal, config inheritance)
+Last activity: 2026-03-16 — Completed plan 04-02 (checkbox selection, floating action bar, CompareModal with Metrics + Config tabs, config inheritance)
 
-Progress: [██████████░░] 88%
+Progress: [████████████] 100%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [██████████░░] 88%
 | Phase 03-experiment-tree P02 | 4 | 1 tasks | 1 files |
 | Phase 03-experiment-tree P03 | 10 min | 1 tasks | 1 files |
 | Phase 04-experiment-differentiators P01 | 10 min | 2 tasks | 5 files |
+| Phase 04-experiment-differentiators P02 | 45 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,9 @@ Recent decisions affecting current work:
 - [Phase 04-experiment-differentiators]: Leaf duplicate opens pre-filled ExperimentCreateModal (not direct API) so user can rename/tweak config before saving
 - [Phase 04-experiment-differentiators]: Parent deep-clone calls API directly and refreshes — no modal since editing entire subtree at once is impractical
 - [Phase 04-experiment-differentiators]: parentId prop threaded through ExperimentNode so Duplicate creates a sibling (not a child)
+- [Phase 04-experiment-differentiators]: getEffectiveConfig() merges parent config into child at compare time — no DB changes needed, resolved client-side using the flatTree prop passed to CompareModal
+- [Phase 04-experiment-differentiators]: Any-node selection (not leaf-only) — parent experiments can be selected alongside leaf experiments for comparison
+- [Phase 04-experiment-differentiators]: Config inheritance uses child-wins semantics — explicit child override always beats parent value
 
 ### Pending Todos
 
