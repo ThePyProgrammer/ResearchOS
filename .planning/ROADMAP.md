@@ -105,7 +105,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -114,13 +114,33 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 3. Experiment Tree | 3/3 | Complete   | 2026-03-15 |
 | 4. Experiment Differentiators | 3/3 | Complete   | 2026-03-16 |
 | 5. Integration Polish | 1/1 | Complete   | 2026-03-16 |
+| 6. CSV Loading Framework | 0/3 | Planning   | — |
 
-### Phase 6: Implement a CSV loading framework to nest into the experimental design
+### Phase 6: CSV Loading Framework for Experiments
+**Goal**: Researchers can import CSV files containing experiment results into the experiment tree, with a multi-step wizard for column mapping, tree preview with interactive editing, and collision resolution for re-imports
+**Depends on:** Phase 5
+**Requirements**: CSV-01, CSV-02, CSV-03, CSV-04, CSV-05, CSV-06, CSV-07
+**Success Criteria** (what must be TRUE):
+  1. User can upload a CSV file and map columns to experiment roles (Name, Config, Metric, Group, Skip)
+  2. Column roles are auto-detected (numeric = Metric, string = Config) with manual override
+  3. Multi-level group hierarchy is constructed from Group columns with correct nesting
+  4. Group column values are stored on both group nodes and leaf experiments as config keys
+  5. User can preview the import tree, rename groups/experiments, and exclude rows before confirming
+  6. Collision detection warns on name matches within the same parent scope with per-match resolution (Create/Update/Skip)
+  7. Backend bulk-creates experiments in parent-before-child order with correct hierarchy
+**Plans:** 3 plans
+
+Plans:
+- [ ] 06-00-PLAN.md — TDD: test scaffolds + pure utility functions (buildImportTree, autoGenerateName, detectCollision, bfsFlatten, autoDetectRoles, mergeMetrics)
+- [ ] 06-01-PLAN.md — Backend bulk import endpoint + CSVImportModal wizard (Upload, Map Columns, Preview, Confirm)
+- [ ] 06-02-PLAN.md — Interactive preview editing (rename, exclude, collision resolution) + human verification
+
+### Phase 7: Implement an alternative table view for the experiment view that looks like a spreadsheet with filters and sorts available
 
 **Goal:** [To be planned]
 **Requirements**: TBD
-**Depends on:** Phase 5
+**Depends on:** Phase 6
 **Plans:** 0 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 6 to break down)
+- [ ] TBD (run /gsd:plan-phase 7 to break down)
