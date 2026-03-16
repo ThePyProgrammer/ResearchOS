@@ -1499,19 +1499,12 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
     opacity: isDragging ? 0.4 : 1,
   }
 
-  // Checkbox state computation
-  const leafIds = collectLeafIds(experiment)
-  const checkedCount = leafIds.filter(id => selectedLeafIds.has(id)).length
-  const allChecked = checkedCount === leafIds.length && leafIds.length > 0
-  const someChecked = checkedCount > 0 && !allChecked
+  // Checkbox state computation — any node (leaf or parent) can be individually selected
+  const isSelected = selectedLeafIds.has(experiment.id)
   const anySelected = selectedLeafIds.size > 0
 
-  const checkboxIconName = allChecked
-    ? 'check_box'
-    : someChecked
-      ? 'indeterminate_check_box'
-      : 'check_box_outline_blank'
-  const checkboxColorClass = (allChecked || someChecked) ? 'text-blue-600' : 'text-slate-400'
+  const checkboxIconName = isSelected ? 'check_box' : 'check_box_outline_blank'
+  const checkboxColorClass = isSelected ? 'text-blue-600' : 'text-slate-400'
   const checkboxVisibility = anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
 
   return (
@@ -1531,7 +1524,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, isDragOverlay
           <button
             onClick={e => { e.stopPropagation(); onToggle(experiment) }}
             className={`flex-shrink-0 mt-0.5 transition-opacity ${checkboxVisibility} ${checkboxColorClass}`}
-            title={allChecked ? 'Deselect' : 'Select for comparison'}
+            title={isSelected ? 'Deselect' : 'Select for comparison'}
           >
             <span className="material-symbols-outlined text-[16px]">{checkboxIconName}</span>
           </button>
@@ -1841,6 +1834,30 @@ function collectLeafIds(node) {
   return node.children.flatMap(collectLeafIds)
 }
 
+// Build a map of experiment id → parent experiment id from the flat tree
+function buildParentMap(flatTree) {
+  const map = {}
+  for (const node of flatTree) {
+    map[node.id] = node._parentId || null
+  }
+  return map
+}
+
+// Compute effective config by walking up the ancestry chain
+// Child config overrides parent config (child values take precedence)
+function getEffectiveConfig(expId, flatTree, parentMap) {
+  const chain = []
+  let currentId = expId
+  const byId = Object.fromEntries(flatTree.map(e => [e.id, e]))
+  while (currentId) {
+    const node = byId[currentId]
+    if (node) chain.unshift(node.config || {})
+    currentId = parentMap[currentId] || null
+  }
+  // Merge from root down — later entries (children) override earlier (parents)
+  return Object.assign({}, ...chain)
+}
+
 function unionKeys(objects) {
   const keySet = new Set()
   for (const obj of objects) {
@@ -1874,30 +1891,40 @@ function getBestValue(key, experiments, lowerIsBetter) {
 
 // ─── CompareModal ──────────────────────────────────────────────────────────────
 
-function CompareModal({ experiments, open, onClose }) {
+function CompareModal({ experiments, open, onClose, flatTree }) {
   const [activeTab, setActiveTab] = useState('metrics')
   const [highlightBest, setHighlightBest] = useState(true)
   const [lowerIsBetter, setLowerIsBetter] = useState({})
   const [changedOnly, setChangedOnly] = useState(false)
+
+  // Compute effective configs (inheriting parent config values)
+  const parentMap = useMemo(() => buildParentMap(flatTree || []), [flatTree])
+  const effectiveConfigs = useMemo(() => {
+    const map = {}
+    for (const exp of experiments) {
+      map[exp.id] = flatTree ? getEffectiveConfig(exp.id, flatTree, parentMap) : (exp.config || {})
+    }
+    return map
+  }, [experiments, flatTree, parentMap])
 
   const metricKeys = useMemo(
     () => unionKeys(experiments.map(e => e.metrics || {})),
     [experiments]
   )
   const configKeys = useMemo(
-    () => unionKeys(experiments.map(e => e.config || {})),
-    [experiments]
+    () => unionKeys(experiments.map(e => effectiveConfigs[e.id] || {})),
+    [experiments, effectiveConfigs]
   )
 
   const visibleConfigKeys = useMemo(() => {
     if (!changedOnly) return configKeys
     return configKeys.filter(key => {
-      const vals = experiments.map(e => e.config?.[key])
+      const vals = experiments.map(e => effectiveConfigs[e.id]?.[key])
       const definedVals = vals.filter(v => v !== undefined && v !== null)
       if (definedVals.length !== vals.length) return true // some missing = changed
       return !definedVals.every(v => String(v) === String(definedVals[0]))
     })
-  }, [configKeys, experiments, changedOnly])
+  }, [configKeys, experiments, effectiveConfigs, changedOnly])
 
   function toggleLowerIsBetter(key) {
     setLowerIsBetter(prev => ({ ...prev, [key]: !prev[key] }))
@@ -2051,14 +2078,14 @@ function CompareModal({ experiments, open, onClose }) {
                   </thead>
                   <tbody>
                     {visibleConfigKeys.map(key => {
-                      const allValues = experiments.map(e => e.config?.[key])
+                      const allValues = experiments.map(e => effectiveConfigs[e.id]?.[key])
                       return (
                         <tr key={key} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                           <td className="px-3 py-2 font-medium text-slate-600 sticky left-0 bg-white" style={{ minWidth: 160 }}>
                             <span className="truncate block">{key}</span>
                           </td>
                           {experiments.map((exp, idx) => {
-                            const value = exp.config?.[key]
+                            const value = effectiveConfigs[exp.id]?.[key]
                             const cls = configCellClass(key, value, allValues)
                             return (
                               <td key={exp.id} className={`px-3 py-2 ${cls}`} style={{ minWidth: 120 }}>
@@ -2100,14 +2127,12 @@ function ExperimentSection({ projectId }) {
   const flatTree = useMemo(() => flattenExperimentTree(expTree), [expTree])
 
   function handleToggleNode(exp) {
-    const leaves = collectLeafIds(exp)
     setSelectedLeafIds(prev => {
-      const allSelected = leaves.every(id => prev.has(id))
       const next = new Set(prev)
-      if (allSelected) {
-        leaves.forEach(id => next.delete(id))
+      if (next.has(exp.id)) {
+        next.delete(exp.id)
       } else {
-        leaves.forEach(id => next.add(id))
+        next.add(exp.id)
       }
       return next
     })
@@ -2334,6 +2359,7 @@ function ExperimentSection({ projectId }) {
           experiments={compareExperiments}
           open={compareOpen}
           onClose={() => setCompareOpen(false)}
+          flatTree={flatTree}
         />
       )}
     </div>
