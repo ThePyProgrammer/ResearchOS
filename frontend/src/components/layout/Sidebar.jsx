@@ -771,17 +771,18 @@ function ProjectsTree({ collapsed }) {
         <button
           onClick={handleRowClick}
           title={project.name}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-left ${
+          className={`w-full flex items-center gap-1.5 py-1.5 rounded-lg transition-colors text-left cursor-pointer ${
             isProjectActive
               ? 'bg-white/10 text-white font-medium'
               : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
           }`}
+          style={{ paddingLeft: '8px', paddingRight: '8px' }}
         >
           <Icon
             name={isExpanded ? 'expand_more' : 'chevron_right'}
             className="text-[14px] flex-shrink-0 opacity-50"
           />
-          <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+          <span className="w-[16px] flex items-center justify-center flex-shrink-0">
             <span className={`w-2 h-2 rounded-full ${dotClass}`} />
           </span>
           <span className="flex-1 truncate text-[13px]">{project.name}</span>
@@ -796,15 +797,17 @@ function ProjectsTree({ collapsed }) {
                 to={link.to}
                 end={link.end}
                 className={({ isActive }) =>
-                  `flex items-center gap-2 pl-9 pr-3 py-1 rounded-lg transition-colors text-[13px] ${
+                  `flex items-center gap-1.5 py-1.5 rounded-lg transition-colors text-[13px] cursor-pointer ${
                     isActive
                       ? 'bg-white/10 text-white font-medium'
                       : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
                   }`
                 }
+                style={{ paddingLeft: '20px', paddingRight: '8px' }}
               >
-                <Icon name={link.icon} className="text-[14px] flex-shrink-0" />
-                <span>{link.label}</span>
+                <span className="w-[14px] flex-shrink-0" />
+                <Icon name={link.icon} className="text-[16px] flex-shrink-0" />
+                <span className="flex-1 truncate">{link.label}</span>
               </NavLink>
             ))}
           </div>
