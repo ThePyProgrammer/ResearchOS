@@ -3141,7 +3141,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
         <ColumnPicker allColumns={allColumns} colState={colState} setColState={setColState} />
       </div>
 
-      <div className="border border-slate-200 rounded-lg">
+      <div className="border border-slate-200 rounded-lg overflow-x-auto">
         <table className="border-collapse text-sm w-full" style={{ tableLayout: 'auto' }}>
           <thead>
             <DndContext
@@ -4097,8 +4097,8 @@ export default function ProjectDetail() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-50">
-      {/* Breadcrumb header */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-white border-b border-slate-200">
+      {/* Breadcrumb header — sticky */}
+      <div className="sticky top-0 z-20 flex items-center gap-2 px-4 py-3 bg-white border-b border-slate-200">
         <button
           onClick={() => navigate('/projects')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors"
@@ -4111,7 +4111,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto bg-white">
+      <div className="flex-1 min-h-0 overflow-auto bg-white">
         <Outlet context={{ project, setProject: (updated) => setProject(updated), notes, setNotes, id }} />
       </div>
     </div>
