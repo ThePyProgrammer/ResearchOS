@@ -2822,7 +2822,7 @@ function ExperimentDetailPanel({ experiment, flatTree, onClose, onRefresh, libra
 
 // ─── ExperimentTableView ───────────────────────────────────────────────────────
 
-function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperiments, projectId, libraryId, expPapersMap, onExpPapersChange, rqList }) {
+function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperiments, projectId, libraryId, expPapersMap, onExpPapersChange, rqList, onCompare, onBulkSetStatus, onBulkDuplicate, onBulkDelete, onClearSelection }) {
   const [sort, setSort] = useState(null) // { columnId, direction }
   const [newRowName, setNewRowName] = useState('')
   const [newRowError, setNewRowError] = useState(false)
@@ -3156,6 +3156,19 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
         <ColumnPicker allColumns={allColumns} colState={colState} setColState={setColState} />
       </div>
 
+      {/* Bulk action bar — below toolbar */}
+      {selectedLeafIds.size >= 1 && (
+        <BulkActionBar
+          selectedLeafIds={selectedLeafIds}
+          onCompare={onCompare}
+          onSetStatus={onBulkSetStatus}
+          onDuplicate={onBulkDuplicate}
+          onDelete={onBulkDelete}
+          onClear={onClearSelection}
+          className="flex-shrink-0"
+        />
+      )}
+
       {/* Scrollable table area */}
       <div className="flex-1 overflow-auto">
         <table className="border-collapse text-sm w-full" style={{ tableLayout: 'auto' }}>
@@ -3397,6 +3410,53 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
           />
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── BulkActionBar ────────────────────────────────────────────────────────────
+
+function BulkActionBar({ selectedLeafIds, onCompare, onSetStatus, onDuplicate, onDelete, onClear, className = '' }) {
+  return (
+    <div className={`flex items-center gap-2 px-4 py-2 bg-blue-50 border-t border-blue-200 z-20 ${className}`}>
+      <span className="text-xs font-semibold text-blue-700">
+        {selectedLeafIds.size} selected
+      </span>
+
+      {selectedLeafIds.size >= 2 && (
+        <button
+          onClick={onCompare}
+          className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Icon name="compare_arrows" className="text-[14px]" />
+          Compare
+        </button>
+      )}
+
+      <BulkStatusDropdown selectedIds={selectedLeafIds} onApply={onSetStatus} />
+
+      <button
+        onClick={onDuplicate}
+        className="flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+      >
+        <Icon name="content_copy" className="text-[14px]" />
+        Duplicate
+      </button>
+
+      <button
+        onClick={onDelete}
+        className="flex items-center gap-1 px-2.5 py-1 bg-white border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors"
+      >
+        <Icon name="delete" className="text-[14px]" />
+        Delete
+      </button>
+
+      <button
+        onClick={onClear}
+        className="text-xs text-slate-500 hover:text-slate-700 ml-auto"
+      >
+        Clear
+      </button>
     </div>
   )
 }
@@ -3650,6 +3710,18 @@ function ExperimentSection({ projectId, libraryId }) {
           expPapersMap={expPapersMap}
           onExpPapersChange={handleExpPapersChange}
           rqList={rqList}
+          onCompare={() => setCompareOpen(true)}
+          onBulkSetStatus={async (status) => {
+            await Promise.all([...selectedLeafIds].map(id => experimentsApi.update(id, { status })))
+            await fetchExperiments()
+          }}
+          onBulkDuplicate={async () => {
+            await Promise.all([...selectedLeafIds].map(id => experimentsApi.duplicate(id)))
+            await fetchExperiments()
+            setSelectedLeafIds(new Set())
+          }}
+          onBulkDelete={() => setBulkDeleteConfirm(true)}
+          onClearSelection={() => setSelectedLeafIds(new Set())}
         />
       ) : (
         <div className="max-w-4xl pb-4">
@@ -3700,62 +3772,24 @@ function ExperimentSection({ projectId, libraryId }) {
         </div>
       )}
 
-      {/* Floating action bar when 1+ experiments selected */}
-      {selectedLeafIds.size >= 1 && (
-        <div className="sticky bottom-0 flex items-center gap-2 px-4 py-2 bg-blue-50 border-t border-blue-200 mt-4 rounded-lg z-20">
-          <span className="text-xs font-semibold text-blue-700">
-            {selectedLeafIds.size} selected
-          </span>
-
-          {/* Compare — needs 2+ */}
-          {selectedLeafIds.size >= 2 && (
-            <button
-              onClick={() => setCompareOpen(true)}
-              className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Icon name="compare_arrows" className="text-[14px]" />
-              Compare
-            </button>
-          )}
-
-          {/* Set Status */}
-          <BulkStatusDropdown
-            selectedIds={selectedLeafIds}
-            onApply={async (status) => {
-              await Promise.all([...selectedLeafIds].map(id => experimentsApi.update(id, { status })))
-              await fetchExperiments()
-            }}
-          />
-
-          {/* Duplicate */}
-          <button
-            onClick={async () => {
-              await Promise.all([...selectedLeafIds].map(id => experimentsApi.duplicate(id)))
-              await fetchExperiments()
-              setSelectedLeafIds(new Set())
-            }}
-            className="flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            <Icon name="content_copy" className="text-[14px]" />
-            Duplicate
-          </button>
-
-          {/* Delete */}
-          <button
-            onClick={() => setBulkDeleteConfirm(true)}
-            className="flex items-center gap-1 px-2.5 py-1 bg-white border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors"
-          >
-            <Icon name="delete" className="text-[14px]" />
-            Delete
-          </button>
-
-          <button
-            onClick={() => setSelectedLeafIds(new Set())}
-            className="text-xs text-slate-500 hover:text-slate-700 ml-auto"
-          >
-            Clear
-          </button>
-        </div>
+      {/* Floating action bar when 1+ experiments selected — tree view only */}
+      {viewMode !== 'table' && selectedLeafIds.size >= 1 && (
+        <BulkActionBar
+          selectedLeafIds={selectedLeafIds}
+          onCompare={() => setCompareOpen(true)}
+          onSetStatus={async (status) => {
+            await Promise.all([...selectedLeafIds].map(id => experimentsApi.update(id, { status })))
+            await fetchExperiments()
+          }}
+          onDuplicate={async () => {
+            await Promise.all([...selectedLeafIds].map(id => experimentsApi.duplicate(id)))
+            await fetchExperiments()
+            setSelectedLeafIds(new Set())
+          }}
+          onDelete={() => setBulkDeleteConfirm(true)}
+          onClear={() => setSelectedLeafIds(new Set())}
+          className="sticky bottom-0 mt-4 rounded-lg"
+        />
       )}
 
       {/* Bulk delete confirmation */}
