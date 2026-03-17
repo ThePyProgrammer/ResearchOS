@@ -1,13 +1,14 @@
 /**
- * CSVImportModal — 4-step wizard for importing CSV experiment results.
+ * CSVImportModal — 4-step wizard for importing experiment results.
  *
- * Step 1: Upload CSV file
+ * Step 1: Upload CSV / JSON / JSONL / XLSX / XLS file
  * Step 2: Map columns to roles (Name, Config, Metric, Group, Skip)
  * Step 3: Preview tree with collision warnings + per-row controls
  * Step 4: Confirm & Import
  */
 import { useState, useRef, useCallback, useMemo } from 'react'
 import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 import WindowModal from '../components/WindowModal'
 import { experimentsApi } from '../services/api'
 import {
@@ -27,6 +28,56 @@ function Icon({ name, className = '' }) {
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+const SUPPORTED_EXTS = ['csv', 'json', 'jsonl', 'xlsx', 'xls']
+
+// ---------------------------------------------------------------------------
+// File parsing helpers
+// ---------------------------------------------------------------------------
+
+function parseJsonData(text) {
+  const data = JSON.parse(text)
+  if (Array.isArray(data)) {
+    // array of objects
+    if (data.length === 0) return null
+    const headers = [...new Set(data.flatMap((obj) => Object.keys(obj)))]
+    const rows = data.map((obj) => {
+      const row = {}
+      headers.forEach((h) => { row[h] = obj[h] != null ? String(obj[h]) : '' })
+      return row
+    })
+    return { headers, rows }
+  } else if (typeof data === 'object' && data !== null) {
+    // columnar: { key: [val, ...], ... }
+    const headers = Object.keys(data)
+    const maxLen = Math.max(...headers.map((h) => (Array.isArray(data[h]) ? data[h].length : 0)))
+    if (maxLen === 0) return null
+    const rows = []
+    for (let i = 0; i < maxLen; i++) {
+      const row = {}
+      headers.forEach((h) => {
+        row[h] = Array.isArray(data[h]) && data[h][i] != null ? String(data[h][i]) : ''
+      })
+      rows.push(row)
+    }
+    return { headers, rows }
+  }
+  return null
+}
+
+function parseSheetData(workbook, sheetName) {
+  const raw = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 })
+  if (raw.length < 2) return null // need header + at least 1 data row
+  const headers = raw[0].map((h) => String(h ?? '').trim())
+  const rows = raw
+    .slice(1)
+    .filter((r) => r.some((v) => v != null && String(v).trim() !== ''))
+    .map((r) => {
+      const obj = {}
+      headers.forEach((h, i) => { obj[h] = r[i] != null ? String(r[i]) : '' })
+      return obj
+    })
+  return { headers, rows }
+}
 
 // ---------------------------------------------------------------------------
 // StepIndicator
@@ -89,6 +140,11 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
   const inputRef = useRef(null)
   const [dragging, setDragging] = useState(false)
 
+  // XLSX sheet selection state (sub-state within Step 1)
+  const [xlsxWorkbook, setXlsxWorkbook] = useState(null)
+  const [xlsxSheets, setXlsxSheets] = useState([])
+  const [selectedSheet, setSelectedSheet] = useState(null)
+
   // Step 2 state
   const [columnRoles, setColumnRoles] = useState({}) // { [header]: role }
   const [groupPriorities, setGroupPriorities] = useState([]) // ordered group column names
@@ -138,51 +194,134 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
 
   // ── Step 1: File handling ────────────────────────────────────────────────
 
-  const processFile = useCallback((f) => {
-    setParseError(null)
-    if (!f) return
-    if (!f.name.endsWith('.csv')) {
-      setParseError('Please upload a .csv file.')
+  /** Shared post-parse logic — called by all format handlers with { headers, rows }. */
+  const finalizeParsed = useCallback(({ headers, rows, fileName }) => {
+    if (rows.length === 0) {
+      setParseError('File has no data rows.')
       return
     }
+    setParsed({ headers, rows, fileName })
+    const sampleRows = rows.slice(0, 3)
+    const detected = autoDetectColumnRoles(headers, sampleRows)
+    const roles = {}
+    for (const h of headers) {
+      roles[h] = detected[h] || 'config'
+    }
+    setColumnRoles(roles)
+    setGroupPriorities([])
+    setParentGroupId(null)
+    setMergeMode('overwrite')
+    setStep(2)
+  }, [])
+
+  const processFile = useCallback((f) => {
+    setParseError(null)
+    setXlsxWorkbook(null)
+    setXlsxSheets([])
+    setSelectedSheet(null)
+    if (!f) return
+
+    const ext = f.name.split('.').pop().toLowerCase()
+
+    if (!SUPPORTED_EXTS.includes(ext)) {
+      setParseError('Unsupported file type. Please upload a CSV, JSON, JSONL, or Excel file.')
+      return
+    }
+
     if (f.size > MAX_FILE_SIZE) {
       setParseError('File exceeds 5 MB limit.')
       return
     }
+
     setFile(f)
 
-    Papa.parse(f, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: false,
-      complete: (result) => {
-        const headers = result.meta.fields || []
-        const rows = result.data.filter((row) =>
-          Object.values(row).some((v) => String(v).trim() !== '')
-        )
-        if (rows.length === 0) {
-          setParseError('CSV file has no data rows.')
-          return
+    if (ext === 'csv') {
+      Papa.parse(f, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false,
+        complete: (result) => {
+          const headers = result.meta.fields || []
+          const rows = result.data.filter((row) =>
+            Object.values(row).some((v) => String(v).trim() !== '')
+          )
+          finalizeParsed({ headers, rows, fileName: f.name })
+        },
+        error: (err) => {
+          setParseError(`Parse error: ${err.message}`)
+        },
+      })
+    } else if (ext === 'json') {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const result = parseJsonData(e.target.result)
+          if (!result) {
+            setParseError('JSON must be an array of objects or an object of arrays.')
+            return
+          }
+          finalizeParsed({ ...result, fileName: f.name })
+        } catch (err) {
+          setParseError(`JSON parse error: ${err.message}`)
         }
-        setParsed({ headers, rows })
-        const sampleRows = rows.slice(0, 3)
-        const detected = autoDetectColumnRoles(headers, sampleRows)
-        // Map "metric"/"config" roles; "skip" for empty headers
-        const roles = {}
-        for (const h of headers) {
-          roles[h] = detected[h] || 'config'
+      }
+      reader.readAsText(f)
+    } else if (ext === 'jsonl') {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const lines = e.target.result
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0)
+          const objects = lines.map((l) => JSON.parse(l))
+          if (objects.length === 0) {
+            setParseError('JSONL file has no valid records.')
+            return
+          }
+          const headers = [...new Set(objects.flatMap((obj) => Object.keys(obj)))]
+          const rows = objects.map((obj) => {
+            const row = {}
+            headers.forEach((h) => { row[h] = obj[h] != null ? String(obj[h]) : '' })
+            return row
+          })
+          finalizeParsed({ headers, rows, fileName: f.name })
+        } catch (err) {
+          setParseError(`JSONL parse error: ${err.message}`)
         }
-        setColumnRoles(roles)
-        setGroupPriorities([]) // reset group ordering
-        setParentGroupId(null)
-        setMergeMode('overwrite')
-        setStep(2)
-      },
-      error: (err) => {
-        setParseError(`Parse error: ${err.message}`)
-      },
-    })
-  }, [])
+      }
+      reader.readAsText(f)
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const workbook = XLSX.read(e.target.result, { type: 'array' })
+          const sheets = workbook.SheetNames
+          if (sheets.length === 0) {
+            setParseError('Excel file contains no sheets.')
+            return
+          }
+          if (sheets.length === 1) {
+            // Auto-select the only sheet
+            const result = parseSheetData(workbook, sheets[0])
+            if (!result) {
+              setParseError('Excel sheet must have a header row and at least one data row.')
+              return
+            }
+            finalizeParsed({ ...result, fileName: f.name })
+          } else {
+            // Show sheet selector within Step 1
+            setXlsxWorkbook(workbook)
+            setXlsxSheets(sheets)
+            setSelectedSheet(sheets[0])
+          }
+        } catch (err) {
+          setParseError(`Excel parse error: ${err.message}`)
+        }
+      }
+      reader.readAsArrayBuffer(f)
+    }
+  }, [finalizeParsed])
 
   const handleFileInput = (e) => {
     processFile(e.target.files[0])
@@ -370,7 +509,7 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
     return (
       <div className="space-y-4">
         <p className="text-sm text-slate-600">
-          Upload a CSV file to import experiments. Each row becomes one experiment.
+          Upload a file to import experiments. Each row becomes one experiment.
         </p>
 
         {/* Drop zone */}
@@ -386,18 +525,56 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
           <Icon name="upload_file" className="text-slate-400 text-[40px]" />
           <div className="text-center">
             <p className="text-sm font-medium text-slate-700">
-              Drop your CSV file here or <span className="text-blue-600 underline">browse</span>
+              Drop your file here or <span className="text-blue-600 underline">browse</span>
             </p>
-            <p className="text-xs text-slate-400 mt-1">CSV files only, max 5 MB</p>
+            <p className="text-xs text-slate-400 mt-1">CSV, JSON, JSONL, or Excel files, max 5 MB</p>
           </div>
           <input
             ref={inputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.json,.jsonl,.xlsx,.xls"
             className="hidden"
             onChange={handleFileInput}
           />
         </div>
+
+        {/* XLSX sheet selector — shown when file has multiple sheets */}
+        {xlsxSheets.length > 1 && (
+          <div className="border border-slate-200 rounded-lg p-4 space-y-3">
+            <p className="text-sm font-medium text-slate-700">
+              Select a sheet to import:
+            </p>
+            <div className="space-y-1.5">
+              {xlsxSheets.map((sheet) => (
+                <label key={sheet} className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="xlsxSheet"
+                    value={sheet}
+                    checked={selectedSheet === sheet}
+                    onChange={() => setSelectedSheet(sheet)}
+                    className="accent-blue-600"
+                  />
+                  <span className="text-sm text-slate-700">{sheet}</span>
+                </label>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                if (!selectedSheet || !xlsxWorkbook) return
+                const result = parseSheetData(xlsxWorkbook, selectedSheet)
+                if (!result) {
+                  setParseError('Selected sheet must have a header row and at least one data row.')
+                  return
+                }
+                finalizeParsed({ ...result, fileName: file?.name ?? '' })
+              }}
+              className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Continue with "{selectedSheet}"
+            </button>
+          </div>
+        )}
 
         {parseError && (
           <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
@@ -409,7 +586,7 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
         {parsed && (
           <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 flex items-center gap-2">
             <Icon name="check_circle" className="text-[14px]" />
-            Parsed {parsed.rows.length} rows, {parsed.headers.length} columns
+            Parsed {parsed.rows.length} rows, {parsed.headers.length} columns from {parsed.fileName}
           </div>
         )}
       </div>
@@ -821,6 +998,14 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
   // ── Navigation ────────────────────────────────────────────────────────────
 
   function handleBack() {
+    if (step === 2) {
+      // Reset xlsx state when going back to Step 1
+      setXlsxWorkbook(null)
+      setXlsxSheets([])
+      setSelectedSheet(null)
+      setParsed(null)
+      setFile(null)
+    }
     if (step === 3) {
       // Reset all preview state per research pitfall 2
       setPreviewTree([])
@@ -850,7 +1035,7 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
   return (
     <WindowModal
       open={true}
-      title="Import CSV"
+      title="Import Experiments"
       onClose={onClose}
       iconName="upload_file"
       iconWrapClassName="bg-blue-100"
