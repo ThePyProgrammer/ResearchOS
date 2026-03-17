@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link, Outlet, useLocation, useOutletContext } f
 import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi, githubReposApi, experimentsApi } from '../services/api'
 import NotesPanel from '../components/NotesPanel'
 import WindowModal from '../components/WindowModal'
+import { statusConfig } from '../components/PaperInfoPanel'
 import CSVImportModal from './CSVImportModal'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
@@ -4122,6 +4123,142 @@ function SearchPicker({ projectId, libraryId, onLinked, existingPaperIds, existi
   )
 }
 
+// ─── Literature Tab helpers ────────────────────────────────────────────────────
+
+function litLastName(name) {
+  if (!name) return ''
+  const parts = name.trim().split(/\s+/)
+  return parts[parts.length - 1]
+}
+
+function litFormatAuthors(authors) {
+  if (!authors || authors.length === 0) return ''
+  if (authors.length === 1) return litLastName(authors[0])
+  if (authors.length === 2) return `${litLastName(authors[0])} & ${litLastName(authors[1])}`
+  return `${litLastName(authors[0])} et al.`
+}
+
+function litItemYear(item) {
+  if (item.publishedDate) return item.publishedDate.slice(0, 4)
+  if (item.itemType === 'website') return '-'
+  if (item.itemType === 'github_repo') return '-'
+  return item.year || '-'
+}
+
+function litItemVenue(item) {
+  if (item.itemType === 'website') {
+    try { return new URL(item.url).hostname.replace(/^www\./, '') } catch { return item.url || '' }
+  }
+  if (item.itemType === 'github_repo') {
+    return `${item.owner || ''}/${item.repoName || ''}`
+  }
+  return item.venue || ''
+}
+
+// ─── Lit Detail Panel ─────────────────────────────────────────────────────────
+
+function LitDetailPanel({ item, onClose, onUnlink }) {
+  const navigate = useNavigate()
+  if (!item) return null
+  const status = statusConfig[item.status] || statusConfig['inbox']
+  const isWebsite = item.itemType === 'website'
+  const isRepo = item.itemType === 'github_repo'
+
+  function openInLibrary() {
+    if (isWebsite) navigate(`/library/website/${item.id}`)
+    else if (isRepo) navigate(`/library/github-repo/${item.id}`)
+    else navigate(`/library/paper/${item.id}`)
+  }
+
+  return (
+    <div className="w-80 flex-shrink-0 flex flex-col border-l border-slate-200 bg-white overflow-y-auto">
+      {/* Header */}
+      <div className="flex items-start justify-between px-4 py-3 border-b border-slate-200">
+        <div className="flex-1 min-w-0 pr-2">
+          <h3 className="text-sm font-semibold text-slate-800 line-clamp-2">{item.title}</h3>
+        </div>
+        <button
+          onClick={onClose}
+          className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors p-0.5"
+        >
+          <Icon name="close" className="text-[18px]" />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 px-4 py-3 space-y-3">
+        {/* Status */}
+        {item.status && (
+          <div>
+            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${status.class}`}>
+              {status.label}
+            </span>
+          </div>
+        )}
+
+        {/* Type badge */}
+        {(isWebsite || isRepo) && (
+          <div>
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${isRepo ? 'bg-violet-100 text-violet-700' : 'bg-purple-100 text-purple-700'}`}>
+              {isRepo ? 'GitHub' : 'Website'}
+            </span>
+          </div>
+        )}
+
+        {/* Authors */}
+        {item.authors && item.authors.length > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Authors</p>
+            <p className="text-sm text-slate-700">{item.authors.slice(0, 5).join(', ')}{item.authors.length > 5 ? ' …' : ''}</p>
+          </div>
+        )}
+
+        {/* Date / Venue */}
+        <div className="flex gap-4">
+          {litItemYear(item) !== '-' && (
+            <div>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Year</p>
+              <p className="text-sm text-slate-700">{litItemYear(item)}</p>
+            </div>
+          )}
+          {litItemVenue(item) && (
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Venue</p>
+              <p className="text-sm text-slate-700 truncate">{litItemVenue(item)}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Abstract */}
+        {item.abstract && (
+          <div>
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Abstract</p>
+            <p className="text-xs text-slate-600 line-clamp-6">{item.abstract}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="px-4 py-3 border-t border-slate-200 space-y-2">
+        <button
+          onClick={openInLibrary}
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+        >
+          <Icon name="open_in_new" className="text-[16px]" />
+          Open in Library
+        </button>
+        <button
+          onClick={() => onUnlink(item._linkId)}
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+        >
+          <Icon name="link_off" className="text-[16px]" />
+          Unlink
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Literature Tab ────────────────────────────────────────────────────────────
 
 function LiteratureTab({ projectId, libraryId }) {
@@ -4130,6 +4267,13 @@ function LiteratureTab({ projectId, libraryId }) {
   const [websiteLookup, setWebsiteLookup] = useState({})
   const [repoLookup, setRepoLookup] = useState({})
   const [loading, setLoading] = useState(true)
+
+  // Table state
+  const [sortKey, setSortKey] = useState('date')
+  const [sortDir, setSortDir] = useState('asc')
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [selectedItem, setSelectedItem] = useState(null)
+  const [searchFilter, setSearchFilter] = useState('')
 
   const fetchAll = useCallback(async () => {
     try {
@@ -4168,30 +4312,90 @@ function LiteratureTab({ projectId, libraryId }) {
     try {
       await projectPapersApi.unlink(projectId, linkId)
       setLinks(prev => prev.filter(l => l.id !== linkId))
+      setSelectedItem(prev => prev?._linkId === linkId ? null : prev)
     } catch (err) {
       console.error('Failed to unlink:', err)
     }
   }
 
+  async function handleBulkUnlink() {
+    const toUnlink = items.filter(i => selectedIds.has(i.id)).map(i => i._linkId)
+    for (const linkId of toUnlink) {
+      try {
+        await projectPapersApi.unlink(projectId, linkId)
+      } catch (err) {
+        console.error('Failed to unlink:', err)
+      }
+    }
+    setLinks(prev => prev.filter(l => !toUnlink.includes(l.id)))
+    setSelectedIds(new Set())
+    setSelectedItem(null)
+  }
+
+  function toggleSort(key) {
+    if (sortKey === key) {
+      if (sortDir === 'asc') setSortDir('desc')
+      else { setSortKey(null); setSortDir('asc') }
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const toggleCheck = (item) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(item.id) ? next.delete(item.id) : next.add(item.id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set())
+    else setSelectedIds(new Set(filtered.map(i => i.id)))
+  }
+
+  // Build flat items array from links
+  const items = useMemo(() => links.map(link => {
+    if (link.paperId && paperLookup[link.paperId]) return { ...paperLookup[link.paperId], itemType: 'paper', _linkId: link.id }
+    if (link.githubRepoId && repoLookup[link.githubRepoId]) return { ...repoLookup[link.githubRepoId], itemType: 'github_repo', _linkId: link.id }
+    if (link.websiteId && websiteLookup[link.websiteId]) return { ...websiteLookup[link.websiteId], itemType: 'website', _linkId: link.id }
+    return null
+  }).filter(Boolean), [links, paperLookup, websiteLookup, repoLookup])
+
+  // Filtered + sorted items
+  const filtered = useMemo(() => {
+    let result = items
+    if (searchFilter.trim()) {
+      const q = searchFilter.toLowerCase()
+      result = result.filter(i => (i.title || '').toLowerCase().includes(q))
+    }
+    if (sortKey) {
+      const dir = sortDir === 'asc' ? 1 : -1
+      result = [...result].sort((a, b) => {
+        if (sortKey === 'title') return dir * (a.title || '').localeCompare(b.title || '')
+        if (sortKey === 'date') {
+          const da = a.publishedDate || ''
+          const db = b.publishedDate || ''
+          if (!da && !db) return 0
+          if (!da) return dir
+          if (!db) return -dir
+          return dir * da.localeCompare(db)
+        }
+        if (sortKey === 'authors') return dir * litFormatAuthors(a.authors).localeCompare(litFormatAuthors(b.authors))
+        if (sortKey === 'status') {
+          const order = ['inbox', 'to-read', 'read']
+          return dir * (order.indexOf(a.status) - order.indexOf(b.status))
+        }
+        return 0
+      })
+    }
+    return result
+  }, [items, searchFilter, sortKey, sortDir])
+
   const existingPaperIds = useMemo(() => new Set(links.filter(l => l.paperId).map(l => l.paperId)), [links])
   const existingWebsiteIds = useMemo(() => new Set(links.filter(l => l.websiteId).map(l => l.websiteId)), [links])
   const existingRepoIds = useMemo(() => new Set(links.filter(l => l.githubRepoId).map(l => l.githubRepoId)), [links])
-
-  function formatDate(iso) {
-    if (!iso) return '—'
-    try {
-      const d = new Date(iso)
-      const now = new Date()
-      const diff = now - d
-      if (diff < 60000) return 'just now'
-      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-      if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`
-      return d.toLocaleDateString()
-    } catch {
-      return '—'
-    }
-  }
 
   if (loading) {
     return (
@@ -4204,73 +4408,198 @@ function LiteratureTab({ projectId, libraryId }) {
   }
 
   return (
-    <div className="p-6">
-      <h2 className="text-lg font-semibold text-slate-800 mb-4">Literature</h2>
-
-      <SearchPicker
-        projectId={projectId}
-        libraryId={libraryId}
-        onLinked={fetchAll}
-        existingPaperIds={existingPaperIds}
-        existingWebsiteIds={existingWebsiteIds}
-        existingRepoIds={existingRepoIds}
-      />
-
-      {links.length === 0 ? (
-        <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center">
-          <Icon name="menu_book" className="text-slate-300 text-[36px] mb-2" />
-          <p className="text-sm text-slate-400">No literature linked yet. Use the search above to add supporting papers and websites.</p>
+    <div className="flex h-full">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top toolbar */}
+        <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-slate-200 space-y-2">
+          <SearchPicker
+            projectId={projectId}
+            libraryId={libraryId}
+            onLinked={fetchAll}
+            existingPaperIds={existingPaperIds}
+            existingWebsiteIds={existingWebsiteIds}
+            existingRepoIds={existingRepoIds}
+          />
+          {/* Search filter */}
+          <div className="relative">
+            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400" />
+            <input
+              type="text"
+              placeholder="Filter literature..."
+              value={searchFilter}
+              onChange={e => setSearchFilter(e.target.value)}
+              className="w-full pl-10 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+            />
+          </div>
         </div>
-      ) : (
-        <div className="border border-slate-200 rounded-lg overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5">Title</th>
-                <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5 w-24">Type</th>
-                <th className="text-left text-xs font-semibold text-slate-500 px-4 py-2.5 w-28">Added</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {links.map(link => {
-                const isPaper = !!link.paperId
-                const isRepo = !!link.githubRepoId
-                const item = isPaper ? paperLookup[link.paperId] : isRepo ? repoLookup[link.githubRepoId] : websiteLookup[link.websiteId]
-                const title = item?.title || link.paperId || link.websiteId || link.githubRepoId || 'Unknown'
-                const typeLabel = isPaper ? 'Paper' : isRepo ? 'GitHub' : 'Website'
-                const typeClass = isPaper ? 'bg-blue-100 text-blue-700' : isRepo ? 'bg-violet-100 text-violet-700' : 'bg-purple-100 text-purple-700'
-                return (
-                  <tr key={link.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-slate-800 line-clamp-1">{title}</span>
-                      {item?.authors && Array.isArray(item.authors) && item.authors.length > 0 && (
-                        <span className="text-xs text-slate-400 block truncate">
-                          {item.authors.slice(0, 2).join(', ')}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${typeClass}`}>
-                        {typeLabel}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{formatDate(link.createdAt)}</td>
-                    <td className="px-2 py-3">
-                      <button
-                        onClick={() => handleUnlink(link.id)}
-                        title="Unlink"
-                        className="text-slate-300 hover:text-red-400 transition-colors p-1 rounded"
-                      >
-                        <Icon name="link_off" className="text-[16px]" />
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+
+        {/* Bulk action bar */}
+        {selectedIds.size > 0 && (
+          <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2 bg-blue-50 border-b border-blue-100">
+            <span className="text-sm font-medium text-blue-700">{selectedIds.size} selected</span>
+            <button
+              onClick={handleBulkUnlink}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors"
+            >
+              <Icon name="link_off" className="text-[14px]" />
+              Unlink Selected
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="ml-auto text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <Icon name="close" className="text-[16px]" />
+            </button>
+          </div>
+        )}
+
+        {/* Table */}
+        {items.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <Icon name="menu_book" className="text-slate-300 text-[36px] mb-2" />
+            <p className="text-sm text-slate-400">No literature linked yet. Use the search above to add supporting papers and websites.</p>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                <tr>
+                  <th className="pl-4 pr-2 py-2.5 w-8">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 text-blue-600"
+                      checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                      ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length }}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
+                  <th
+                    className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
+                    onClick={() => toggleSort('status')}
+                  >
+                    <span className="flex items-center gap-1">
+                      Status
+                      {sortKey === 'status' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
+                    </span>
+                  </th>
+                  <th
+                    className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
+                    onClick={() => toggleSort('title')}
+                  >
+                    <span className="flex items-center gap-1">
+                      Title
+                      {sortKey === 'title' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
+                    </span>
+                  </th>
+                  <th
+                    className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
+                    onClick={() => toggleSort('authors')}
+                  >
+                    <span className="flex items-center gap-1">
+                      Authors
+                      {sortKey === 'authors' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
+                    </span>
+                  </th>
+                  <th
+                    className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
+                    onClick={() => toggleSort('date')}
+                  >
+                    <span className="flex items-center gap-1">
+                      Date
+                      {sortKey === 'date' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
+                    </span>
+                  </th>
+                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Venue</th>
+                  <th className="w-10" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map(item => {
+                  const isSelected = selectedItem?.id === item.id
+                  const isChecked = selectedIds.has(item.id)
+                  const isWebsite = item.itemType === 'website'
+                  const isRepo = item.itemType === 'github_repo'
+                  const status = statusConfig[item.status] || statusConfig['inbox']
+                  return (
+                    <tr
+                      key={item.id}
+                      onClick={() => setSelectedItem(isSelected ? null : item)}
+                      className={`group cursor-pointer transition-colors ${
+                        isSelected ? 'bg-blue-50' : isChecked ? 'bg-blue-50/50' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      {/* Checkbox */}
+                      <td className="pl-4 pr-2 py-3 w-8">
+                        <input
+                          type="checkbox"
+                          className="rounded border-slate-300 text-blue-600"
+                          checked={isChecked}
+                          onClick={e => e.stopPropagation()}
+                          onChange={() => toggleCheck(item)}
+                        />
+                      </td>
+                      {/* Status */}
+                      <td className="px-2 py-3 w-24">
+                        {item.status && (
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${status.class}`}>
+                            {status.label}
+                          </span>
+                        )}
+                        {(isWebsite || isRepo) && (
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${isRepo ? 'bg-violet-100 text-violet-700' : 'bg-purple-100 text-purple-700'}`}>
+                            {isRepo ? 'GitHub' : 'Website'}
+                          </span>
+                        )}
+                      </td>
+                      {/* Title */}
+                      <td className="px-2 py-3 max-w-xs">
+                        <span className="text-sm text-slate-800 line-clamp-1 block">{item.title}</span>
+                      </td>
+                      {/* Authors */}
+                      <td className="px-2 py-3 text-sm text-slate-500 w-32">
+                        {litFormatAuthors(item.authors)}
+                      </td>
+                      {/* Date */}
+                      <td className="px-2 py-3 text-sm text-slate-500 w-16">
+                        {litItemYear(item)}
+                      </td>
+                      {/* Venue */}
+                      <td className="px-2 py-3 text-sm text-slate-500 max-w-[140px]">
+                        <span className="line-clamp-1 block">{litItemVenue(item)}</span>
+                      </td>
+                      {/* Unlink */}
+                      <td className="px-2 py-3 w-10">
+                        <button
+                          onClick={e => { e.stopPropagation(); handleUnlink(item._linkId) }}
+                          title="Unlink"
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all p-1 rounded"
+                        >
+                          <Icon name="link_off" className="text-[16px]" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {filtered.length === 0 && items.length > 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <Icon name="search_off" className="text-[36px] mb-2" />
+                <p className="text-sm">No items match your filter.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Detail panel */}
+      {selectedItem && (
+        <LitDetailPanel
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onUnlink={(linkId) => handleUnlink(linkId)}
+        />
       )}
     </div>
   )
@@ -4447,7 +4776,7 @@ export function ProjectOverview() {
 export function ProjectLiterature() {
   const { project } = useOutletContext()
   return (
-    <div className="h-full overflow-auto">
+    <div className="h-full overflow-hidden">
       <LiteratureTab projectId={project.id} libraryId={project.libraryId} />
     </div>
   )
