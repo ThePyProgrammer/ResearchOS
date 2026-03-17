@@ -3978,52 +3978,6 @@ function LiteratureTab({ projectId, libraryId }) {
 
 // ─── Left panel nav ───────────────────────────────────────────────────────────
 
-function LeftNav({ projectName, projectId }) {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const path = location.pathname
-  const activeId = path.endsWith('/literature') ? 'literature'
-    : path.endsWith('/experiments') ? 'experiments'
-    : path.endsWith('/notes') ? 'notes'
-    : 'overview'
-
-  const navItems = [
-    { id: 'overview',     icon: 'info',      label: 'Overview' },
-    { id: 'literature',   icon: 'menu_book', label: 'Literature' },
-    { id: 'experiments',  icon: 'science',   label: 'Experiments' },
-    { id: 'notes',        icon: 'edit_note', label: 'Notes' },
-  ]
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Project name at top */}
-      <div className="px-3 py-3 border-b border-slate-200">
-        <p className="text-xs font-semibold text-slate-700 truncate" title={projectName}>
-          {projectName || 'Loading...'}
-        </p>
-      </div>
-
-      {/* Nav items */}
-      <nav className="flex-1 p-2 space-y-0.5">
-        {navItems.map(item => (
-          <button
-            key={item.id}
-            onClick={() => navigate(item.id === 'overview' ? `/projects/${projectId}` : `/projects/${projectId}/${item.id}`)}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              activeId === item.id
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
-            }`}
-          >
-            <Icon name={item.icon} className="text-[16px] flex-shrink-0" />
-            {item.label}
-          </button>
-        ))}
-      </nav>
-    </div>
-  )
-}
-
 // ─── Overview tab ─────────────────────────────────────────────────────────────
 
 function OverviewTab({ project, onUpdate }) {
@@ -4158,20 +4112,9 @@ export default function ProjectDetail() {
         <span className="text-sm text-slate-700 truncate font-medium">{project.name}</span>
       </div>
 
-      {/* Body: split panel */}
-      <div className="flex flex-1 min-h-0">
-        {/* Left panel */}
-        <div className="w-56 flex-shrink-0 border-r border-slate-200 bg-white overflow-y-auto">
-          <LeftNav
-            projectName={project.name}
-            projectId={id}
-          />
-        </div>
-
-        {/* Right panel */}
-        <div className="flex-1 min-w-0 overflow-y-auto bg-white">
-          <Outlet context={{ project, setProject: (updated) => setProject(updated), notes, setNotes, id }} />
-        </div>
+      {/* Content */}
+      <div className="flex-1 min-h-0 overflow-y-auto bg-white">
+        <Outlet context={{ project, setProject: (updated) => setProject(updated), notes, setNotes, id }} />
       </div>
     </div>
   )
