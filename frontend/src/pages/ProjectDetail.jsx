@@ -4242,7 +4242,7 @@ export default function ProjectDetail() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col min-h-0 bg-slate-50">
+      <div className="h-full flex flex-col bg-slate-50 overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 bg-white border-b border-slate-200">
           <div className="h-4 bg-slate-200 rounded w-24 animate-pulse" />
         </div>
@@ -4267,9 +4267,9 @@ export default function ProjectDetail() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-slate-50">
-      {/* Breadcrumb header — sticky */}
-      <div className="sticky top-0 z-20 flex items-center gap-2 px-4 py-3 bg-white border-b border-slate-200">
+    <div className="h-full flex flex-col bg-slate-50 overflow-hidden">
+      {/* Breadcrumb header */}
+      <div className="flex-shrink-0 flex items-center gap-2 px-4 py-3 bg-white border-b border-slate-200">
         <button
           onClick={() => navigate('/projects')}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors"
