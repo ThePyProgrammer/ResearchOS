@@ -1929,7 +1929,7 @@ function getCellValue(columnId, exp, parentMap) {
 }
 
 function applyFilter(exp, filter) {
-  const { columnId, operator, value } = filter
+  const { column: columnId, operator, value } = filter
   let cellVal
   if (columnId === 'name') cellVal = exp.name
   else if (columnId === 'status') cellVal = exp.status

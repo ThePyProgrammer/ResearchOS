@@ -107,84 +107,84 @@ describe('applyFilter', () => {
   }
 
   it('gt operator returns true when cell value > filter value', () => {
-    const filter = { columnId: 'metric::loss', operator: 'gt', value: '0.4' }
+    const filter = { column: 'metric::loss', operator: 'gt', value: '0.4' }
     expect(applyFilter(row, filter)).toBe(true)
   })
 
   it('gt operator returns false when cell value <= filter value', () => {
-    const filter = { columnId: 'metric::loss', operator: 'gt', value: '0.6' }
+    const filter = { column: 'metric::loss', operator: 'gt', value: '0.6' }
     expect(applyFilter(row, filter)).toBe(false)
   })
 
   it('lt operator returns true when cell value < filter value', () => {
-    const filter = { columnId: 'metric::loss', operator: 'lt', value: '0.6' }
+    const filter = { column: 'metric::loss', operator: 'lt', value: '0.6' }
     expect(applyFilter(row, filter)).toBe(true)
   })
 
   it('lt operator returns false when cell value >= filter value', () => {
-    const filter = { columnId: 'metric::loss', operator: 'lt', value: '0.4' }
+    const filter = { column: 'metric::loss', operator: 'lt', value: '0.4' }
     expect(applyFilter(row, filter)).toBe(false)
   })
 
   it('eq operator matches string equality on a fixed column', () => {
-    const filter = { columnId: 'name', operator: 'eq', value: 'Run A' }
+    const filter = { column: 'name', operator: 'eq', value: 'Run A' }
     expect(applyFilter(row, filter)).toBe(true)
   })
 
   it('eq operator returns false on mismatch', () => {
-    const filter = { columnId: 'name', operator: 'eq', value: 'Run B' }
+    const filter = { column: 'name', operator: 'eq', value: 'Run B' }
     expect(applyFilter(row, filter)).toBe(false)
   })
 
   it('between operator matches value within [low, high] range', () => {
-    const filter = { columnId: 'metric::loss', operator: 'between', value: ['0.4', '0.6'] }
+    const filter = { column: 'metric::loss', operator: 'between', value: ['0.4', '0.6'] }
     expect(applyFilter(row, filter)).toBe(true)
   })
 
   it('between operator returns false when value is outside range', () => {
-    const filter = { columnId: 'metric::loss', operator: 'between', value: ['0.6', '0.9'] }
+    const filter = { column: 'metric::loss', operator: 'between', value: ['0.6', '0.9'] }
     expect(applyFilter(row, filter)).toBe(false)
   })
 
   it('empty operator returns true for undefined values', () => {
     const rowMissing = { ...row, config: {}, metrics: {} }
-    const filter = { columnId: 'metric::loss', operator: 'empty', value: null }
+    const filter = { column: 'metric::loss', operator: 'empty', value: null }
     expect(applyFilter(rowMissing, filter)).toBe(true)
   })
 
   it('empty operator returns false for defined non-empty values', () => {
-    const filter = { columnId: 'metric::loss', operator: 'empty', value: null }
+    const filter = { column: 'metric::loss', operator: 'empty', value: null }
     expect(applyFilter(row, filter)).toBe(false)
   })
 
   it('notempty operator returns true for defined non-empty values', () => {
-    const filter = { columnId: 'metric::loss', operator: 'notempty', value: null }
+    const filter = { column: 'metric::loss', operator: 'notempty', value: null }
     expect(applyFilter(row, filter)).toBe(true)
   })
 
   it('notempty operator returns false for undefined values', () => {
     const rowMissing = { ...row, config: {}, metrics: {} }
-    const filter = { columnId: 'metric::loss', operator: 'notempty', value: null }
+    const filter = { column: 'metric::loss', operator: 'notempty', value: null }
     expect(applyFilter(rowMissing, filter)).toBe(false)
   })
 
   it('is operator with array value matches if cellVal is in array (status multi-select)', () => {
-    const filter = { columnId: 'status', operator: 'is', value: ['completed', 'running'] }
+    const filter = { column: 'status', operator: 'is', value: ['completed', 'running'] }
     expect(applyFilter(row, filter)).toBe(true)
   })
 
   it('is operator returns false if cellVal is not in array', () => {
-    const filter = { columnId: 'status', operator: 'is', value: ['planned'] }
+    const filter = { column: 'status', operator: 'is', value: ['planned'] }
     expect(applyFilter(row, filter)).toBe(false)
   })
 
   it('config column resolution extracts key from config::keyname column id', () => {
-    const filter = { columnId: 'config::lr', operator: 'eq', value: '0.01' }
+    const filter = { column: 'config::lr', operator: 'eq', value: '0.01' }
     expect(applyFilter(row, filter)).toBe(true)
   })
 
   it('metric column resolution extracts key from metric::keyname column id', () => {
-    const filter = { columnId: 'metric::accuracy', operator: 'gt', value: '0.9' }
+    const filter = { column: 'metric::accuracy', operator: 'gt', value: '0.9' }
     expect(applyFilter(row, filter)).toBe(true)
   })
 })
