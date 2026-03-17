@@ -4426,7 +4426,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-hidden bg-white">
+      <div className="flex-1 min-h-0 bg-white" style={{ overflow: 'hidden', display: 'grid' }}>
         <Outlet context={{ project, setProject: (updated) => setProject(updated), notes, setNotes, id }} />
       </div>
     </div>
