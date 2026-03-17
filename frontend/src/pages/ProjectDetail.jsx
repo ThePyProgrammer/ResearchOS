@@ -3401,6 +3401,50 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   )
 }
 
+// ─── BulkStatusDropdown ───────────────────────────────────────────────────────
+
+function BulkStatusDropdown({ selectedIds, onApply }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+      >
+        <Icon name="swap_horiz" className="text-[14px]" />
+        Set Status
+      </button>
+      {open && (
+        <div className="absolute bottom-full mb-1 left-0 bg-white border border-slate-200 rounded-lg shadow-lg z-50 w-36 p-1">
+          {Object.entries(experimentStatusConfig).map(([key, cfg]) => (
+            <button
+              key={key}
+              onClick={async () => {
+                setOpen(false)
+                await onApply(key)
+              }}
+              className="block w-full text-left px-2.5 py-1.5 text-xs hover:bg-slate-50 rounded flex items-center gap-2"
+            >
+              <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-medium ${cfg.class}`}>{cfg.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Experiment Section ────────────────────────────────────────────────────────
 
 function ExperimentSection({ projectId, libraryId }) {
@@ -3414,6 +3458,7 @@ function ExperimentSection({ projectId, libraryId }) {
   const [rqList, setRqList] = useState([])
   const [selectedLeafIds, setSelectedLeafIds] = useState(new Set())
   const [compareOpen, setCompareOpen] = useState(false)
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [viewMode, setViewMode] = useLocalStorage(`researchos.exp.view.${projectId}`, 'tree')
 
   const expTree = useMemo(() => buildExperimentTree(flatExperiments), [flatExperiments])
@@ -3655,25 +3700,92 @@ function ExperimentSection({ projectId, libraryId }) {
         </div>
       )}
 
-      {/* Floating action bar when 2+ experiments selected */}
-      {selectedLeafIds.size >= 2 && (
-        <div className="sticky bottom-0 flex items-center gap-3 px-4 py-2 bg-blue-50 border-t border-blue-200 mt-4 rounded-lg">
+      {/* Floating action bar when 1+ experiments selected */}
+      {selectedLeafIds.size >= 1 && (
+        <div className="sticky bottom-0 flex items-center gap-2 px-4 py-2 bg-blue-50 border-t border-blue-200 mt-4 rounded-lg z-20">
           <span className="text-xs font-semibold text-blue-700">
-            {selectedLeafIds.size} experiments selected
+            {selectedLeafIds.size} selected
           </span>
+
+          {/* Compare — needs 2+ */}
+          {selectedLeafIds.size >= 2 && (
+            <button
+              onClick={() => setCompareOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Icon name="compare_arrows" className="text-[14px]" />
+              Compare
+            </button>
+          )}
+
+          {/* Set Status */}
+          <BulkStatusDropdown
+            selectedIds={selectedLeafIds}
+            onApply={async (status) => {
+              await Promise.all([...selectedLeafIds].map(id => experimentsApi.update(id, { status })))
+              await fetchExperiments()
+            }}
+          />
+
+          {/* Duplicate */}
           <button
-            onClick={() => setCompareOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={async () => {
+              await Promise.all([...selectedLeafIds].map(id => experimentsApi.duplicate(id)))
+              await fetchExperiments()
+              setSelectedLeafIds(new Set())
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
           >
-            <span className="material-symbols-outlined text-[14px]">compare_arrows</span>
-            Compare ({selectedLeafIds.size})
+            <Icon name="content_copy" className="text-[14px]" />
+            Duplicate
           </button>
+
+          {/* Delete */}
+          <button
+            onClick={() => setBulkDeleteConfirm(true)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-white border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors"
+          >
+            <Icon name="delete" className="text-[14px]" />
+            Delete
+          </button>
+
           <button
             onClick={() => setSelectedLeafIds(new Set())}
             className="text-xs text-slate-500 hover:text-slate-700 ml-auto"
           >
             Clear
           </button>
+        </div>
+      )}
+
+      {/* Bulk delete confirmation */}
+      {bulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setBulkDeleteConfirm(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-800 mb-2">Delete {selectedLeafIds.size} experiment{selectedLeafIds.size !== 1 ? 's' : ''}?</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              This will permanently delete the selected experiments and all their children. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setBulkDeleteConfirm(false)}
+                className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await Promise.all([...selectedLeafIds].map(id => experimentsApi.remove(id)))
+                  setSelectedLeafIds(new Set())
+                  setBulkDeleteConfirm(false)
+                  await fetchExperiments()
+                }}
+                className="px-3 py-1.5 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
