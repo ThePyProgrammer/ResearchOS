@@ -48,14 +48,14 @@ const mockExperiments = [
 // ---------------------------------------------------------------------------
 
 describe('buildColumns', () => {
-  it('returns 5 fixed columns + config cols + metric cols from experiment data', () => {
+  it('returns 4 fixed columns + config cols + metric cols from experiment data', () => {
     const cols = buildColumns(mockExperiments)
-    // 5 fixed: id, name, status, parent_id, created_at
+    // 4 fixed: type_icon, name, status, parent
     const fixed = cols.filter(c => c.type === 'fixed')
     const config = cols.filter(c => c.type === 'config')
     const metric = cols.filter(c => c.type === 'metric')
 
-    expect(fixed).toHaveLength(5)
+    expect(fixed).toHaveLength(4)
     expect(config).toHaveLength(2) // lr, batch_size
     expect(metric).toHaveLength(2) // loss, accuracy
   })
@@ -84,9 +84,9 @@ describe('buildColumns', () => {
     }
   })
 
-  it('empty experiment list returns only the 5 fixed columns', () => {
+  it('empty experiment list returns only the 4 fixed columns', () => {
     const cols = buildColumns([])
-    expect(cols).toHaveLength(5)
+    expect(cols).toHaveLength(4)
     expect(cols.every(c => c.type === 'fixed')).toBe(true)
   })
 })

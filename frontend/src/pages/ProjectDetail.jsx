@@ -1912,7 +1912,6 @@ function getCellValue(columnId, exp, parentMap) {
   if (columnId === 'type_icon') return exp.children?.length > 0 ? 'folder' : 'science'
   if (columnId === 'parent') {
     if (!parentMap) return exp._parentId ?? null
-    // parentMap can be { id -> _parentId } or a Map of { id -> name }
     if (parentMap instanceof Map) return parentMap.get(exp._parentId) ?? null
     return exp._parentId ?? null
   }
@@ -2355,7 +2354,7 @@ function SortableColumnHeader({ col, sort, onSort, onResizeStart, headerBgClass,
 
 // ─── EditableCell ──────────────────────────────────────────────────────────────
 
-function EditableCell({ value, onSave }) {
+function EditableCell({ value, onSave, className = '' }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
 
@@ -2400,7 +2399,7 @@ function EditableCell({ value, onSave }) {
   return (
     <span
       onDoubleClick={e => { e.stopPropagation(); activate() }}
-      className="block w-full cursor-text min-h-[1.25rem]"
+      className={`block w-full cursor-text min-h-[1.25rem] ${className}`}
     >
       {value != null && value !== ''
         ? String(value)
@@ -2838,6 +2837,16 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   const [highlightBest, setHighlightBest] = useState(false)
   const [lowerIsBetter, setLowerIsBetter] = useState({}) // { [metricKey]: boolean }
 
+  // Effective config per experiment (inherits parent config values)
+  const effectiveConfigMap = useMemo(() => {
+    const pm = buildParentMap(flatTree)
+    const map = {}
+    for (const exp of flatTree) {
+      map[exp.id] = getEffectiveConfig(exp.id, flatTree, pm)
+    }
+    return map
+  }, [flatTree])
+
   // Column state persisted to localStorage per project
   const [colState, setColState] = useLocalStorage(
     `researchos.exp.table.cols.${projectId}`,
@@ -3041,9 +3050,12 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
       }
     }
     if (col.type === 'config') {
+      const effectiveVal = effectiveConfigMap[exp.id]?.[col.key]
+      const isInherited = exp.config?.[col.key] === undefined && effectiveVal !== undefined
       return (
         <EditableCell
-          value={exp.config?.[col.key]}
+          value={effectiveVal}
+          className={isInherited ? 'text-slate-400 italic' : ''}
           onSave={async v => {
             await experimentsApi.update(exp.id, { config: { ...(exp.config || {}), [col.key]: v } })
             await fetchExperiments()
