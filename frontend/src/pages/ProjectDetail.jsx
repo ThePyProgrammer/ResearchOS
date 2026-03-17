@@ -3524,9 +3524,9 @@ function ExperimentSection({ projectId, libraryId }) {
   const allIds = flatTree.map(n => n.id)
 
   return (
-    <div className={`${viewMode === 'table' ? 'p-0 max-w-full h-full' : 'p-6 max-w-2xl'}`}>
+    <div className={`px-4 pt-4 ${viewMode === 'table' ? 'h-full' : ''}`}>
       {/* Header */}
-      <div className={`flex items-center justify-between mb-4 ${viewMode === 'table' ? 'px-4 pt-4' : ''}`}>
+      <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
         <div className="flex items-center gap-2">
           {/* View toggle */}
@@ -3597,50 +3597,52 @@ function ExperimentSection({ projectId, libraryId }) {
           rqList={rqList}
         />
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={({ active }) => setActiveId(active.id)}
-          onDragEnd={handleDragEnd}
-          onDragCancel={() => setActiveId(null)}
-        >
-          <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
-            <div className="space-y-0">
-              {expTree.map(exp => (
-                <ExperimentNode
-                  key={exp.id}
-                  experiment={exp}
-                  depth={0}
-                  onRefresh={fetchExperiments}
-                  projectId={projectId}
-                  libraryId={libraryId}
-                  expPapersMap={expPapersMap}
-                  onExpPapersChange={handleExpPapersChange}
-                  rqList={rqList}
-                  parentId={null}
-                  selectedLeafIds={selectedLeafIds}
-                  onToggle={handleToggleNode}
-                />
-              ))}
-            </div>
-          </SortableContext>
-
-          <DragOverlay>
-            {activeExp ? (
-              <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg flex items-center gap-2 max-w-xs">
-                <Icon name="drag_indicator" className="text-[16px] text-slate-300 flex-shrink-0" />
-                <span className="text-sm text-slate-800 truncate flex-1">{activeExp.name}</span>
-                {activeExp.status && (
-                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                    experimentStatusConfig[activeExp.status]?.class || experimentStatusConfig.planned.class
-                  }`}>
-                    {experimentStatusConfig[activeExp.status]?.label || activeExp.status}
-                  </span>
-                )}
+        <div className="max-w-2xl pb-4">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={({ active }) => setActiveId(active.id)}
+            onDragEnd={handleDragEnd}
+            onDragCancel={() => setActiveId(null)}
+          >
+            <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
+              <div className="space-y-0">
+                {expTree.map(exp => (
+                  <ExperimentNode
+                    key={exp.id}
+                    experiment={exp}
+                    depth={0}
+                    onRefresh={fetchExperiments}
+                    projectId={projectId}
+                    libraryId={libraryId}
+                    expPapersMap={expPapersMap}
+                    onExpPapersChange={handleExpPapersChange}
+                    rqList={rqList}
+                    parentId={null}
+                    selectedLeafIds={selectedLeafIds}
+                    onToggle={handleToggleNode}
+                  />
+                ))}
               </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+            </SortableContext>
+
+            <DragOverlay>
+              {activeExp ? (
+                <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg flex items-center gap-2 max-w-xs">
+                  <Icon name="drag_indicator" className="text-[16px] text-slate-300 flex-shrink-0" />
+                  <span className="text-sm text-slate-800 truncate flex-1">{activeExp.name}</span>
+                  {activeExp.status && (
+                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                      experimentStatusConfig[activeExp.status]?.class || experimentStatusConfig.planned.class
+                    }`}>
+                      {experimentStatusConfig[activeExp.status]?.label || activeExp.status}
+                    </span>
+                  )}
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </div>
       )}
 
       {/* Floating action bar when 2+ experiments selected */}
