@@ -3663,9 +3663,9 @@ function ExperimentSection({ projectId, libraryId }) {
   const allIds = flatTree.map(n => n.id)
 
   return (
-    <div className={`${viewMode === 'table' ? 'h-full flex flex-col' : 'h-full flex flex-col pt-4'}`}>
+    <div className="h-full flex flex-col">
       {/* Header */}
-      <div className={`flex-shrink-0 flex items-center justify-between ${viewMode === 'table' ? 'px-4 py-3 border-b border-slate-200 bg-white' : 'pb-3 bg-white'}`}>
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
         <div className="flex items-center gap-2">
           {/* View toggle */}
