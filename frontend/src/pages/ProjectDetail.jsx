@@ -3141,8 +3141,8 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
         <ColumnPicker allColumns={allColumns} colState={colState} setColState={setColState} />
       </div>
 
-      <div className="overflow-auto max-h-[calc(100vh-340px)] border border-slate-200 rounded-lg">
-        <table className="border-collapse text-sm w-max min-w-full" style={{ tableLayout: 'fixed' }}>
+      <div className="border border-slate-200 rounded-lg">
+        <table className="border-collapse text-sm w-full" style={{ tableLayout: 'auto' }}>
           <thead>
             <DndContext
               id="column-dnd"
