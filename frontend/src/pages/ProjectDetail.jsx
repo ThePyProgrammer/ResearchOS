@@ -3663,9 +3663,9 @@ function ExperimentSection({ projectId, libraryId }) {
   const allIds = flatTree.map(n => n.id)
 
   return (
-    <div className={`${viewMode === 'table' ? 'h-full flex flex-col' : 'px-4 pt-4'}`}>
-      {/* Header */}
-      <div className={`flex-shrink-0 flex items-center justify-between ${viewMode === 'table' ? 'px-4 py-3 border-b border-slate-200 bg-white' : 'mb-4'}`}>
+    <div className={`${viewMode === 'table' ? 'h-full flex flex-col' : 'h-full flex flex-col px-4 pt-4'}`}>
+      {/* Header — sticky */}
+      <div className={`flex-shrink-0 flex items-center justify-between ${viewMode === 'table' ? 'px-4 py-3 border-b border-slate-200 bg-white' : 'pb-3 bg-white sticky top-0 z-10'}`}>
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
         <div className="flex items-center gap-2">
           {/* View toggle */}
@@ -3701,6 +3701,26 @@ function ExperimentSection({ projectId, libraryId }) {
           </button>
         </div>
       </div>
+
+      {/* Selection bar — sticky below header, tree view only */}
+      {viewMode !== 'table' && selectedLeafIds.size >= 1 && (
+        <BulkActionBar
+          selectedLeafIds={selectedLeafIds}
+          onCompare={() => setCompareOpen(true)}
+          onSetStatus={async (status) => {
+            await Promise.all([...selectedLeafIds].map(id => experimentsApi.update(id, { status })))
+            await fetchExperiments()
+          }}
+          onDuplicate={async () => {
+            await Promise.all([...selectedLeafIds].map(id => experimentsApi.duplicate(id)))
+            await fetchExperiments()
+            setSelectedLeafIds(new Set())
+          }}
+          onDelete={() => setBulkDeleteConfirm(true)}
+          onClear={() => setSelectedLeafIds(new Set())}
+          className="flex-shrink-0 sticky top-[52px] z-10 rounded-lg border border-blue-200 border-t"
+        />
+      )}
 
       {loading ? (
         <div className="space-y-2 animate-pulse">
@@ -3748,7 +3768,7 @@ function ExperimentSection({ projectId, libraryId }) {
           onClearSelection={() => setSelectedLeafIds(new Set())}
         />
       ) : (
-        <div className="max-w-4xl pb-4">
+        <div className="max-w-4xl pb-4 flex-1 min-h-0 overflow-y-auto">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -3794,26 +3814,6 @@ function ExperimentSection({ projectId, libraryId }) {
             </DragOverlay>
           </DndContext>
         </div>
-      )}
-
-      {/* Floating action bar when 1+ experiments selected — tree view only */}
-      {viewMode !== 'table' && selectedLeafIds.size >= 1 && (
-        <BulkActionBar
-          selectedLeafIds={selectedLeafIds}
-          onCompare={() => setCompareOpen(true)}
-          onSetStatus={async (status) => {
-            await Promise.all([...selectedLeafIds].map(id => experimentsApi.update(id, { status })))
-            await fetchExperiments()
-          }}
-          onDuplicate={async () => {
-            await Promise.all([...selectedLeafIds].map(id => experimentsApi.duplicate(id)))
-            await fetchExperiments()
-            setSelectedLeafIds(new Set())
-          }}
-          onDelete={() => setBulkDeleteConfirm(true)}
-          onClear={() => setSelectedLeafIds(new Set())}
-          className="sticky bottom-0 mt-4 rounded-lg"
-        />
       )}
 
       {/* Bulk delete confirmation */}
