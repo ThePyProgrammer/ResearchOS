@@ -3544,9 +3544,27 @@ function ExperimentSection({ projectId, libraryId }) {
   const [compareOpen, setCompareOpen] = useState(false)
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [viewMode, setViewMode] = useLocalStorage(`researchos.exp.view.${projectId}`, 'tree')
+  const [treeFilters, setTreeFilters] = useState([])
 
   const expTree = useMemo(() => buildExperimentTree(flatExperiments), [flatExperiments])
   const flatTree = useMemo(() => flattenExperimentTree(expTree), [expTree])
+  const treeFilterColumns = useMemo(() => buildColumns(flatTree), [flatTree])
+
+  /** Filter a tree recursively — keep a node if it matches or any descendant matches. */
+  const filteredExpTree = useMemo(() => {
+    if (treeFilters.length === 0) return expTree
+    function filterNode(node) {
+      const selfMatches = treeFilters.every(f => applyFilter(node, f))
+      if (node.children?.length > 0) {
+        const filteredChildren = node.children.map(filterNode).filter(Boolean)
+        if (filteredChildren.length > 0) return { ...node, children: filteredChildren }
+        if (selfMatches) return { ...node, children: [] }
+        return null
+      }
+      return selfMatches ? node : null
+    }
+    return expTree.map(filterNode).filter(Boolean)
+  }, [expTree, treeFilters])
 
   function handleToggleNode(exp) {
     setSelectedLeafIds(prev => {
@@ -3660,7 +3678,8 @@ function ExperimentSection({ projectId, libraryId }) {
   }
 
   const activeExp = activeId ? flatTree.find(n => n.id === activeId) : null
-  const allIds = flatTree.map(n => n.id)
+  const filteredFlat = useMemo(() => flattenExperimentTree(filteredExpTree), [filteredExpTree])
+  const allIds = filteredFlat.map(n => n.id)
 
   return (
     <div className="h-full flex flex-col">
@@ -3722,6 +3741,13 @@ function ExperimentSection({ projectId, libraryId }) {
         />
       )}
 
+      {/* Filter bar — tree view only */}
+      {viewMode !== 'table' && expTree.length > 0 && (
+        <div className="flex-shrink-0 px-4 py-2 border-b border-slate-100 bg-white">
+          <FilterBar filters={treeFilters} setFilters={setTreeFilters} allColumns={treeFilterColumns} />
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-2 animate-pulse">
           <div className="h-8 bg-slate-100 rounded-lg" />
@@ -3778,7 +3804,7 @@ function ExperimentSection({ projectId, libraryId }) {
           >
             <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-0">
-                {expTree.map(exp => (
+                {filteredExpTree.map(exp => (
                   <ExperimentNode
                     key={exp.id}
                     experiment={exp}
