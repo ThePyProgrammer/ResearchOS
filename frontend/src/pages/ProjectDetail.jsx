@@ -3153,7 +3153,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
               <SortableContext items={reorderableColIds} strategy={horizontalListSortingStrategy}>
                 <tr>
                   {/* Select-all checkbox — sticky top+left */}
-                  <th className="sticky top-0 left-0 z-30 bg-slate-50 border-b border-r border-slate-200 px-2 py-2 text-center" style={{ width: 40, minWidth: 40 }}>
+                  <th className="bg-slate-50 border-b border-r border-slate-200 px-2 py-2 text-center" style={{ width: 40, minWidth: 40 }}>
                     <input
                       ref={selectAllRef}
                       type="checkbox"
@@ -3180,8 +3180,8 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
                   {/* Fixed: name — sticky */}
                   {fixedNameCol && (
                     <th
-                      className={`sticky top-0 left-10 z-30 border-b border-r border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${headerBgClass('fixed')}`}
-                      style={{ width: fixedNameCol.width, minWidth: fixedNameCol.width, position: 'relative' }}
+                      className={`border-b border-r border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap relative ${headerBgClass('fixed')}`}
+                      style={{ width: fixedNameCol.width, minWidth: fixedNameCol.width, maxWidth: fixedNameCol.width }}
                       onClick={() => fixedNameCol.sortable && handleSort(fixedNameCol.id)}
                     >
                       <div className={`flex items-center gap-1 ${fixedNameCol.sortable ? 'cursor-pointer select-none' : ''}`}>
@@ -3298,7 +3298,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
               >
                 {/* Checkbox — sticky left */}
                 <td
-                  className="sticky left-0 z-10 bg-white border-r border-slate-100 px-2 py-2 text-center"
+                  className="bg-white border-r border-slate-100 px-2 py-2 text-center"
                   style={{ width: 40, minWidth: 40 }}
                   onClick={e => e.stopPropagation()}
                 >
@@ -3318,7 +3318,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
                     <td
                       key={col.id}
                       className={`px-3 py-2 text-xs text-slate-700 whitespace-nowrap${
-                        col.id === 'name' ? ' sticky left-10 z-10 bg-white border-r border-slate-100 font-medium' : ''
+                        col.id === 'name' ? ' font-medium' : ''
                       }${highlightCls ? ` ${highlightCls}` : ''}`}
                       style={{ width: col.width, minWidth: col.width }}
                       onClick={col.id === 'status' ? e => e.stopPropagation() : undefined}
@@ -3342,7 +3342,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
               )}
               {fixedNameCol && (
                 <td
-                  className="sticky left-10 z-10 bg-slate-50/30 px-3 py-2"
+                  className="bg-slate-50/30 px-3 py-2"
                   style={{ width: fixedNameCol.width, minWidth: fixedNameCol.width }}
                 >
                   <input
