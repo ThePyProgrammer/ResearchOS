@@ -2931,8 +2931,9 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   }, [allColumns, colState])
 
   // Reorderable columns (exclude fixed type_icon and name columns)
+  const fixedIdSet = new Set(['type_icon', 'name', 'status', 'parent'])
   const reorderableColIds = useMemo(
-    () => visibleColumns.filter(c => c.id !== 'type_icon' && c.id !== 'name').map(c => c.id),
+    () => visibleColumns.filter(c => !fixedIdSet.has(c.id)).map(c => c.id),
     [visibleColumns]
   )
 
@@ -3146,9 +3147,12 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   }
 
   // Fixed headers (type_icon and name are always rendered outside the sortable context)
+  const fixedIds = ['type_icon', 'name', 'status', 'parent']
   const fixedTypeIconCol = visibleColumns.find(c => c.id === 'type_icon')
   const fixedNameCol = visibleColumns.find(c => c.id === 'name')
-  const reorderableCols = visibleColumns.filter(c => c.id !== 'type_icon' && c.id !== 'name')
+  const fixedStatusCol = visibleColumns.find(c => c.id === 'status')
+  const fixedParentCol = visibleColumns.find(c => c.id === 'parent')
+  const reorderableCols = visibleColumns.filter(c => !fixedIds.includes(c.id))
 
   // Metric columns in visible set (for lower-is-better toggles in header)
   const metricColumnsVisible = visibleColumns.filter(c => c.type === 'metric')
@@ -3244,6 +3248,48 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
                       <div
                         className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 transition-colors"
                         onMouseDown={e => { e.stopPropagation(); handleResizeStart(e, fixedNameCol.id, fixedNameCol.width) }}
+                        onClick={e => e.stopPropagation()}
+                      />
+                    </th>
+                  )}
+
+                  {/* Fixed: status */}
+                  {fixedStatusCol && (
+                    <th
+                      className={`border-b border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap relative ${headerBgClass('fixed')}`}
+                      style={{ width: fixedStatusCol.width, minWidth: fixedStatusCol.width }}
+                      onClick={() => fixedStatusCol.sortable && handleSort(fixedStatusCol.id)}
+                    >
+                      <div className={`flex items-center gap-1 ${fixedStatusCol.sortable ? 'cursor-pointer select-none' : ''}`}>
+                        {fixedStatusCol.label}
+                        {sort?.columnId === fixedStatusCol.id && (
+                          <Icon name={sort.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-500" />
+                        )}
+                      </div>
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 transition-colors"
+                        onMouseDown={e => { e.stopPropagation(); handleResizeStart(e, fixedStatusCol.id, fixedStatusCol.width) }}
+                        onClick={e => e.stopPropagation()}
+                      />
+                    </th>
+                  )}
+
+                  {/* Fixed: parent */}
+                  {fixedParentCol && (
+                    <th
+                      className={`border-b border-r border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap relative ${headerBgClass('fixed')}`}
+                      style={{ width: fixedParentCol.width, minWidth: fixedParentCol.width }}
+                      onClick={() => fixedParentCol.sortable && handleSort(fixedParentCol.id)}
+                    >
+                      <div className={`flex items-center gap-1 ${fixedParentCol.sortable ? 'cursor-pointer select-none' : ''}`}>
+                        {fixedParentCol.label}
+                        {sort?.columnId === fixedParentCol.id && (
+                          <Icon name={sort.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-500" />
+                        )}
+                      </div>
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400 transition-colors"
+                        onMouseDown={e => { e.stopPropagation(); handleResizeStart(e, fixedParentCol.id, fixedParentCol.width) }}
                         onClick={e => e.stopPropagation()}
                       />
                     </th>
@@ -3365,21 +3411,40 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
                     className="cursor-pointer"
                   />
                 </td>
-                {visibleColumns.map((col, colIdx) => {
+                {/* Fixed cells: type_icon, name, status, parent */}
+                {fixedTypeIconCol && (
+                  <td key="type_icon" className="px-3 py-2 text-xs text-slate-700 whitespace-nowrap" style={{ width: fixedTypeIconCol.width, minWidth: fixedTypeIconCol.width }}>
+                    {renderCellValue(fixedTypeIconCol, exp)}
+                  </td>
+                )}
+                {fixedNameCol && (
+                  <td key="name" className="px-3 py-2 text-xs text-slate-700 whitespace-nowrap font-medium" style={{ width: fixedNameCol.width, minWidth: fixedNameCol.width }}>
+                    {renderCellValue(fixedNameCol, exp)}
+                  </td>
+                )}
+                {fixedStatusCol && (
+                  <td key="status" className="px-3 py-2 text-xs text-slate-700 whitespace-nowrap" style={{ width: fixedStatusCol.width, minWidth: fixedStatusCol.width }} onClick={e => e.stopPropagation()}>
+                    {renderCellValue(fixedStatusCol, exp)}
+                  </td>
+                )}
+                {fixedParentCol && (
+                  <td key="parent" className="px-3 py-2 text-xs text-slate-700 whitespace-nowrap border-r border-slate-200" style={{ width: fixedParentCol.width, minWidth: fixedParentCol.width }}>
+                    {renderCellValue(fixedParentCol, exp)}
+                  </td>
+                )}
+                {/* Reorderable cells: config + metric columns */}
+                {reorderableCols.map((col, colIdx) => {
                   const isHighlighted = highlightBest && col.type === 'metric'
                   const cellValue = isHighlighted ? exp.metrics?.[col.key] : undefined
                   const bestValue = isHighlighted ? getBestValue(col.key, filteredRows, lowerIsBetter[col.key] || false) : undefined
                   const highlightCls = isHighlighted ? metricCellClass(col.key, cellValue, bestValue, true) : ''
-                  const prevColType = colIdx > 0 ? visibleColumns[colIdx - 1].type : null
-                  const isGroupStart = col.type !== 'fixed' && col.type !== prevColType
+                  const prevType = colIdx > 0 ? reorderableCols[colIdx - 1].type : null
+                  const isGroupStart = col.type !== prevType
                   return (
                     <td
                       key={col.id}
-                      className={`px-3 py-2 text-xs text-slate-700 whitespace-nowrap${
-                        col.id === 'name' ? ' font-medium' : ''
-                      }${highlightCls ? ` ${highlightCls}` : ''}${isGroupStart ? ' border-l-2 border-l-slate-300' : ''}`}
+                      className={`px-3 py-2 text-xs text-slate-700 whitespace-nowrap${highlightCls ? ` ${highlightCls}` : ''}${isGroupStart ? ' border-l-2 border-l-slate-300' : ''}`}
                       style={{ width: col.width, minWidth: col.width }}
-                      onClick={col.id === 'status' ? e => e.stopPropagation() : undefined}
                     >
                       {renderCellValue(col, exp)}
                     </td>
