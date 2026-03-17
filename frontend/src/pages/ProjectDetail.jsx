@@ -3617,6 +3617,7 @@ function ExperimentSection({ projectId, libraryId }) {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [viewMode, setViewMode] = useLocalStorage(`researchos.exp.view.${projectId}`, 'tree')
   const [treeFilters, setTreeFilters] = useState([])
+  const [treeSort, setTreeSort] = useState(null) // null | 'name-asc' | 'name-desc' | 'status-asc' | 'status-desc'
   const [expandCollapseKey, setExpandCollapseKey] = useState(null) // { key, expand }
   const [allCollapsed, setAllCollapsed] = useState(false)
 
@@ -3624,9 +3625,29 @@ function ExperimentSection({ projectId, libraryId }) {
   const flatTree = useMemo(() => flattenExperimentTree(expTree), [expTree])
   const treeFilterColumns = useMemo(() => buildColumns(flatTree), [flatTree])
 
+  /** Sort a tree recursively at each level. */
+  function sortTree(nodes, sortKey) {
+    if (!sortKey) return nodes
+    const [field, dir] = sortKey.split('-') // 'name-asc' → ['name', 'asc']
+    const statusOrder = { planned: 0, running: 1, completed: 2, failed: 3 }
+    const sorted = [...nodes].sort((a, b) => {
+      let cmp
+      if (field === 'name') {
+        cmp = (a.name || '').localeCompare(b.name || '')
+      } else if (field === 'status') {
+        cmp = (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99)
+      } else {
+        cmp = 0
+      }
+      return dir === 'desc' ? -cmp : cmp
+    })
+    return sorted.map(n => n.children?.length > 0 ? { ...n, children: sortTree(n.children, sortKey) } : n)
+  }
+
   /** Filter a tree recursively — keep a node if it matches or any descendant matches. */
   const filteredExpTree = useMemo(() => {
-    if (treeFilters.length === 0) return expTree
+    const base = treeSort ? sortTree(expTree, treeSort) : expTree
+    if (treeFilters.length === 0) return base
     function filterNode(node) {
       const selfMatches = treeFilters.every(f => applyFilter(node, f))
       if (node.children?.length > 0) {
@@ -3637,8 +3658,8 @@ function ExperimentSection({ projectId, libraryId }) {
       }
       return selfMatches ? node : null
     }
-    return expTree.map(filterNode).filter(Boolean)
-  }, [expTree, treeFilters])
+    return base.map(filterNode).filter(Boolean)
+  }, [expTree, treeFilters, treeSort])
 
   function handleToggleNode(exp) {
     setSelectedLeafIds(prev => {
@@ -3807,6 +3828,17 @@ function ExperimentSection({ projectId, libraryId }) {
           <div className="flex-1 min-w-0">
             <FilterBar filters={treeFilters} setFilters={setTreeFilters} allColumns={treeFilterColumns} />
           </div>
+          <select
+            value={treeSort || ''}
+            onChange={e => setTreeSort(e.target.value || null)}
+            className="flex-shrink-0 text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-600 focus:outline-none focus:border-blue-400 cursor-pointer"
+          >
+            <option value="">Position order</option>
+            <option value="name-asc">Name A→Z</option>
+            <option value="name-desc">Name Z→A</option>
+            <option value="status-asc">Status: Planned→Failed</option>
+            <option value="status-desc">Status: Failed→Planned</option>
+          </select>
           <button
             onClick={() => {
               if (allSelected) {
