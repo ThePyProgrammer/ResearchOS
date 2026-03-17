@@ -1543,7 +1543,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, is
           className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors mt-0.5"
         >
           <Icon
-            name={expanded ? 'remove' : 'add'}
+            name={hasChildren ? (expanded ? 'expand_more' : 'chevron_right') : (expanded ? 'remove' : 'add')}
             className="text-[16px]"
           />
         </button>
