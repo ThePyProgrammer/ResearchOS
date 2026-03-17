@@ -114,7 +114,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Experiment Tree | 3/3 | Complete   | 2026-03-15 |
 | 4. Experiment Differentiators | 3/3 | Complete   | 2026-03-16 |
 | 5. Integration Polish | 1/1 | Complete   | 2026-03-16 |
-| 6. CSV Loading Framework | 3/3 | Complete   | 2026-03-16 |
+| 6. CSV Loading Framework | 3/3 | Complete   | 2026-03-17 |
 | 7. Experiment Table View | 4/4 | Complete   | 2026-03-16 |
 
 ### Phase 6: CSV Loading Framework for Experiments

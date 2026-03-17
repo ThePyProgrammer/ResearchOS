@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Paused at checkpoint 07-03 Task 3: human-verify"
-last_updated: "2026-03-16T17:07:40.965Z"
+stopped_at: Completed 06-02-PLAN.md (human verification approved)
+last_updated: "2026-03-17T13:15:47.530Z"
 last_activity: 2026-03-17 — Completed plan 07-00 (Extract useLocalStorage hook, table view test scaffolds RED phase)
 progress:
   total_phases: 7
@@ -67,6 +67,7 @@ Progress: [████████████] 100%
 | Phase 07-experiment-table-view P00 | 3 min | 2 tasks | 3 files |
 | Phase 07-experiment-table-view P01 | 8 | 2 tasks | 1 files |
 | Phase 07-experiment-table-view P02 | 4 min | 2 tasks | 1 files |
+| Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design P02 | 10 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,7 @@ Recent decisions affecting current work:
 - [Phase 07-experiment-table-view]: formatFilterValue helper renders human-readable chip value labels (array join, between range, empty string for empty/notempty operators)
 - [Phase 07-experiment-table-view]: filteredRows replaces sortedRows throughout — select-all, metric highlighting, and new-row creation all work on filtered set
 - [Phase 07-experiment-table-view]: Row click toggles detail panel (click same row again to close) to avoid requiring a separate close-only affordance
+- [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: BFS flatten at Step 4 call time (not Step 3) so user renames/excludes are applied as the final transformation
 
 ### Roadmap Evolution
 
@@ -158,5 +160,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T17:07:15.567Z
-Stopped at: Paused at checkpoint 07-03 Task 3: human-verify
+Last session: 2026-03-17T13:15:47.528Z
+Stopped at: Completed 06-02-PLAN.md (human verification approved)
