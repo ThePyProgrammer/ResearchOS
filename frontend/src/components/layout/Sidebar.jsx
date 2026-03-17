@@ -720,6 +720,7 @@ function ProjectsTree({ collapsed }) {
   const navigate = useNavigate()
   const [projects, setProjects] = useState([])
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [expandedProjects, setExpandedProjects] = useState({})
 
   const fetchProjects = useCallback(() => {
     if (!activeLibraryId) return
@@ -737,6 +738,80 @@ function ProjectsTree({ collapsed }) {
     window.addEventListener('researchos:projects-changed', handler)
     return () => window.removeEventListener('researchos:projects-changed', handler)
   }, [fetchProjects])
+
+  // Auto-expand project when navigating directly to a sub-route
+  useEffect(() => {
+    const match = location.pathname.match(/^\/projects\/(proj_[^/]+)/)
+    if (match) {
+      const projectId = match[1]
+      setExpandedProjects(prev => prev[projectId] ? prev : { ...prev, [projectId]: true })
+    }
+  }, [location.pathname])
+
+  function ProjectNode({ project }) {
+    const isExpanded = !!expandedProjects[project.id]
+    const isProjectActive = location.pathname.startsWith(`/projects/${project.id}`)
+    const dotClass = projectStatusDotClass[project.status] || projectStatusDotClass.active
+
+    function handleRowClick() {
+      setExpandedProjects(prev => ({ ...prev, [project.id]: !isExpanded }))
+      navigate(`/projects/${project.id}`)
+    }
+
+    const subLinks = [
+      { label: 'Overview',    icon: 'dashboard',  to: `/projects/${project.id}`,             end: true },
+      { label: 'Literature',  icon: 'menu_book',  to: `/projects/${project.id}/literature`,  end: false },
+      { label: 'Experiments', icon: 'science',    to: `/projects/${project.id}/experiments`, end: false },
+      { label: 'Notes',       icon: 'edit_note',  to: `/projects/${project.id}/notes`,       end: false },
+    ]
+
+    return (
+      <div>
+        {/* Project row */}
+        <button
+          onClick={handleRowClick}
+          title={project.name}
+          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-left ${
+            isProjectActive
+              ? 'bg-white/10 text-white font-medium'
+              : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+          }`}
+        >
+          <Icon
+            name={isExpanded ? 'expand_more' : 'chevron_right'}
+            className="text-[14px] flex-shrink-0 opacity-50"
+          />
+          <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+            <span className={`w-2 h-2 rounded-full ${dotClass}`} />
+          </span>
+          <span className="flex-1 truncate text-[13px]">{project.name}</span>
+        </button>
+
+        {/* Sub-links */}
+        {isExpanded && (
+          <div className="space-y-0.5 mt-0.5">
+            {subLinks.map(link => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.end}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 pl-9 pr-3 py-1 rounded-lg transition-colors text-[12px] ${
+                    isActive
+                      ? 'bg-white/10 text-white font-medium'
+                      : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
+                  }`
+                }
+              >
+                <Icon name={link.icon} className="text-[14px] flex-shrink-0" />
+                <span>{link.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   if (collapsed) {
     return (
@@ -774,45 +849,27 @@ function ProjectsTree({ collapsed }) {
 
       {/* Project links */}
       <div className="space-y-0.5">
-          <NavLink
-            to="/projects"
-            end
-            className={({ isActive }) =>
-              `flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
-                isActive
-                  ? 'bg-white/10 text-white font-medium'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-              }`
-            }
-          >
-            <Icon name="home" className="text-[16px] flex-shrink-0" />
-            <span className="flex-1 text-[13px]">Home</span>
-          </NavLink>
-          {projects.map(project => {
-            const isActive = location.pathname === `/projects/${project.id}`
-            const dotClass = projectStatusDotClass[project.status] || projectStatusDotClass.active
-            return (
-              <NavLink
-                key={project.id}
-                to={`/projects/${project.id}`}
-                title={project.name}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-white/10 text-white font-medium'
-                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                }`}
-              >
-                <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                  <span className={`w-2 h-2 rounded-full ${dotClass}`} />
-                </span>
-                <span className="flex-1 truncate text-[13px]">{project.name}</span>
-              </NavLink>
-            )
-          })}
-          {projects.length === 0 && (
-            <p className="px-3 py-1 text-[12px] text-slate-600 italic">No projects yet</p>
-          )}
-        </div>
+        <NavLink
+          to="/projects"
+          end
+          className={({ isActive }) =>
+            `flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+              isActive
+                ? 'bg-white/10 text-white font-medium'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+            }`
+          }
+        >
+          <Icon name="home" className="text-[16px] flex-shrink-0" />
+          <span className="flex-1 text-[13px]">Home</span>
+        </NavLink>
+        {projects.map(project => (
+          <ProjectNode key={project.id} project={project} />
+        ))}
+        {projects.length === 0 && (
+          <p className="px-3 py-1 text-[12px] text-slate-600 italic">No projects yet</p>
+        )}
+      </div>
       {showCreateModal && (
         <CreateProjectModal
           libraryId={activeLibraryId}
