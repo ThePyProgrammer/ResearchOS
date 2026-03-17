@@ -3701,20 +3701,20 @@ function ExperimentSection({ projectId, libraryId }) {
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
         <div className="flex items-center gap-2">
           {/* View toggle */}
-          <div className="flex items-center gap-0 border border-slate-200 rounded-lg overflow-hidden">
+          <div className="flex items-center gap-0 border border-slate-200 rounded-lg overflow-hidden h-[34px]">
             <button
               onClick={() => setViewMode('tree')}
               title="Tree view"
-              className={`px-2 py-1.5 transition-colors ${viewMode === 'tree' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center justify-center px-2 h-full transition-colors ${viewMode === 'tree' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
             >
-              <Icon name="account_tree" className="text-[16px]" />
+              <Icon name="account_tree" className="text-[16px] leading-none" />
             </button>
             <button
               onClick={() => setViewMode('table')}
               title="Table view"
-              className={`px-2 py-1.5 transition-colors ${viewMode === 'table' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center justify-center px-2 h-full transition-colors ${viewMode === 'table' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
             >
-              <Icon name="table_chart" className="text-[16px]" />
+              <Icon name="table_chart" className="text-[16px] leading-none" />
             </button>
           </div>
           <button
