@@ -4348,6 +4348,7 @@ function LoadingSkeleton() {
 export default function ProjectDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [project, setProject] = useState(null)
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -4409,7 +4410,19 @@ export default function ProjectDetail() {
           Projects
         </button>
         <Icon name="chevron_right" className="text-[16px] text-slate-400" />
-        <span className="text-sm text-slate-700 truncate font-medium">{project.name}</span>
+        <Link to={`/projects/${id}`} className="text-sm text-slate-500 hover:text-slate-700 truncate font-medium transition-colors">{project.name}</Link>
+        {(() => {
+          const segment = location.pathname.split('/').pop()
+          const sectionLabels = { literature: 'Literature', experiments: 'Experiments', notes: 'Notes' }
+          const label = sectionLabels[segment]
+          if (!label) return null
+          return (
+            <>
+              <Icon name="chevron_right" className="text-[16px] text-slate-400" />
+              <span className="text-sm text-slate-700 font-medium">{label}</span>
+            </>
+          )
+        })()}
       </div>
 
       {/* Content */}
