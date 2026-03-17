@@ -857,17 +857,21 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
       iconClassName="text-[16px] text-blue-600"
       position="center"
     >
-      <div className="p-6 w-[560px] max-w-full">
-        <StepIndicator current={step} steps={STEPS} />
+      <div className="flex flex-col w-[560px] max-w-full max-h-[calc(100vh-8rem)]">
+        <div className="px-6 pt-6 flex-shrink-0">
+          <StepIndicator current={step} steps={STEPS} />
+        </div>
 
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
-        {step === 4 && renderStep4()}
+        <div className="px-6 pb-2 flex-1 min-h-0 overflow-y-auto">
+          {step === 1 && renderStep1()}
+          {step === 2 && renderStep2()}
+          {step === 3 && renderStep3()}
+          {step === 4 && renderStep4()}
+        </div>
 
         {/* Footer navigation */}
         {!(step === 4 && importResult) && (
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 flex-shrink-0">
             <button
               onClick={step === 1 ? onClose : handleBack}
               className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
