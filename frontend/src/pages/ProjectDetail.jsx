@@ -4562,7 +4562,7 @@ function LiteratureTab({ projectId, libraryId }) {
                         <button
                           onClick={e => { e.stopPropagation(); handleUnlink(item._linkId) }}
                           title="Unlink"
-                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-all p-1 rounded"
+                          className="text-slate-300 hover:text-red-400 transition-all p-1 rounded"
                         >
                           <Icon name="link_off" className="text-[16px]" />
                         </button>
@@ -4595,7 +4595,7 @@ function LiteratureTab({ projectId, libraryId }) {
             fetchAll()
           }}
           onDelete={() => { setSelectedItem(null); fetchAll() }}
-          width={360}
+          width={320}
         />
       )}
       {selectedItem && selectedItem.itemType === 'github_repo' && (
@@ -4610,7 +4610,7 @@ function LiteratureTab({ projectId, libraryId }) {
             fetchAll()
           }}
           onDelete={() => { setSelectedItem(null); fetchAll() }}
-          width={360}
+          width={320}
         />
       )}
       {selectedItem && selectedItem.itemType !== 'website' && selectedItem.itemType !== 'github_repo' && (
@@ -4625,7 +4625,7 @@ function LiteratureTab({ projectId, libraryId }) {
             fetchAll()
           }}
           onDelete={() => { setSelectedItem(null); fetchAll() }}
-          width={360}
+          width={320}
         />
       )}
     </div>
