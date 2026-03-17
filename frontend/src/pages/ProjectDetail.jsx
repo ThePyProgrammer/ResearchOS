@@ -2292,7 +2292,7 @@ function ColumnPicker({ allColumns, colState, setColState }) {
 
 // ─── SortableColumnHeader ──────────────────────────────────────────────────────
 
-function SortableColumnHeader({ col, sort, onSort, onResizeStart, headerBgClass, highlightBest, lowerIsBetter, onToggleLowerIsBetter }) {
+function SortableColumnHeader({ col, sort, onSort, onResizeStart, headerBgClass, highlightBest, lowerIsBetter, onToggleLowerIsBetter, isGroupStart }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.id })
   const style = {
     transform: transform ? `translate3d(${transform.x}px, 0, 0)` : undefined,
@@ -2307,7 +2307,7 @@ function SortableColumnHeader({ col, sort, onSort, onResizeStart, headerBgClass,
     <th
       ref={setNodeRef}
       style={style}
-      className={`sticky top-0 z-20 border-b border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${headerBgClass(col.type)}`}
+      className={`sticky top-0 z-20 border-b border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${headerBgClass(col.type)}${isGroupStart ? ' border-l-2 border-l-slate-300' : ''}`}
       onClick={() => col.sortable && onSort(col.id)}
     >
       <div className={`flex items-center gap-1 ${col.sortable ? 'cursor-pointer select-none' : ''}`}>
@@ -2981,6 +2981,25 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
     const oldIndex = reorderableColIds.indexOf(active.id)
     const newIndex = reorderableColIds.indexOf(over.id)
     if (oldIndex === -1 || newIndex === -1) return
+
+    // Enforce group boundaries: configs stay with configs, metrics with metrics
+    const draggedCol = reorderableCols.find(c => c.id === active.id)
+    const targetCol = reorderableCols.find(c => c.id === over.id)
+    if (draggedCol && targetCol && draggedCol.type !== 'fixed' && targetCol.type !== 'fixed' && draggedCol.type !== targetCol.type) {
+      // Dragged across group boundary — clamp to the edge of its own group
+      const sameGroupIds = reorderableColIds.filter(id => {
+        const c = reorderableCols.find(col => col.id === id)
+        return c && c.type === draggedCol.type
+      })
+      const clampIndex = newIndex < oldIndex
+        ? reorderableColIds.indexOf(sameGroupIds[0])  // moving left → first in group
+        : reorderableColIds.indexOf(sameGroupIds[sameGroupIds.length - 1]) // moving right → last in group
+      if (clampIndex === oldIndex) return // already at edge
+      const newOrder = arrayMove(reorderableColIds, oldIndex, clampIndex)
+      setColState(prev => ({ ...prev, order: newOrder }))
+      return
+    }
+
     const newOrder = arrayMove(reorderableColIds, oldIndex, newIndex)
     setColState(prev => ({ ...prev, order: newOrder }))
   }
@@ -3018,8 +3037,6 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   const detailExp = detailExpId ? flatTree.find(e => e.id === detailExpId) : null
 
   function headerBgClass(colType) {
-    if (colType === 'config') return 'bg-blue-50'
-    if (colType === 'metric') return 'bg-emerald-50'
     return 'bg-slate-50'
   }
 
@@ -3228,19 +3245,24 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
                   )}
 
                   {/* Reorderable columns */}
-                  {reorderableCols.map(col => (
-                    <SortableColumnHeader
-                      key={col.id}
-                      col={col}
-                      sort={sort}
-                      onSort={handleSort}
-                      onResizeStart={handleResizeStart}
-                      headerBgClass={headerBgClass}
-                      highlightBest={highlightBest}
-                      lowerIsBetter={lowerIsBetter}
-                      onToggleLowerIsBetter={key => setLowerIsBetter(prev => ({ ...prev, [key]: !prev[key] }))}
-                    />
-                  ))}
+                  {reorderableCols.map((col, idx) => {
+                    const prevType = idx > 0 ? reorderableCols[idx - 1].type : null
+                    const isGroupStart = col.type !== 'fixed' && col.type !== prevType
+                    return (
+                      <SortableColumnHeader
+                        key={col.id}
+                        col={col}
+                        sort={sort}
+                        onSort={handleSort}
+                        onResizeStart={handleResizeStart}
+                        headerBgClass={headerBgClass}
+                        highlightBest={highlightBest}
+                        lowerIsBetter={lowerIsBetter}
+                        onToggleLowerIsBetter={key => setLowerIsBetter(prev => ({ ...prev, [key]: !prev[key] }))}
+                        isGroupStart={isGroupStart}
+                      />
+                    )
+                  })}
 
                   {/* '+' button to add new column */}
                   <th
@@ -3338,17 +3360,19 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
                     className="cursor-pointer"
                   />
                 </td>
-                {visibleColumns.map(col => {
+                {visibleColumns.map((col, colIdx) => {
                   const isHighlighted = highlightBest && col.type === 'metric'
                   const cellValue = isHighlighted ? exp.metrics?.[col.key] : undefined
                   const bestValue = isHighlighted ? getBestValue(col.key, filteredRows, lowerIsBetter[col.key] || false) : undefined
                   const highlightCls = isHighlighted ? metricCellClass(col.key, cellValue, bestValue, true) : ''
+                  const prevColType = colIdx > 0 ? visibleColumns[colIdx - 1].type : null
+                  const isGroupStart = col.type !== 'fixed' && col.type !== prevColType
                   return (
                     <td
                       key={col.id}
                       className={`px-3 py-2 text-xs text-slate-700 whitespace-nowrap${
                         col.id === 'name' ? ' font-medium' : ''
-                      }${highlightCls ? ` ${highlightCls}` : ''}`}
+                      }${highlightCls ? ` ${highlightCls}` : ''}${isGroupStart ? ' border-l-2 border-l-slate-300' : ''}`}
                       style={{ width: col.width, minWidth: col.width }}
                       onClick={col.id === 'status' ? e => e.stopPropagation() : undefined}
                     >
