@@ -3727,7 +3727,23 @@ function ExperimentSection({ projectId, libraryId }) {
         </div>
       </div>
 
-      {/* Selection bar — sticky below header, tree view only */}
+      {/* Filter bar — tree view only */}
+      {viewMode !== 'table' && expTree.length > 0 && (
+        <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-white">
+          <div className="flex-1 min-w-0">
+            <FilterBar filters={treeFilters} setFilters={setTreeFilters} allColumns={treeFilterColumns} />
+          </div>
+          <button
+            onClick={() => setCollapseKey(k => k + 1)}
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 border border-slate-200 rounded px-2 py-1 flex-shrink-0"
+          >
+            <Icon name="unfold_less" className="text-[14px]" />
+            Collapse All
+          </button>
+        </div>
+      )}
+
+      {/* Bulk action bar — below filter bar, tree view only */}
       {viewMode !== 'table' && selectedLeafIds.size >= 1 && (
         <BulkActionBar
           selectedLeafIds={selectedLeafIds}
@@ -3743,24 +3759,8 @@ function ExperimentSection({ projectId, libraryId }) {
           }}
           onDelete={() => setBulkDeleteConfirm(true)}
           onClear={() => setSelectedLeafIds(new Set())}
-          className="flex-shrink-0 rounded-lg border border-blue-200 mb-2"
+          className="flex-shrink-0"
         />
-      )}
-
-      {/* Filter bar — tree view only */}
-      {viewMode !== 'table' && expTree.length > 0 && (
-        <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-white">
-          <div className="flex-1 min-w-0">
-            <FilterBar filters={treeFilters} setFilters={setTreeFilters} allColumns={treeFilterColumns} />
-          </div>
-          <button
-            onClick={() => setCollapseKey(k => k + 1)}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 border border-slate-200 rounded px-2 py-1 flex-shrink-0"
-          >
-            <Icon name="unfold_less" className="text-[14px]" />
-            Collapse All
-          </button>
-        </div>
       )}
 
       {loading ? (
