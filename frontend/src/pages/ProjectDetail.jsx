@@ -3169,7 +3169,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
               <SortableContext items={reorderableColIds} strategy={horizontalListSortingStrategy}>
                 <tr>
                   {/* Select-all checkbox — sticky top+left */}
-                  <th className="bg-slate-50 border-b border-r border-slate-200 px-2 py-2 text-center" style={{ width: 40, minWidth: 40 }}>
+                  <th className="sticky left-0 z-20 bg-slate-50 border-b border-r border-slate-200 px-2 py-2 text-center" style={{ width: 40, minWidth: 40 }}>
                     <input
                       ref={selectAllRef}
                       type="checkbox"
@@ -3314,7 +3314,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
               >
                 {/* Checkbox — sticky left */}
                 <td
-                  className="bg-white border-r border-slate-100 px-2 py-2 text-center"
+                  className="sticky left-0 z-10 bg-white border-r border-slate-100 px-2 py-2 text-center"
                   style={{ width: 40, minWidth: 40 }}
                   onClick={e => e.stopPropagation()}
                 >
