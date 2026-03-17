@@ -3018,8 +3018,8 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   const detailExp = detailExpId ? flatTree.find(e => e.id === detailExpId) : null
 
   function headerBgClass(colType) {
-    if (colType === 'config') return 'bg-blue-50/60'
-    if (colType === 'metric') return 'bg-emerald-50/60'
+    if (colType === 'config') return 'bg-blue-50'
+    if (colType === 'metric') return 'bg-emerald-50'
     return 'bg-slate-50'
   }
 
