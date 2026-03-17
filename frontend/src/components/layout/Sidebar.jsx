@@ -800,13 +800,13 @@ function ProjectsTree({ collapsed }) {
                   `flex items-center gap-1.5 py-1.5 rounded-lg transition-colors text-[13px] cursor-pointer ${
                     isActive
                       ? 'bg-white/10 text-white font-medium'
-                      : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                   }`
                 }
                 style={{ paddingLeft: '20px', paddingRight: '8px' }}
               >
                 <span className="w-[14px] flex-shrink-0" />
-                <Icon name={link.icon} className="text-[16px] flex-shrink-0" />
+                <Icon name={link.icon} className="text-[18px] flex-shrink-0" />
                 <span className="flex-1 truncate">{link.label}</span>
               </NavLink>
             ))}
