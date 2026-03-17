@@ -856,8 +856,11 @@ export default function CSVImportModal({ projectId, existingExperiments = [], on
       iconWrapClassName="bg-blue-100"
       iconClassName="text-[16px] text-blue-600"
       position="center"
+      normalPanelClassName="w-full max-w-[560px] rounded-2xl"
+      fullscreenPanelClassName="w-[calc(100vw-1rem)] h-[calc(100vh-1rem)] rounded-xl"
+      bodyClassName="overflow-hidden"
     >
-      <div className="flex flex-col w-[560px] max-w-full max-h-[calc(100vh-8rem)]">
+      <div className="flex flex-col h-full max-h-[calc(100vh-8rem)]">
         <div className="px-6 pt-6 flex-shrink-0">
           <StepIndicator current={step} steps={STEPS} />
         </div>
