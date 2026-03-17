@@ -3789,7 +3789,7 @@ function ExperimentSection({ projectId, libraryId }) {
             className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
           >
             <Icon name="upload_file" className="text-[16px]" />
-            Import CSV
+            Import Data
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -4818,7 +4818,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 bg-white" style={{ overflow: 'hidden', display: 'grid' }}>
+      <div className="flex-1 min-h-0 bg-white overflow-y-auto">
         <Outlet context={{ project, setProject: (updated) => setProject(updated), notes, setNotes, id }} />
       </div>
     </div>
