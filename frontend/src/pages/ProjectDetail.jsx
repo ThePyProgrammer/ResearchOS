@@ -3141,7 +3141,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
         <ColumnPicker allColumns={allColumns} colState={colState} setColState={setColState} />
       </div>
 
-      <div className="border border-slate-200 rounded-lg overflow-x-auto">
+      <div className="overflow-x-auto border-t border-slate-200">
         <table className="border-collapse text-sm w-full" style={{ tableLayout: 'auto' }}>
           <thead>
             <DndContext
@@ -3533,9 +3533,9 @@ function ExperimentSection({ projectId, libraryId }) {
   const allIds = flatTree.map(n => n.id)
 
   return (
-    <div className={`px-4 pt-4 ${viewMode === 'table' ? 'h-full' : ''}`}>
+    <div className={`${viewMode === 'table' ? 'h-full' : 'px-4 pt-4'}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className={`flex items-center justify-between mb-4 ${viewMode === 'table' ? 'px-4 pt-4' : ''}`}>
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
         <div className="flex items-center gap-2">
           {/* View toggle */}
