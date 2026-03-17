@@ -4204,7 +4204,7 @@ function LiteratureTab({ projectId, libraryId }) {
   }
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6">
       <h2 className="text-lg font-semibold text-slate-800 mb-4">Literature</h2>
 
       <SearchPicker
@@ -4291,7 +4291,7 @@ function OverviewTab({ project, onUpdate }) {
   }
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6">
       {/* Header */}
       <div className="space-y-3 mb-8">
         <div className="flex items-center gap-3">
