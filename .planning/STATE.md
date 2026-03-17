@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 06-02-PLAN.md (human verification approved)
-last_updated: "2026-03-17T13:15:47.530Z"
+last_updated: "2026-03-17T14:04:25.066Z"
 last_activity: 2026-03-17 — Completed plan 07-00 (Extract useLocalStorage hook, table view test scaffolds RED phase)
 progress:
   total_phases: 7
@@ -157,6 +157,14 @@ None yet.
 
 - Schema design is the highest-risk decision in Phase 1: config/metrics must be JSONB key-value from day one; research_questions must be a first-class table (not JSONB array); project_papers must be a pure FK join table. Getting these wrong requires rewrites.
 - Resolve before Phase 1 plans: whether to include rq-to-experiment FK on experiments in Phase 1 schema (research recommends low-cost inclusion now vs. painful migration later).
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Refactor ProjectDetail tabs into separate routes | 2026-03-17 | 632d74e | [1-refactor-projectdetail-tabs-into-separat](./quick/1-refactor-projectdetail-tabs-into-separat/) |
+| 2 | Change projects sidebar icon from science to topic | 2026-03-17 | 9e94105 | [2-change-projects-sidebar-icon-to-be-consi](./quick/2-change-projects-sidebar-icon-to-be-consi/) |
+| 3 | Move projects into main sidebar with collapsible nodes | 2026-03-17 | f85c896 | [3-move-projects-into-main-sidebar-with-col](./quick/3-move-projects-into-main-sidebar-with-col/) |
 
 ## Session Continuity
 

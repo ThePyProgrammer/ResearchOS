@@ -796,7 +796,7 @@ function ProjectsTree({ collapsed }) {
                 to={link.to}
                 end={link.end}
                 className={({ isActive }) =>
-                  `flex items-center gap-2 pl-9 pr-3 py-1 rounded-lg transition-colors text-[12px] ${
+                  `flex items-center gap-2 pl-9 pr-3 py-1 rounded-lg transition-colors text-[13px] ${
                     isActive
                       ? 'bg-white/10 text-white font-medium'
                       : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
