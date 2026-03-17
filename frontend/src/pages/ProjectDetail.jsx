@@ -3108,7 +3108,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   return (
     <>
       {/* Table area */}
-      <div className={`transition-all ${detailExp ? 'pr-[370px]' : ''}`}>
+      <div className={`transition-all ${detailExp ? 'pr-[280px]' : ''}`}>
       {/* Toolbar */}
       <div className="flex items-center justify-end gap-2 mb-2">
         <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
@@ -3372,9 +3372,10 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
       </div>
       </div>{/* end table area */}
 
-      {/* Right: detail panel — fixed to viewport right edge */}
+      {/* Right: detail panel — below header + breadcrumb */}
       {detailExp && (
-        <div className="fixed top-0 right-0 w-[360px] h-screen border-l border-slate-200 bg-white overflow-y-auto shadow-lg z-40">
+        <div className="fixed right-0 w-[280px] border-l border-slate-200 bg-white overflow-y-auto shadow-lg z-30"
+          style={{ top: '92px', height: 'calc(100vh - 92px)' }}>
           <ExperimentDetailPanel
             experiment={detailExp}
             flatTree={flatTree}
