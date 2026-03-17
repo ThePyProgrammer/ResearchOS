@@ -2577,7 +2577,7 @@ function FilterBar({ filters, setFilters, allColumns }) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-1 py-2">
+    <div className="flex flex-wrap items-center gap-2">
       {filters.map(f => (
         <FilterChip
           key={f.id}
@@ -3120,28 +3120,26 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
     <div className="flex gap-0 h-full">
       {/* Table area */}
       <div className="flex-1 min-w-0 overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center justify-end gap-2 mb-2">
-        <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
+      {/* Unified toolbar: filters + highlight + columns */}
+      <div className="flex items-center gap-2 px-1 py-2 mb-1">
+        <FilterBar filters={filters} setFilters={setFilters} allColumns={allColumns} />
+        {filters.length > 0 && (
+          <span className="text-xs text-slate-400 whitespace-nowrap">
+            {filteredRows.length}/{flatTree.length}
+          </span>
+        )}
+        <div className="flex-1" />
+        <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none whitespace-nowrap">
           <input
             type="checkbox"
             checked={highlightBest}
             onChange={e => setHighlightBest(e.target.checked)}
+            className="rounded"
           />
           Highlight best
         </label>
         <ColumnPicker allColumns={allColumns} colState={colState} setColState={setColState} />
       </div>
-
-      {/* Filter bar */}
-      <FilterBar filters={filters} setFilters={setFilters} allColumns={allColumns} />
-
-      {/* Row count */}
-      {filters.length > 0 && (
-        <div className="text-xs text-slate-400 mb-1 px-1">
-          {filteredRows.length} of {flatTree.length} experiments
-        </div>
-      )}
 
       <div className="overflow-auto max-h-[calc(100vh-340px)] border border-slate-200 rounded-lg">
         <table className="border-collapse text-sm w-max min-w-full" style={{ tableLayout: 'fixed' }}>
