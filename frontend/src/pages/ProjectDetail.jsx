@@ -3768,7 +3768,7 @@ function ExperimentSection({ projectId, libraryId }) {
           onClearSelection={() => setSelectedLeafIds(new Set())}
         />
       ) : (
-        <div className="max-w-4xl pb-4 flex-1 min-h-0 overflow-y-auto">
+        <div className="pb-4 flex-1 min-h-0 overflow-y-auto">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
