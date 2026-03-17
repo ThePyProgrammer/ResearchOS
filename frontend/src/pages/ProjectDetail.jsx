@@ -2827,6 +2827,21 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   const [newRowName, setNewRowName] = useState('')
   const [newRowError, setNewRowError] = useState(false)
 
+  // Measure available height from container top to viewport bottom
+  const containerRef = useRef(null)
+  const [availableHeight, setAvailableHeight] = useState(null)
+  useEffect(() => {
+    function measure() {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setAvailableHeight(window.innerHeight - rect.top)
+      }
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
+
   // Filter state persisted to localStorage per project
   const [filters, setFilters] = useLocalStorage(`researchos.exp.table.filters.${projectId}`, [])
 
@@ -3117,7 +3132,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   const metricColumnsVisible = visibleColumns.filter(c => c.type === 'metric')
 
   return (
-    <div className="flex gap-0 flex-1 min-h-0">
+    <div ref={containerRef} className="flex gap-0" style={availableHeight ? { height: availableHeight } : {}}>
       {/* Table area */}
       <div className="flex-1 min-w-0 flex flex-col">
       {/* Unified toolbar: filters + highlight + columns — fixed top */}
