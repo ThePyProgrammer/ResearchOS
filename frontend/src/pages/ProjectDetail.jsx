@@ -3664,8 +3664,8 @@ function ExperimentSection({ projectId, libraryId }) {
 
   return (
     <div className={`${viewMode === 'table' ? 'h-full flex flex-col' : 'h-full flex flex-col px-4 pt-4'}`}>
-      {/* Header — sticky */}
-      <div className={`flex-shrink-0 flex items-center justify-between ${viewMode === 'table' ? 'px-4 py-3 border-b border-slate-200 bg-white' : 'pb-3 bg-white sticky top-0 z-10'}`}>
+      {/* Header */}
+      <div className={`flex-shrink-0 flex items-center justify-between ${viewMode === 'table' ? 'px-4 py-3 border-b border-slate-200 bg-white' : 'pb-3 bg-white'}`}>
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
         <div className="flex items-center gap-2">
           {/* View toggle */}
@@ -3718,7 +3718,7 @@ function ExperimentSection({ projectId, libraryId }) {
           }}
           onDelete={() => setBulkDeleteConfirm(true)}
           onClear={() => setSelectedLeafIds(new Set())}
-          className="flex-shrink-0 sticky top-[52px] z-10 rounded-lg border border-blue-200 border-t"
+          className="flex-shrink-0 rounded-lg border border-blue-200 mb-2"
         />
       )}
 
@@ -4282,7 +4282,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-auto bg-white">
+      <div className="flex-1 min-h-0 overflow-hidden bg-white">
         <Outlet context={{ project, setProject: (updated) => setProject(updated), notes, setNotes, id }} />
       </div>
     </div>
@@ -4293,12 +4293,20 @@ export default function ProjectDetail() {
 
 export function ProjectOverview() {
   const { project, setProject } = useOutletContext()
-  return <OverviewTab project={project} onUpdate={updated => setProject(updated)} />
+  return (
+    <div className="h-full overflow-auto">
+      <OverviewTab project={project} onUpdate={updated => setProject(updated)} />
+    </div>
+  )
 }
 
 export function ProjectLiterature() {
   const { project } = useOutletContext()
-  return <LiteratureTab projectId={project.id} libraryId={project.libraryId} />
+  return (
+    <div className="h-full overflow-auto">
+      <LiteratureTab projectId={project.id} libraryId={project.libraryId} />
+    </div>
+  )
 }
 
 export function ProjectExperiments() {
