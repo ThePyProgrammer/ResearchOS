@@ -3332,52 +3332,37 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
               </tr>
             ))}
 
-            {/* Inline new row */}
-            <tr className="border-t border-slate-200 bg-slate-50/30">
-              <td className="sticky left-0 z-10 bg-slate-50/30 px-2 py-2" style={{ width: 40, minWidth: 40 }} />
-              {fixedTypeIconCol && (
-                <td className="px-3 py-2" style={{ width: fixedTypeIconCol.width, minWidth: fixedTypeIconCol.width }}>
-                  <Icon name="add" className="text-[16px] text-slate-300" />
-                </td>
-              )}
-              {fixedNameCol && (
-                <td
-                  className="bg-slate-50/30 px-3 py-2"
-                  style={{ width: fixedNameCol.width, minWidth: fixedNameCol.width }}
-                >
-                  <input
-                    value={newRowName}
-                    onChange={e => { setNewRowName(e.target.value); setNewRowError(false) }}
-                    onKeyDown={async e => {
-                      if (e.key === 'Enter') {
-                        const trimmed = newRowName.trim()
-                        if (!trimmed) { setNewRowError(true); return }
-                        try {
-                          await experimentsApi.create(projectId, { name: trimmed, status: 'planned' })
-                          setNewRowName('')
-                          setNewRowError(false)
-                          await fetchExperiments()
-                        } catch (err) {
-                          console.error('Failed to create experiment:', err)
-                          setNewRowError(true)
-                        }
-                      }
-                      if (e.key === 'Escape') { setNewRowName(''); setNewRowError(false) }
-                    }}
-                    placeholder="New experiment..."
-                    className={`w-full text-xs bg-transparent border-none focus:outline-none placeholder:text-slate-300 ${
-                      newRowError ? 'text-red-500' : 'text-slate-500'
-                    }`}
-                  />
-                </td>
-              )}
-              {reorderableCols.map(col => (
-                <td key={col.id} className="px-3 py-2" style={{ width: col.width, minWidth: col.width }} />
-              ))}
-              <td style={{ width: 36, minWidth: 36 }} />
-            </tr>
           </tbody>
         </table>
+      </div>
+
+      {/* New experiment bar — sticky bottom */}
+      <div className="sticky bottom-0 z-10 flex items-center gap-2 px-4 py-2 bg-slate-50 border-t border-slate-200">
+        <Icon name="add" className="text-[16px] text-slate-400" />
+        <input
+          value={newRowName}
+          onChange={e => { setNewRowName(e.target.value); setNewRowError(false) }}
+          onKeyDown={async e => {
+            if (e.key === 'Enter') {
+              const trimmed = newRowName.trim()
+              if (!trimmed) { setNewRowError(true); return }
+              try {
+                await experimentsApi.create(projectId, { name: trimmed, status: 'planned' })
+                setNewRowName('')
+                setNewRowError(false)
+                await fetchExperiments()
+              } catch (err) {
+                console.error('Failed to create experiment:', err)
+                setNewRowError(true)
+              }
+            }
+            if (e.key === 'Escape') { setNewRowName(''); setNewRowError(false) }
+          }}
+          placeholder="New experiment..."
+          className={`flex-1 text-sm bg-transparent border-none focus:outline-none placeholder:text-slate-400 ${
+            newRowError ? 'text-red-500' : 'text-slate-700'
+          }`}
+        />
       </div>
       </div>{/* end table area */}
 
