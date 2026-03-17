@@ -3597,7 +3597,7 @@ function ExperimentSection({ projectId, libraryId }) {
           rqList={rqList}
         />
       ) : (
-        <div className="max-w-2xl pb-4">
+        <div className="max-w-4xl pb-4">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
