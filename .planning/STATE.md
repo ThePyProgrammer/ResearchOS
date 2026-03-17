@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 06-02-PLAN.md (human verification approved)
-last_updated: "2026-03-17T14:04:25.066Z"
+stopped_at: Completed 07-03-PLAN.md (human verification approved — Phase 7 complete)
+last_updated: "2026-03-17T17:43:36.566Z"
 last_activity: 2026-03-17 — Completed plan 07-00 (Extract useLocalStorage hook, table view test scaffolds RED phase)
 progress:
   total_phases: 7
@@ -143,6 +143,10 @@ Recent decisions affecting current work:
 - [Phase 07-experiment-table-view]: filteredRows replaces sortedRows throughout — select-all, metric highlighting, and new-row creation all work on filtered set
 - [Phase 07-experiment-table-view]: Row click toggles detail panel (click same row again to close) to avoid requiring a separate close-only affordance
 - [Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design]: BFS flatten at Step 4 call time (not Step 3) so user renames/excludes are applied as the final transformation
+- [Phase 07-experiment-table-view]: Config inheritance in table view via effectiveConfigMap — parent values cascade to child cells without DB changes
+- [Phase 07-experiment-table-view]: Bulk actions (set status, duplicate, delete) shared between tree and table views via same selectedIds state
+- [Phase 07-experiment-table-view]: Group separator borders used instead of colored group headers in table view — less visual noise
+- [Phase 07-experiment-table-view]: Status and Parent columns pinned before config/metric groups so they are always visible on the left
 
 ### Roadmap Evolution
 
@@ -168,5 +172,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T13:15:47.528Z
-Stopped at: Completed 06-02-PLAN.md (human verification approved)
+Last session: 2026-03-17T17:43:20.234Z
+Stopped at: Completed 07-03-PLAN.md (human verification approved — Phase 7 complete)
