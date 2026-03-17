@@ -3106,9 +3106,9 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   const metricColumnsVisible = visibleColumns.filter(c => c.type === 'metric')
 
   return (
-    <div className="flex gap-0">
-      {/* Left: table area */}
-      <div className={`flex-1 overflow-hidden min-w-0 transition-all ${detailExp ? 'max-w-[calc(100%-360px)]' : 'w-full'}`}>
+    <>
+      {/* Table area */}
+      <div className={`transition-all ${detailExp ? 'pr-[370px]' : ''}`}>
       {/* Toolbar */}
       <div className="flex items-center justify-end gap-2 mb-2">
         <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
@@ -3370,11 +3370,11 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
           </tbody>
         </table>
       </div>
-      </div>{/* end flex-1 table area */}
+      </div>{/* end table area */}
 
-      {/* Right: detail panel */}
+      {/* Right: detail panel — fixed to viewport right edge */}
       {detailExp && (
-        <div className="w-[360px] flex-shrink-0 border-l border-slate-200 overflow-y-auto max-h-[calc(100vh-300px)]">
+        <div className="fixed top-0 right-0 w-[360px] h-screen border-l border-slate-200 bg-white overflow-y-auto shadow-lg z-40">
           <ExperimentDetailPanel
             experiment={detailExp}
             flatTree={flatTree}
@@ -3387,7 +3387,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
           />
         </div>
       )}
-    </div>
+    </>
   )
 }
 
@@ -3524,7 +3524,7 @@ function ExperimentSection({ projectId, libraryId }) {
   const allIds = flatTree.map(n => n.id)
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className={`p-6 ${viewMode === 'table' ? 'max-w-full' : 'max-w-2xl'}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
