@@ -1512,7 +1512,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, is
 
   const checkboxIconName = isSelected ? 'check_box' : 'check_box_outline_blank'
   const checkboxColorClass = isSelected ? 'text-blue-600' : 'text-slate-400'
-  const checkboxVisibility = anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+  const checkboxVisibility = 'opacity-100'
 
   return (
     <div ref={isDragOverlay ? undefined : setNodeRef} style={{ paddingLeft: depth * 24, ...sortableStyle }}>
@@ -1758,7 +1758,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, is
           {/* Notes toggle button */}
           <button
             onClick={e => { e.stopPropagation(); setNotesOpen(o => !o) }}
-            className={`opacity-0 group-hover:opacity-100 transition-colors p-0.5 rounded ${notesOpen ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`transition-colors p-0.5 rounded ${notesOpen ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
             title="Toggle notes"
           >
             <Icon name="edit_note" className="text-[16px]" />
@@ -1768,7 +1768,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, is
           <div className="relative" ref={menuRef}>
             <button
               onClick={e => { e.stopPropagation(); setMenuOpen(m => !m) }}
-              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
+              className="text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
             >
               <Icon name="more_vert" className="text-[16px]" />
             </button>
