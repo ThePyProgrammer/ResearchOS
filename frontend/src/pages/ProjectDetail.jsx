@@ -3106,9 +3106,9 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   const metricColumnsVisible = visibleColumns.filter(c => c.type === 'metric')
 
   return (
-    <>
+    <div className="flex gap-0 h-full">
       {/* Table area */}
-      <div className={`transition-all ${detailExp ? 'pr-[280px]' : ''}`}>
+      <div className="flex-1 min-w-0 overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center justify-end gap-2 mb-2">
         <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
@@ -3372,10 +3372,9 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
       </div>
       </div>{/* end table area */}
 
-      {/* Right: detail panel — below header + breadcrumb */}
+      {/* Right: detail panel — flex sibling */}
       {detailExp && (
-        <div className="fixed right-0 w-[280px] border-l border-slate-200 bg-white overflow-y-auto shadow-lg z-30"
-          style={{ top: '92px', height: 'calc(100vh - 92px)' }}>
+        <div className="w-[280px] flex-shrink-0 border-l border-slate-200 bg-white overflow-y-auto">
           <ExperimentDetailPanel
             experiment={detailExp}
             flatTree={flatTree}
@@ -3388,7 +3387,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
           />
         </div>
       )}
-    </>
+    </div>
   )
 }
 
@@ -3525,9 +3524,9 @@ function ExperimentSection({ projectId, libraryId }) {
   const allIds = flatTree.map(n => n.id)
 
   return (
-    <div className={`p-6 ${viewMode === 'table' ? 'max-w-full' : 'max-w-2xl'}`}>
+    <div className={`${viewMode === 'table' ? 'p-0 max-w-full h-full' : 'p-6 max-w-2xl'}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className={`flex items-center justify-between mb-4 ${viewMode === 'table' ? 'px-4 pt-4' : ''}`}>
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
         <div className="flex items-center gap-2">
           {/* View toggle */}
