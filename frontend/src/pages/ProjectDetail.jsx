@@ -1352,8 +1352,12 @@ function RQSection({ projectId, libraryId }) {
 
 // ─── Experiment Node (recursive) ──────────────────────────────────────────────
 
-function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [], parentId = null, selectedLeafIds = new Set(), onToggle }) {
+function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [], parentId = null, selectedLeafIds = new Set(), onToggle, collapseKey = 0 }) {
   const [expanded, setExpanded] = useState(true)
+
+  useEffect(() => {
+    if (collapseKey > 0) setExpanded(false)
+  }, [collapseKey])
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(experiment.name)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -1729,6 +1733,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, is
                       parentId={experiment.id}
                       selectedLeafIds={selectedLeafIds}
                       onToggle={onToggle}
+                      collapseKey={collapseKey}
                     />
                   ))}
                 </div>
@@ -3545,6 +3550,7 @@ function ExperimentSection({ projectId, libraryId }) {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [viewMode, setViewMode] = useLocalStorage(`researchos.exp.view.${projectId}`, 'tree')
   const [treeFilters, setTreeFilters] = useState([])
+  const [collapseKey, setCollapseKey] = useState(0)
 
   const expTree = useMemo(() => buildExperimentTree(flatExperiments), [flatExperiments])
   const flatTree = useMemo(() => flattenExperimentTree(expTree), [expTree])
@@ -3743,8 +3749,17 @@ function ExperimentSection({ projectId, libraryId }) {
 
       {/* Filter bar — tree view only */}
       {viewMode !== 'table' && expTree.length > 0 && (
-        <div className="flex-shrink-0 px-4 py-2 border-b border-slate-100 bg-white">
-          <FilterBar filters={treeFilters} setFilters={setTreeFilters} allColumns={treeFilterColumns} />
+        <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-white">
+          <div className="flex-1 min-w-0">
+            <FilterBar filters={treeFilters} setFilters={setTreeFilters} allColumns={treeFilterColumns} />
+          </div>
+          <button
+            onClick={() => setCollapseKey(k => k + 1)}
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 border border-slate-200 rounded px-2 py-1 flex-shrink-0"
+          >
+            <Icon name="unfold_less" className="text-[14px]" />
+            Collapse All
+          </button>
         </div>
       )}
 
@@ -3818,6 +3833,7 @@ function ExperimentSection({ projectId, libraryId }) {
                     parentId={null}
                     selectedLeafIds={selectedLeafIds}
                     onToggle={handleToggleNode}
+                    collapseKey={collapseKey}
                   />
                 ))}
               </div>
