@@ -3117,7 +3117,7 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   const metricColumnsVisible = visibleColumns.filter(c => c.type === 'metric')
 
   return (
-    <div className="flex gap-0" style={{ height: 'calc(100vh - 140px)' }}>
+    <div className="flex gap-0 flex-1 min-h-0">
       {/* Table area */}
       <div className="flex-1 min-w-0 flex flex-col">
       {/* Unified toolbar: filters + highlight + columns — fixed top */}
