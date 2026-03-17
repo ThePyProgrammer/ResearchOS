@@ -5,6 +5,7 @@ import NotesPanel from '../components/NotesPanel'
 import WindowModal from '../components/WindowModal'
 import { statusConfig } from '../components/PaperInfoPanel'
 import CSVImportModal from './CSVImportModal'
+import { PaperDetail, WebsiteDetail, GitHubRepoDetail } from './Library'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
   DndContext,
@@ -4474,14 +4475,8 @@ function LiteratureTab({ projectId, libraryId }) {
                       onChange={toggleSelectAll}
                     />
                   </th>
-                  <th
-                    className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
-                    onClick={() => toggleSort('status')}
-                  >
-                    <span className="flex items-center gap-1">
-                      Status
-                      {sortKey === 'status' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
-                    </span>
+                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider w-20">
+                    Type
                   </th>
                   <th
                     className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
@@ -4520,7 +4515,6 @@ function LiteratureTab({ projectId, libraryId }) {
                   const isChecked = selectedIds.has(item.id)
                   const isWebsite = item.itemType === 'website'
                   const isRepo = item.itemType === 'github_repo'
-                  const status = statusConfig[item.status] || statusConfig['inbox']
                   return (
                     <tr
                       key={item.id}
@@ -4539,18 +4533,13 @@ function LiteratureTab({ projectId, libraryId }) {
                           onChange={() => toggleCheck(item)}
                         />
                       </td>
-                      {/* Status */}
-                      <td className="px-2 py-3 w-24">
-                        {item.status && (
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${status.class}`}>
-                            {status.label}
-                          </span>
-                        )}
-                        {(isWebsite || isRepo) && (
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${isRepo ? 'bg-violet-100 text-violet-700' : 'bg-purple-100 text-purple-700'}`}>
-                            {isRepo ? 'GitHub' : 'Website'}
-                          </span>
-                        )}
+                      {/* Type */}
+                      <td className="px-2 py-3 w-20">
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${
+                          isRepo ? 'bg-violet-100 text-violet-700' : isWebsite ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {isRepo ? 'GitHub' : isWebsite ? 'Website' : 'Paper'}
+                        </span>
                       </td>
                       {/* Title */}
                       <td className="px-2 py-3 max-w-xs">
@@ -4593,12 +4582,50 @@ function LiteratureTab({ projectId, libraryId }) {
         )}
       </div>
 
-      {/* Detail panel */}
-      {selectedItem && (
-        <LitDetailPanel
+      {/* Detail panel — reuse Library.jsx components */}
+      {selectedItem && selectedItem.itemType === 'website' && (
+        <WebsiteDetail
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
-          onUnlink={(linkId) => handleUnlink(linkId)}
+          onStatusChange={(id, status) => {
+            websitesApi.update(id, { status }).then(fetchAll)
+          }}
+          onUpdate={(updated) => {
+            setSelectedItem(prev => prev?.id === updated.id ? { ...prev, ...updated, itemType: 'website', _linkId: prev._linkId } : prev)
+            fetchAll()
+          }}
+          onDelete={() => { setSelectedItem(null); fetchAll() }}
+          width={360}
+        />
+      )}
+      {selectedItem && selectedItem.itemType === 'github_repo' && (
+        <GitHubRepoDetail
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onStatusChange={(id, status) => {
+            githubReposApi.update(id, { status }).then(fetchAll)
+          }}
+          onUpdate={(updated) => {
+            setSelectedItem(prev => prev?.id === updated.id ? { ...prev, ...updated, itemType: 'github_repo', _linkId: prev._linkId } : prev)
+            fetchAll()
+          }}
+          onDelete={() => { setSelectedItem(null); fetchAll() }}
+          width={360}
+        />
+      )}
+      {selectedItem && selectedItem.itemType !== 'website' && selectedItem.itemType !== 'github_repo' && (
+        <PaperDetail
+          paper={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onStatusChange={(id, status) => {
+            papersApi.update(id, { status }).then(fetchAll)
+          }}
+          onPaperUpdate={(updated) => {
+            setSelectedItem(prev => prev?.id === updated.id ? { ...prev, ...updated, _linkId: prev._linkId } : prev)
+            fetchAll()
+          }}
+          onDelete={() => { setSelectedItem(null); fetchAll() }}
+          width={360}
         />
       )}
     </div>

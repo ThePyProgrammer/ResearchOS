@@ -1324,6 +1324,8 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete, w
 }
 
 
+export { PaperDetail, WebsiteDetail, GitHubRepoDetail }
+
 export default function Library() {
   const { activeLibraryId, collections, refreshCollections } = useLibrary()
   const [searchParams, setSearchParams] = useSearchParams()
