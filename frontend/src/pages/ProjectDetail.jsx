@@ -4015,24 +4015,27 @@ function ExperimentSection({ projectId, libraryId }) {
 
 // ─── Search Picker (for Literature tab) ───────────────────────────────────────
 
-function SearchPicker({ projectId, libraryId, onLinked, existingPaperIds, existingWebsiteIds, existingRepoIds = new Set() }) {
+function SearchPicker({ projectId, libraryId, onLinked, existingPaperIds, existingWebsiteIds, existingRepoIds = new Set(), renderTrigger = false }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)
   const [linking, setLinking] = useState(false)
+  const [showPicker, setShowPicker] = useState(false)
   const containerRef = useRef(null)
   const debounceRef = useRef(null)
+  const inputRef = useRef(null)
 
   // Close on outside click
   useEffect(() => {
     function handleClick(e) {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
         setOpen(false)
+        if (renderTrigger) setShowPicker(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
+  }, [renderTrigger])
 
   function handleQueryChange(e) {
     const q = e.target.value
@@ -4078,48 +4081,77 @@ function SearchPicker({ projectId, libraryId, onLinked, existingPaperIds, existi
     }
   }
 
+  const searchInput = (
+    <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 bg-white focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-400/20">
+      <Icon name="search" className="text-[18px] text-slate-400 flex-shrink-0" />
+      <input
+        ref={inputRef}
+        value={query}
+        onChange={handleQueryChange}
+        onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery(''); setResults([]); if (renderTrigger) setShowPicker(false) } }}
+        placeholder="Search papers, websites, and repos..."
+        className="flex-1 text-sm text-slate-700 bg-transparent focus:outline-none"
+      />
+    </div>
+  )
+
+  const resultsList = open && results.length > 0 && (
+    <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
+      {results.map(item => {
+        const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : item._type === 'github_repo' ? existingRepoIds.has(item.id) : existingWebsiteIds.has(item.id)
+        const title = item.title || 'Untitled'
+        const authors = Array.isArray(item.authors) ? item.authors.slice(0, 2).join(', ') : ''
+        const typeLabel = item._type === 'paper' ? 'Paper' : item._type === 'github_repo' ? 'GitHub' : 'Website'
+        const typeClass = item._type === 'paper' ? 'bg-blue-100 text-blue-700' : item._type === 'github_repo' ? 'bg-violet-100 text-violet-700' : 'bg-purple-100 text-purple-700'
+        return (
+          <button
+            key={`${item._type}-${item.id}`}
+            onClick={() => handleSelect(item)}
+            disabled={alreadyLinked || linking}
+            className={`w-full text-left px-4 py-3 flex items-start gap-3 border-b border-slate-50 last:border-0 transition-colors ${
+              alreadyLinked ? 'opacity-50 cursor-default' : 'hover:bg-slate-50 cursor-pointer'
+            }`}
+          >
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5 ${typeClass}`}>
+              {typeLabel}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm text-slate-800 truncate">{title}</div>
+              {authors && <div className="text-xs text-slate-400 truncate">{authors}</div>}
+            </div>
+            {alreadyLinked && <Icon name="check" className="text-[16px] text-emerald-500 flex-shrink-0 mt-0.5" />}
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  if (renderTrigger) {
+    return (
+      <div className="relative" ref={containerRef}>
+        <button
+          onClick={() => { setShowPicker(p => !p); setTimeout(() => inputRef.current?.focus(), 50) }}
+          className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Icon name="add_link" className="text-[16px]" />
+          Link Literature
+        </button>
+        {showPicker && (
+          <div className="absolute right-0 top-full mt-2 w-96 z-20 bg-white border border-slate-200 rounded-xl shadow-xl p-3">
+            <div className="relative">
+              {searchInput}
+              {resultsList}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="relative mb-4" ref={containerRef}>
-      <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 bg-white focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-400/20">
-        <Icon name="search" className="text-[18px] text-slate-400 flex-shrink-0" />
-        <input
-          value={query}
-          onChange={handleQueryChange}
-          onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setQuery(''); setResults([]) } }}
-          placeholder="Search papers, websites, and repos..."
-          className="flex-1 text-sm text-slate-700 bg-transparent focus:outline-none"
-        />
-      </div>
-      {open && results.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
-          {results.map(item => {
-            const alreadyLinked = item._type === 'paper' ? existingPaperIds.has(item.id) : item._type === 'github_repo' ? existingRepoIds.has(item.id) : existingWebsiteIds.has(item.id)
-            const title = item.title || 'Untitled'
-            const authors = Array.isArray(item.authors) ? item.authors.slice(0, 2).join(', ') : ''
-            const typeLabel = item._type === 'paper' ? 'Paper' : item._type === 'github_repo' ? 'GitHub' : 'Website'
-            const typeClass = item._type === 'paper' ? 'bg-blue-100 text-blue-700' : item._type === 'github_repo' ? 'bg-violet-100 text-violet-700' : 'bg-purple-100 text-purple-700'
-            return (
-              <button
-                key={`${item._type}-${item.id}`}
-                onClick={() => handleSelect(item)}
-                disabled={alreadyLinked || linking}
-                className={`w-full text-left px-4 py-3 flex items-start gap-3 border-b border-slate-50 last:border-0 transition-colors ${
-                  alreadyLinked ? 'opacity-50 cursor-default' : 'hover:bg-slate-50 cursor-pointer'
-                }`}
-              >
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5 ${typeClass}`}>
-                  {typeLabel}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-slate-800 truncate">{title}</div>
-                  {authors && <div className="text-xs text-slate-400 truncate">{authors}</div>}
-                </div>
-                {alreadyLinked && <Icon name="check" className="text-[16px] text-emerald-500 flex-shrink-0 mt-0.5" />}
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {searchInput}
+      {resultsList}
     </div>
   )
 }
@@ -4413,17 +4445,9 @@ function LiteratureTab({ projectId, libraryId }) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top toolbar */}
-        <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-slate-200 space-y-2">
-          <SearchPicker
-            projectId={projectId}
-            libraryId={libraryId}
-            onLinked={fetchAll}
-            existingPaperIds={existingPaperIds}
-            existingWebsiteIds={existingWebsiteIds}
-            existingRepoIds={existingRepoIds}
-          />
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b border-slate-200">
           {/* Search filter */}
-          <div className="relative">
+          <div className="relative flex-1">
             <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400" />
             <input
               type="text"
@@ -4431,6 +4455,18 @@ function LiteratureTab({ projectId, libraryId }) {
               value={searchFilter}
               onChange={e => setSearchFilter(e.target.value)}
               className="w-full pl-10 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+            />
+          </div>
+          {/* Link literature button with inline search picker */}
+          <div className="relative flex-shrink-0">
+            <SearchPicker
+              projectId={projectId}
+              libraryId={libraryId}
+              onLinked={fetchAll}
+              existingPaperIds={existingPaperIds}
+              existingWebsiteIds={existingWebsiteIds}
+              existingRepoIds={existingRepoIds}
+              renderTrigger
             />
           </div>
         </div>
