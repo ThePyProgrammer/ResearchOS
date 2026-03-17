@@ -1631,33 +1631,33 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, is
           {/* Expanded: config, metrics, linked papers, children */}
           {expanded && (
             <div className="mt-1.5 space-y-1">
-              {/* Config KV editor */}
-              <KVEditor
-                data={experiment.config || {}}
-                label="Config"
-                onSave={async (updatedConfig) => {
-                  try {
-                    await experimentsApi.update(experiment.id, { config: updatedConfig })
-                    onRefresh()
-                  } catch (err) {
-                    console.error('Failed to update config:', err)
-                  }
-                }}
-              />
-
-              {/* Metrics KV editor */}
-              <KVEditor
-                data={experiment.metrics || {}}
-                label="Metrics"
-                onSave={async (updatedMetrics) => {
-                  try {
-                    await experimentsApi.update(experiment.id, { metrics: updatedMetrics })
-                    onRefresh()
-                  } catch (err) {
-                    console.error('Failed to update metrics:', err)
-                  }
-                }}
-              />
+              {/* Config & Metrics side by side */}
+              <div className="grid grid-cols-2 gap-2">
+                <KVEditor
+                  data={experiment.config || {}}
+                  label="Config"
+                  onSave={async (updatedConfig) => {
+                    try {
+                      await experimentsApi.update(experiment.id, { config: updatedConfig })
+                      onRefresh()
+                    } catch (err) {
+                      console.error('Failed to update config:', err)
+                    }
+                  }}
+                />
+                <KVEditor
+                  data={experiment.metrics || {}}
+                  label="Metrics"
+                  onSave={async (updatedMetrics) => {
+                    try {
+                      await experimentsApi.update(experiment.id, { metrics: updatedMetrics })
+                      onRefresh()
+                    } catch (err) {
+                      console.error('Failed to update metrics:', err)
+                    }
+                  }}
+                />
+              </div>
 
               {/* Linked papers list */}
               {expPapers.length > 0 && (
