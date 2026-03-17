@@ -13,7 +13,7 @@ import GitHubRepo from './pages/GitHubRepo'
 import Authors from './pages/Authors'
 import AuthorDetail from './pages/AuthorDetail'
 import Projects from './pages/Projects'
-import ProjectDetail from './pages/ProjectDetail'
+import ProjectDetail, { ProjectOverview, ProjectLiterature, ProjectExperiments, ProjectNotes } from './pages/ProjectDetail'
 import { LibraryProvider } from './context/LibraryContext'
 
 export default function App() {
@@ -32,7 +32,12 @@ export default function App() {
             <Route path="authors/:id" element={<AuthorDetail />} />
             <Route path="agents" element={<Agents />} />
             <Route path="projects" element={<Projects />} />
-            <Route path="projects/:id" element={<ProjectDetail />} />
+            <Route path="projects/:id" element={<ProjectDetail />}>
+              <Route index element={<ProjectOverview />} />
+              <Route path="literature" element={<ProjectLiterature />} />
+              <Route path="experiments" element={<ProjectExperiments />} />
+              <Route path="notes" element={<ProjectNotes />} />
+            </Route>
           </Route>
           <Route path="/" element={<LayoutBare />}>
             <Route path="library/paper/:id" element={<Paper />} />

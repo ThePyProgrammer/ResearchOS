@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link, Outlet, useLocation, useOutletContext } from 'react-router-dom'
 import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi, githubReposApi, experimentsApi } from '../services/api'
 import NotesPanel from '../components/NotesPanel'
 import WindowModal from '../components/WindowModal'
@@ -3966,7 +3966,15 @@ function LiteratureTab({ projectId, libraryId }) {
 
 // ─── Left panel nav ───────────────────────────────────────────────────────────
 
-function LeftNav({ projectName, activeTab, onTabChange }) {
+function LeftNav({ projectName, projectId }) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const path = location.pathname
+  const activeId = path.endsWith('/literature') ? 'literature'
+    : path.endsWith('/experiments') ? 'experiments'
+    : path.endsWith('/notes') ? 'notes'
+    : 'overview'
+
   const navItems = [
     { id: 'overview',     icon: 'info',      label: 'Overview' },
     { id: 'literature',   icon: 'menu_book', label: 'Literature' },
@@ -3988,9 +3996,9 @@ function LeftNav({ projectName, activeTab, onTabChange }) {
         {navItems.map(item => (
           <button
             key={item.id}
-            onClick={() => onTabChange(item.id)}
+            onClick={() => navigate(item.id === 'overview' ? `/projects/${projectId}` : `/projects/${projectId}/${item.id}`)}
             className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              activeTab === item.id
+              activeId === item.id
                 ? 'bg-blue-50 text-blue-700 font-medium'
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
             }`}
@@ -4078,7 +4086,6 @@ export default function ProjectDetail() {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
     setLoading(true)
@@ -4145,34 +4152,43 @@ export default function ProjectDetail() {
         <div className="w-56 flex-shrink-0 border-r border-slate-200 bg-white overflow-y-auto">
           <LeftNav
             projectName={project.name}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
+            projectId={id}
           />
         </div>
 
         {/* Right panel */}
         <div className="flex-1 min-w-0 overflow-y-auto bg-white">
-          {activeTab === 'overview' && (
-            <OverviewTab
-              project={project}
-              onUpdate={updated => setProject(updated)}
-            />
-          )}
-          {activeTab === 'literature' && (
-            <LiteratureTab projectId={project.id} libraryId={project.libraryId} />
-          )}
-          {activeTab === 'experiments' && (
-            <ExperimentSection projectId={project.id} libraryId={project.libraryId} />
-          )}
-          {activeTab === 'notes' && (
-            <NotesPanel
-              notes={notes}
-              setNotes={setNotes}
-              createFn={(data) => notesApi.createForProject(id, data)}
-            />
-          )}
+          <Outlet context={{ project, setProject: (updated) => setProject(updated), notes, setNotes, id }} />
         </div>
       </div>
     </div>
+  )
+}
+
+// ─── Route-based tab wrappers ─────────────────────────────────────────────────
+
+export function ProjectOverview() {
+  const { project, setProject } = useOutletContext()
+  return <OverviewTab project={project} onUpdate={updated => setProject(updated)} />
+}
+
+export function ProjectLiterature() {
+  const { project } = useOutletContext()
+  return <LiteratureTab projectId={project.id} libraryId={project.libraryId} />
+}
+
+export function ProjectExperiments() {
+  const { project } = useOutletContext()
+  return <ExperimentSection projectId={project.id} libraryId={project.libraryId} />
+}
+
+export function ProjectNotes() {
+  const { notes, setNotes, id } = useOutletContext()
+  return (
+    <NotesPanel
+      notes={notes}
+      setNotes={setNotes}
+      createFn={(data) => notesApi.createForProject(id, data)}
+    />
   )
 }
