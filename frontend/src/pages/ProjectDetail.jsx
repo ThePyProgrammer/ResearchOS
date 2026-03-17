@@ -3117,11 +3117,11 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
   const metricColumnsVisible = visibleColumns.filter(c => c.type === 'metric')
 
   return (
-    <div className="flex gap-0 h-full">
+    <div className="flex gap-0" style={{ height: 'calc(100vh - 140px)' }}>
       {/* Table area */}
-      <div className="flex-1 min-w-0 overflow-hidden">
-      {/* Unified toolbar: filters + highlight + columns */}
-      <div className="flex items-center gap-2 px-1 py-2 mb-1">
+      <div className="flex-1 min-w-0 flex flex-col">
+      {/* Unified toolbar: filters + highlight + columns — fixed top */}
+      <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b border-slate-100 bg-white">
         <FilterBar filters={filters} setFilters={setFilters} allColumns={allColumns} />
         {filters.length > 0 && (
           <span className="text-xs text-slate-400 whitespace-nowrap">
@@ -3141,9 +3141,10 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
         <ColumnPicker allColumns={allColumns} colState={colState} setColState={setColState} />
       </div>
 
-      <div className="overflow-x-auto border-t border-slate-200">
+      {/* Scrollable table area */}
+      <div className="flex-1 overflow-auto">
         <table className="border-collapse text-sm w-full" style={{ tableLayout: 'auto' }}>
-          <thead>
+          <thead className="sticky top-0 z-10">
             <DndContext
               id="column-dnd"
               sensors={colDndSensors}
@@ -3336,8 +3337,8 @@ function ExperimentTableView({ flatTree, selectedLeafIds, onToggle, fetchExperim
         </table>
       </div>
 
-      {/* New experiment bar — sticky bottom */}
-      <div className="sticky bottom-0 z-10 flex items-center gap-2 px-4 py-2 bg-slate-50 border-t border-slate-200">
+      {/* New experiment bar — fixed bottom */}
+      <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-slate-50 border-t border-slate-200">
         <Icon name="add" className="text-[16px] text-slate-400" />
         <input
           value={newRowName}
@@ -3518,9 +3519,9 @@ function ExperimentSection({ projectId, libraryId }) {
   const allIds = flatTree.map(n => n.id)
 
   return (
-    <div className={`${viewMode === 'table' ? 'h-full' : 'px-4 pt-4'}`}>
+    <div className={`${viewMode === 'table' ? 'h-full flex flex-col' : 'px-4 pt-4'}`}>
       {/* Header */}
-      <div className={`flex items-center justify-between mb-4 ${viewMode === 'table' ? 'px-4 pt-4' : ''}`}>
+      <div className={`flex-shrink-0 flex items-center justify-between ${viewMode === 'table' ? 'px-4 py-3 border-b border-slate-200 bg-white' : 'mb-4'}`}>
         <h2 className="text-lg font-semibold text-slate-800">Experiments</h2>
         <div className="flex items-center gap-2">
           {/* View toggle */}
