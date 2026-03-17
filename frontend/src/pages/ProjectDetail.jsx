@@ -1352,12 +1352,12 @@ function RQSection({ projectId, libraryId }) {
 
 // ─── Experiment Node (recursive) ──────────────────────────────────────────────
 
-function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [], parentId = null, selectedLeafIds = new Set(), onToggle, collapseKey = 0 }) {
+function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, isDragOverlay = false, expPapersMap, onExpPapersChange, rqList = [], parentId = null, selectedLeafIds = new Set(), onToggle, expandCollapseKey = null }) {
   const [expanded, setExpanded] = useState(true)
 
   useEffect(() => {
-    if (collapseKey > 0) setExpanded(false)
-  }, [collapseKey])
+    if (expandCollapseKey) setExpanded(expandCollapseKey.expand)
+  }, [expandCollapseKey])
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(experiment.name)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -1733,7 +1733,7 @@ function ExperimentNode({ experiment, depth, onRefresh, projectId, libraryId, is
                       parentId={experiment.id}
                       selectedLeafIds={selectedLeafIds}
                       onToggle={onToggle}
-                      collapseKey={collapseKey}
+                      expandCollapseKey={expandCollapseKey}
                     />
                   ))}
                 </div>
@@ -3550,7 +3550,8 @@ function ExperimentSection({ projectId, libraryId }) {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [viewMode, setViewMode] = useLocalStorage(`researchos.exp.view.${projectId}`, 'tree')
   const [treeFilters, setTreeFilters] = useState([])
-  const [collapseKey, setCollapseKey] = useState(0)
+  const [expandCollapseKey, setExpandCollapseKey] = useState(null) // { key, expand }
+  const [allCollapsed, setAllCollapsed] = useState(false)
 
   const expTree = useMemo(() => buildExperimentTree(flatExperiments), [flatExperiments])
   const flatTree = useMemo(() => flattenExperimentTree(expTree), [expTree])
@@ -3583,6 +3584,12 @@ function ExperimentSection({ projectId, libraryId }) {
       return next
     })
   }
+
+  const allLeafIds = useMemo(() => {
+    return new Set(flatTree.filter(e => !e.children || e.children.length === 0).map(e => e.id))
+  }, [flatTree])
+
+  const allSelected = allLeafIds.size > 0 && allLeafIds.size === selectedLeafIds.size && [...allLeafIds].every(id => selectedLeafIds.has(id))
 
   const compareExperiments = useMemo(() => {
     return flatTree.filter(e => selectedLeafIds.has(e.id))
@@ -3734,11 +3741,28 @@ function ExperimentSection({ projectId, libraryId }) {
             <FilterBar filters={treeFilters} setFilters={setTreeFilters} allColumns={treeFilterColumns} />
           </div>
           <button
-            onClick={() => setCollapseKey(k => k + 1)}
+            onClick={() => {
+              if (allSelected) {
+                setSelectedLeafIds(new Set())
+              } else {
+                setSelectedLeafIds(new Set(allLeafIds))
+              }
+            }}
             className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 border border-slate-200 rounded px-2 py-1 flex-shrink-0"
           >
-            <Icon name="unfold_less" className="text-[14px]" />
-            Collapse All
+            <Icon name={allSelected ? 'deselect' : 'select_all'} className="text-[14px]" />
+            {allSelected ? 'Deselect All' : 'Select All'}
+          </button>
+          <button
+            onClick={() => {
+              const expand = allCollapsed
+              setExpandCollapseKey({ key: Date.now(), expand })
+              setAllCollapsed(!allCollapsed)
+            }}
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 border border-slate-200 rounded px-2 py-1 flex-shrink-0"
+          >
+            <Icon name={allCollapsed ? 'unfold_more' : 'unfold_less'} className="text-[14px]" />
+            {allCollapsed ? 'Expand All' : 'Collapse All'}
           </button>
         </div>
       )}
@@ -3833,7 +3857,7 @@ function ExperimentSection({ projectId, libraryId }) {
                     parentId={null}
                     selectedLeafIds={selectedLeafIds}
                     onToggle={handleToggleNode}
-                    collapseKey={collapseKey}
+                    expandCollapseKey={expandCollapseKey}
                   />
                 ))}
               </div>
