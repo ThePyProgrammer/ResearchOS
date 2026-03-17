@@ -1881,7 +1881,6 @@ function buildColumns(flatTree) {
     { id: 'name', label: 'Name', type: 'fixed', field: 'name', width: 220, sortable: true },
     { id: 'status', label: 'Status', type: 'fixed', field: 'status', width: 110, sortable: true },
     { id: 'parent', label: 'Group', type: 'fixed', field: 'parent', width: 140, sortable: true },
-    { id: 'created_at', label: 'Created', type: 'fixed', field: 'created_at', width: 100, sortable: true },
   ]
   const configKeys = unionKeys(flatTree.map(e => e.config || {}))
   const metricKeys = unionKeys(flatTree.map(e => e.metrics || {}))
