@@ -752,7 +752,7 @@ function ProjectsTree({ collapsed }) {
             }`
           }
         >
-          <Icon name="science" className="text-[18px] flex-shrink-0" />
+          <Icon name="topic" className="text-[18px] flex-shrink-0" />
         </NavLink>
       </div>
     )
