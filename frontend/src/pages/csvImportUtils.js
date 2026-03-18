@@ -7,18 +7,8 @@
 // Type detection
 // ---------------------------------------------------------------------------
 
-/**
- * Detect the JavaScript type of a raw string value.
- * Copied from ProjectDetail.jsx — do not diverge.
- */
-export function detectType(raw) {
-  const trimmed = String(raw).trim()
-  if (trimmed === 'true') return true
-  if (trimmed === 'false') return false
-  const num = Number(trimmed)
-  if (trimmed !== '' && !isNaN(num)) return num
-  return trimmed
-}
+import { detectType } from '../utils/detectType'
+export { detectType }
 
 // ---------------------------------------------------------------------------
 // Auto-detect column roles

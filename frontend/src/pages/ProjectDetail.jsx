@@ -7,6 +7,7 @@ import { statusConfig } from '../components/PaperInfoPanel'
 import CSVImportModal from './CSVImportModal'
 import { PaperDetail, WebsiteDetail, GitHubRepoDetail } from './Library'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { detectType } from '../utils/detectType'
 import {
   DndContext,
   closestCenter,
@@ -120,14 +121,6 @@ function aggregateDescendants(node) {
   return { counts, metricAccum }
 }
 
-function detectType(raw) {
-  const trimmed = String(raw).trim()
-  if (trimmed === 'true') return true
-  if (trimmed === 'false') return false
-  const num = Number(trimmed)
-  if (trimmed !== '' && !isNaN(num)) return num
-  return trimmed
-}
 
 // ─── Inline editable field ──────────────────────────────────────────────────
 
