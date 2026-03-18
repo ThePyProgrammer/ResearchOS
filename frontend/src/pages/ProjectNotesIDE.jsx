@@ -1221,6 +1221,7 @@ export default function ProjectNotesIDE() {
 
   // ── Wiki-link click handler ────────────────────────────────────────────────
   function handleWikiLinkClick(noteName, noteId) {
+    // Check real notes first
     let target
     if (noteId) {
       target = allLoadedNotes.find(n => n.id === noteId)
@@ -1232,12 +1233,23 @@ export default function ProjectNotesIDE() {
     }
     if (target) {
       openNoteInTab(target.id, target.sourceKey)
-    } else {
-      // Auto-create in current editing scope
-      if (window.confirm(`Note "${noteName}" doesn't exist. Create it?`)) {
-        const sourceKey = activeEditorSourceRef.current || 'project'
-        handleCreateByName(noteName, sourceKey)
-      }
+      return
+    }
+
+    // Check pseudo-entities (experiments, literature) from suggestion list
+    const allSuggestions = getAllNotesForSuggestion()
+    const entity = noteId
+      ? allSuggestions.find(n => n.id === noteId)
+      : allSuggestions.find(n => n.name?.toLowerCase() === noteName.toLowerCase() && n._entityType)
+    if (entity?._navigateUrl) {
+      window.open(entity._navigateUrl, '_blank')
+      return
+    }
+
+    // Auto-create in current editing scope
+    if (window.confirm(`Note "${noteName}" doesn't exist. Create it?`)) {
+      const sourceKey = activeEditorSourceRef.current || 'project'
+      handleCreateByName(noteName, sourceKey)
     }
   }
 
