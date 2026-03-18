@@ -116,7 +116,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 5. Integration Polish | 1/1 | Complete   | 2026-03-16 |
 | 6. CSV Loading Framework | 3/3 | Complete    | 2026-03-17 |
 | 7. Experiment Table View | 4/4 | Complete   | 2026-03-17 |
-| 8. Project Notes IDE | 2/3 | In Progress|  |
+| 8. Project Notes IDE | 3/3 | Complete   | 2026-03-18 |
 
 ### Phase 6: CSV Loading Framework for Experiments
 **Goal**: Researchers can import CSV files containing experiment results into the experiment tree, with a multi-step wizard for column mapping, tree preview with interactive editing, and collision resolution for re-imports
@@ -173,7 +173,7 @@ Plans:
   4. Graph view shows all four node types with experiment group hull boundaries and physics controls
   5. AI copilot accepts @-mentioned experiments with config/metrics context and linked literature references
   6. Copilot produces suggestion tabs with diff view, accept/reject, and inline metric comparison charts
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 08-01-PLAN.md — Backend copilot infrastructure (migration, service, router) + NoteGraphView/NotesCopilotPanel prop extensions
