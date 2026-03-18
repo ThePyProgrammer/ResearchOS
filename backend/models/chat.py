@@ -20,6 +20,7 @@ class ChatMessage(CamelModel):
     website_id: Optional[str] = None
     github_repo_id: Optional[str] = None
     library_id: Optional[str] = None  # used by the Notes-page copilot
+    project_id: Optional[str] = None  # used by the project Notes copilot
     role: str  # 'user' | 'assistant'
     content: str
     suggestions: Optional[list[dict]] = None
@@ -44,16 +45,33 @@ class NotesCopilotContextItemNote(CamelModel):
 
 
 class NotesCopilotContextItem(CamelModel):
-    """One context item (paper / website / github_repo / library) selected via @."""
-    type: str  # 'paper' | 'website' | 'github_repo' | 'library'
+    """One context item selected via @.
+
+    Valid types: 'paper' | 'website' | 'github_repo' | 'library' | 'project' | 'experiment'
+    For 'experiment' type, metadata may include: status, config, metrics, children
+    (where children is a list of child experiment summaries with name/status/metrics).
+    """
+    type: str  # 'paper' | 'website' | 'github_repo' | 'library' | 'project' | 'experiment'
     id: str
     name: str
-    metadata: Optional[dict] = None  # item-specific fields (title, abstract, url, …)
+    metadata: Optional[dict] = None  # item-specific fields (title, abstract, url, config, metrics, …)
     notes: Optional[list[NotesCopilotContextItemNote]] = None
     include_pdf: Optional[bool] = False  # if True and type=='paper', inject full PDF text
 
 
 class NotesCopilotMessageCreate(CamelModel):
+    content: str
+    context_items: list[NotesCopilotContextItem] = []
+    # Full conversation history from the frontend (stateless API approach).
+    # Each entry: {role: 'user'|'assistant', content: str}
+    history: list[dict] = []
+
+
+class ProjectNotesCopilotMessageCreate(CamelModel):
+    """Message create model for the project-scoped Notes copilot.
+
+    Accepts experiment context items in addition to the standard types.
+    """
     content: str
     context_items: list[NotesCopilotContextItem] = []
     # Full conversation history from the frontend (stateless API approach).

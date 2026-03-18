@@ -1,0 +1,688 @@
+"""
+Project-scoped Notes AI Copilot service.
+
+Provides a project-scoped, multi-item chat that can:
+  • reference any papers / websites / experiments (and their notes) selected via @
+  • run an agentic loop: read notes → reason → propose note edits/creates
+  • propose notes to project-level or experiment-level notes
+
+Persistence:
+  Chat history is stored in the `chat_messages` table using the project_id column.
+  Requires migration 020_project_notes_copilot.sql to add project_id to chat_messages.
+
+  If the column does not exist the service degrades gracefully: the agentic
+  response is still generated and returned, but message history won't persist
+  across page reloads.
+"""
+
+import json
+import logging
+import re
+import uuid
+from datetime import datetime, timezone
+from typing import Optional
+
+from agents.llm import get_model, get_openai_client, completion_params
+from agents.prompts import NOTES_COPILOT
+from services.cost_service import record_openai_usage
+from models.chat import ChatMessage, NotesCopilotContextItem
+from services.db import get_client
+
+logger = logging.getLogger(__name__)
+
+_TABLE = "chat_messages"
+_MAX_ITERATIONS = 6        # agentic loop cap
+_NOTE_CONTENT_LIMIT = 3000 # chars per note in context
+_PDF_CONTENT_LIMIT = 15000 # chars of PDF text injected into context per paper
+
+# Phrases that indicate the model described an intent but didn't call a tool.
+_INTENT_PHRASES = (
+    "i'll create", "i'll propose", "i'll now", "i'll suggest", "i'll draft",
+    "i will create", "i will propose", "i will suggest", "i will draft",
+    "let me create", "let me propose", "let me suggest", "let me draft",
+    "will now propose", "will now create", "will now suggest",
+    "i'll add", "i will add",
+)
+
+
+# ── Tool definitions ──────────────────────────────────────────────────────────
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_note_edit",
+            "description": (
+                "Suggest an edit to an existing note. "
+                "The user will see a diff and can accept or reject. "
+                "Provide the COMPLETE new HTML content for the note."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note_id": {
+                        "type": "string",
+                        "description": "Exact id of the note to edit (e.g. 'note_a1b2c3d4')",
+                    },
+                    "note_name": {
+                        "type": "string",
+                        "description": "Display name of the note",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The complete new HTML content for the note",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of what this edit does (1-2 sentences)",
+                    },
+                },
+                "required": ["note_id", "note_name", "content", "description"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_note_create",
+            "description": (
+                "Suggest creating a new note file. "
+                "Specify where it should live using target_type / target_id. "
+                "The user will see the proposed content and can accept or reject."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note_name": {
+                        "type": "string",
+                        "description": "Name for the new note file",
+                    },
+                    "parent_id": {
+                        "type": ["string", "null"],
+                        "description": "Parent folder note ID, or null for root level",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The HTML content for the new note",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of the note purpose (1-2 sentences)",
+                    },
+                    "target_type": {
+                        "type": "string",
+                        "enum": ["library", "paper", "website", "github_repo", "project", "experiment"],
+                        "description": (
+                            "Where the note belongs: "
+                            "'project' = top-level project notes, "
+                            "'experiment' = under a specific experiment, "
+                            "'library' = library-level notes, "
+                            "'paper' / 'website' / 'github_repo' = under a specific item"
+                        ),
+                    },
+                    "target_id": {
+                        "type": ["string", "null"],
+                        "description": (
+                            "ID of the target experiment / paper / website / github_repo. "
+                            "Must be null when target_type is 'project' or 'library'."
+                        ),
+                    },
+                },
+                "required": ["note_name", "content", "description", "target_type"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_note",
+            "description": (
+                "Read the full HTML content of a note by its ID. "
+                "Use this before suggesting an edit so you know the current content."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note_id": {
+                        "type": "string",
+                        "description": "ID of the note to read (e.g. 'note_a1b2c3d4')",
+                    },
+                },
+                "required": ["note_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_item_notes",
+            "description": (
+                "List the notes tree for a specific item or the project root. "
+                "Use this to discover what notes already exist before creating or editing."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_type": {
+                        "type": "string",
+                        "enum": ["paper", "website", "github_repo", "library", "project", "experiment"],
+                        "description": "Type of the item to list notes for",
+                    },
+                    "item_id": {
+                        "type": "string",
+                        "description": "ID of the item (project_id when item_type is 'project')",
+                    },
+                },
+                "required": ["item_type", "item_id"],
+            },
+        },
+    },
+]
+
+
+# ── Internal helpers ──────────────────────────────────────────────────────────
+
+def _strip_html(html: str) -> str:
+    """Very lightweight HTML → plain text for readability in tool results."""
+    return re.sub(r"<[^>]+>", " ", html or "").strip()
+
+
+def _format_notes_tree(notes: list[dict]) -> str:
+    """Render a flat notes list as an indented tree string."""
+    by_parent: dict[Optional[str], list[dict]] = {}
+    for n in notes:
+        key = n.get("parent_id") or n.get("parentId")
+        by_parent.setdefault(key, []).append(n)
+
+    lines: list[str] = []
+
+    def _walk(parent_id: Optional[str], depth: int) -> None:
+        for node in by_parent.get(parent_id, []):
+            prefix = "  " * depth
+            kind = "[folder]" if node.get("type") == "folder" else "[file]"
+            lines.append(f"{prefix}{kind} id={node['id']}  name={node['name']}")
+            _walk(node["id"], depth + 1)
+
+    _walk(None, 0)
+    return "\n".join(lines) if lines else "(no notes)"
+
+
+def _build_context_block(context_items: list[NotesCopilotContextItem]) -> str:
+    """Assemble the context string injected as a system message.
+
+    Handles 'experiment' and 'project' types in addition to the standard types.
+    For experiments: serializes config KV pairs, metrics KV pairs, status,
+    and child experiment summaries (name + status + metrics for each child).
+    """
+    if not context_items:
+        return "No context items selected. Answer from general knowledge."
+
+    parts: list[str] = []
+    for item in context_items:
+        header = f"=== {item.type.upper()}: {item.name} (id={item.id}) ==="
+        meta_lines: list[str] = []
+        if item.metadata:
+            m = item.metadata
+            # Paper
+            if item.type == "paper":
+                if m.get("title"):
+                    meta_lines.append(f"Title: {m['title']}")
+                if m.get("authors"):
+                    authors = m["authors"]
+                    meta_lines.append(f"Authors: {', '.join(authors[:5])}")
+                if m.get("year"):
+                    meta_lines.append(f"Year: {m['year']}")
+                if m.get("venue"):
+                    meta_lines.append(f"Venue: {m['venue']}")
+                if m.get("abstract"):
+                    meta_lines.append(f"Abstract: {m['abstract'][:800]}")
+            # Website
+            elif item.type == "website":
+                if m.get("url"):
+                    meta_lines.append(f"URL: {m['url']}")
+                if m.get("description"):
+                    meta_lines.append(f"Description: {m['description'][:500]}")
+            # GitHub repo
+            elif item.type == "github_repo":
+                if m.get("url"):
+                    meta_lines.append(f"URL: {m['url']}")
+                if m.get("language"):
+                    meta_lines.append(f"Language: {m['language']}")
+                if m.get("stars") is not None:
+                    meta_lines.append(f"Stars: {m['stars']}")
+                if m.get("description"):
+                    meta_lines.append(f"Description: {m['description'][:500]}")
+                if m.get("abstract"):
+                    meta_lines.append(f"Abstract: {m['abstract'][:600]}")
+            # Library
+            elif item.type == "library":
+                if m.get("name"):
+                    meta_lines.append(f"Library: {m['name']}")
+            # Project
+            elif item.type == "project":
+                if m.get("name"):
+                    meta_lines.append(f"Project: {m['name']}")
+                if m.get("description"):
+                    meta_lines.append(f"Description: {m['description'][:500]}")
+                if m.get("status"):
+                    meta_lines.append(f"Status: {m['status']}")
+            # Experiment — serialize config, metrics, status, children
+            elif item.type == "experiment":
+                if m.get("status"):
+                    meta_lines.append(f"Status: {m['status']}")
+                config = m.get("config") or {}
+                if config:
+                    meta_lines.append("Config:")
+                    for k, v in list(config.items())[:20]:
+                        meta_lines.append(f"  {k}: {v}")
+                metrics = m.get("metrics") or {}
+                if metrics:
+                    meta_lines.append("Metrics:")
+                    for k, v in list(metrics.items())[:20]:
+                        meta_lines.append(f"  {k}: {v}")
+                children = m.get("children") or []
+                if children:
+                    meta_lines.append(f"Child experiments ({len(children)}):")
+                    for child in children[:10]:
+                        child_name = child.get("name", "?")
+                        child_status = child.get("status", "")
+                        child_metrics = child.get("metrics") or {}
+                        metrics_preview = ", ".join(
+                            f"{k}={v}" for k, v in list(child_metrics.items())[:3]
+                        )
+                        line = f"  - {child_name}"
+                        if child_status:
+                            line += f" [{child_status}]"
+                        if metrics_preview:
+                            line += f" ({metrics_preview})"
+                        meta_lines.append(line)
+
+        # Inject full PDF text when the user toggled "pdf?" on a paper chip
+        if item.type == "paper" and item.include_pdf:
+            pdf_url = None
+            if item.metadata:
+                pdf_url = item.metadata.get("pdfUrl") or item.metadata.get("pdf_url")
+            if pdf_url:
+                try:
+                    from services import pdf_text_service
+                    pdf_data = pdf_text_service.extract_and_cache(item.id, pdf_url)
+                    if pdf_data and pdf_data.get("markdown"):
+                        pages = pdf_data.get("page_count", "?")
+                        pdf_text = pdf_data["markdown"][:_PDF_CONTENT_LIMIT]
+                        truncated = len(pdf_data["markdown"]) > _PDF_CONTENT_LIMIT
+                        suffix = f"\n[... truncated at {_PDF_CONTENT_LIMIT} chars ...]" if truncated else ""
+                        meta_lines.append(
+                            f"\n--- FULL PAPER TEXT ({pages} pages) ---\n{pdf_text}{suffix}"
+                        )
+                    else:
+                        meta_lines.append("\n(PDF is available but no text could be extracted)")
+                except Exception as e:
+                    logger.warning("Failed to extract PDF for paper %s: %s", item.id, e)
+                    meta_lines.append("\n(PDF extraction failed)")
+            else:
+                meta_lines.append("\n(No PDF available for this paper)")
+
+        notes_lines: list[str] = []
+        if item.notes:
+            notes_lines.append("Notes:")
+            for note in item.notes:
+                if note.type == "folder":
+                    notes_lines.append(f"  [folder] id={note.id} name={note.name}")
+                else:
+                    plain = _strip_html(note.content or "")[:_NOTE_CONTENT_LIMIT]
+                    notes_lines.append(f"  [file] id={note.id} name={note.name}")
+                    if note.parent_id:
+                        notes_lines[-1] += f" parent={note.parent_id}"
+                    if plain:
+                        notes_lines.append(f"    content: {plain}")
+
+        section = "\n".join(
+            [header]
+            + (meta_lines if meta_lines else ["(no metadata provided)"])
+            + (notes_lines if notes_lines else ["Notes: (none)"])
+        )
+        parts.append(section)
+
+    return "\n\n".join(parts)
+
+
+def _process_tool_call(tc) -> tuple[Optional[dict], str]:
+    """
+    Handle one tool call from the LLM.
+
+    Returns (suggestion_or_None, tool_result_text).
+    suggestion is a dict when it's an output tool (edit / create).
+    """
+    try:
+        args = json.loads(tc.function.arguments)
+    except json.JSONDecodeError:
+        logger.warning("Failed to parse tool args: %s", tc.function.arguments)
+        return None, "Error: could not parse arguments."
+
+    name = tc.function.name
+
+    # ── Output tools (produce user-facing suggestions) ────────────────────────
+    if name == "suggest_note_edit":
+        suggestion = {
+            "id": f"sug_{uuid.uuid4().hex[:8]}",
+            "status": "pending",
+            "type": "edit",
+            "noteId": args.get("note_id", ""),
+            "noteName": args.get("note_name", ""),
+            "content": args.get("content", ""),
+            "description": args.get("description", ""),
+        }
+        return suggestion, f"Edit suggestion created for '{suggestion['noteName']}'."
+
+    if name == "suggest_note_create":
+        suggestion = {
+            "id": f"sug_{uuid.uuid4().hex[:8]}",
+            "status": "pending",
+            "type": "create",
+            "noteName": args.get("note_name", ""),
+            "parentId": args.get("parent_id"),
+            "content": args.get("content", ""),
+            "description": args.get("description", ""),
+            "targetType": args.get("target_type", "project"),
+            "targetId": args.get("target_id"),
+        }
+        return suggestion, f"Create suggestion queued for '{suggestion['noteName']}'."
+
+    # ── Internal tools (return data, loop continues) ──────────────────────────
+    if name == "read_note":
+        note_id = args.get("note_id", "")
+        try:
+            from services import note_service
+            note = note_service.get_note(note_id)
+            if note is None:
+                return None, f"Note '{note_id}' not found."
+            plain = _strip_html(note.content)[:_NOTE_CONTENT_LIMIT]
+            return None, f"Note id={note.id} name={note.name}:\n{plain}"
+        except Exception as e:
+            logger.warning("read_note failed: %s", e)
+            return None, f"Could not read note: {e}"
+
+    if name == "list_item_notes":
+        item_type = args.get("item_type", "")
+        item_id = args.get("item_id", "")
+        try:
+            from services import note_service
+            kwargs: dict = {}
+            if item_type == "paper":
+                kwargs["paper_id"] = item_id
+            elif item_type == "website":
+                kwargs["website_id"] = item_id
+            elif item_type == "github_repo":
+                kwargs["github_repo_id"] = item_id
+            elif item_type == "library":
+                kwargs["library_id"] = item_id
+            elif item_type in ("project", "experiment"):
+                # Project and experiment notes use the project_id / experiment_id fields
+                if item_type == "project":
+                    kwargs["project_id"] = item_id
+                else:
+                    kwargs["experiment_id"] = item_id
+            notes_raw = note_service.list_notes(**kwargs)
+            tree = _format_notes_tree([n.model_dump() for n in notes_raw])
+            return None, f"Notes for {item_type} {item_id}:\n{tree}"
+        except Exception as e:
+            logger.warning("list_item_notes failed: %s", e)
+            return None, f"Could not list notes: {e}"
+
+    return None, f"Unknown tool: {name}"
+
+
+def _is_internal_tool(name: str) -> bool:
+    return name in ("read_note", "list_item_notes")
+
+
+# ── Persistence helpers ───────────────────────────────────────────────────────
+
+def _try_list_messages(project_id: str) -> list[ChatMessage]:
+    try:
+        result = (
+            get_client()
+            .table(_TABLE)
+            .select("*")
+            .eq("project_id", project_id)
+            .order("created_at")
+            .execute()
+        )
+        return [ChatMessage.model_validate(r) for r in result.data]
+    except Exception:
+        logger.warning("Could not load project notes-copilot history (project_id column may be missing)")
+        return []
+
+
+def _try_save_message(project_id: str, msg: ChatMessage) -> None:
+    row = {
+        "id": msg.id,
+        "project_id": project_id,
+        "role": msg.role,
+        "content": msg.content,
+        "created_at": msg.created_at,
+    }
+    if msg.suggestions is not None:
+        row["suggestions"] = json.dumps(msg.suggestions)
+    try:
+        get_client().table(_TABLE).insert(row).execute()
+    except Exception:
+        logger.warning("Could not persist project notes-copilot message (project_id column may be missing)")
+
+
+def _make_message(project_id: str, role: str, content: str,
+                  suggestions: Optional[list[dict]] = None) -> ChatMessage:
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    return ChatMessage(
+        id=f"msg_{uuid.uuid4().hex[:10]}",
+        project_id=project_id,
+        role=role,
+        content=content,
+        suggestions=suggestions,
+        created_at=now,
+    )
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def list_messages(project_id: str) -> list[ChatMessage]:
+    return _try_list_messages(project_id)
+
+
+def clear_history(project_id: str) -> int:
+    try:
+        result = (
+            get_client()
+            .table(_TABLE)
+            .select("id", count="exact")
+            .eq("project_id", project_id)
+            .execute()
+        )
+        count = result.count or 0
+        if count > 0:
+            get_client().table(_TABLE).delete().eq("project_id", project_id).execute()
+        logger.info("Cleared %d project notes-copilot messages for project %s", count, project_id)
+        return count
+    except Exception:
+        logger.warning("Could not clear project notes-copilot history")
+        return 0
+
+
+def generate_response(
+    project_id: str,
+    user_content: str,
+    context_items: list[NotesCopilotContextItem],
+    history: list[dict],
+) -> ChatMessage:
+    """
+    Run the agentic copilot loop and return the final assistant ChatMessage.
+
+    history: [{role, content}, ...] — last N turns from the frontend.
+    context_items: items the user @-mentioned with optional notes attached.
+                   May include 'experiment' type items with config/metrics/children.
+    """
+    # Persist user message
+    user_msg = _make_message(project_id, "user", user_content)
+    _try_save_message(project_id, user_msg)
+
+    # Build initial message list
+    context_block = _build_context_block(context_items)
+    messages: list[dict] = [
+        {"role": "system", "content": NOTES_COPILOT},
+        {"role": "system", "content": f"Project context:\n{context_block}"},
+    ]
+    # Inject conversation history (skip the last user message — it's already in user_content)
+    for h in history[-20:]:
+        role = h.get("role", "user")
+        content = h.get("content", "")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    # Current user message
+    messages.append({"role": "user", "content": user_content})
+
+    all_suggestions: list[dict] = []
+    final_content = ""
+    client = get_openai_client()
+    model_id = get_model("chat")
+
+    try:
+        for iteration in range(_MAX_ITERATIONS):
+            response = client.chat.completions.create(
+                model=model_id,
+                messages=messages,
+                tools=TOOLS,
+                **completion_params(model_id, max_tokens=4096, temperature=0.7),
+            )
+            record_openai_usage(response.usage, model_id)
+            choice = response.choices[0]
+            msg_content = choice.message.content or ""
+
+            # Handle explicit model refusal
+            refusal = getattr(choice.message, "refusal", None)
+            if refusal:
+                logger.warning("Project notes copilot: model refusal for project %s: %s", project_id, refusal)
+                final_content = (
+                    "<p><em>The AI declined to respond to this request. "
+                    "Try rephrasing, or remove the PDF context if it is very large.</em></p>"
+                )
+                break
+
+            if msg_content:
+                final_content = msg_content
+
+            if not choice.message.tool_calls:
+                break
+
+            # Build the assistant turn with tool_calls
+            assistant_turn: dict = {"role": "assistant", "content": msg_content or None}
+            assistant_turn["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in choice.message.tool_calls
+            ]
+            messages.append(assistant_turn)
+
+            has_internal = False
+            for tc in choice.message.tool_calls:
+                suggestion, result_text = _process_tool_call(tc)
+                if suggestion:
+                    all_suggestions.append(suggestion)
+                if _is_internal_tool(tc.function.name):
+                    has_internal = True
+                messages.append({"role": "tool", "tool_call_id": tc.id, "content": result_text})
+
+            if not has_internal and iteration < _MAX_ITERATIONS - 1:
+                continue
+
+    except Exception as e:
+        logger.exception("Project notes copilot LLM call failed for project %s", project_id)
+        err_str = str(e)
+        if "connection error" in err_str.lower() or "getaddrinfo" in err_str.lower() or "connecterror" in err_str.lower():
+            final_content = (
+                "<p><em>Could not reach the AI service — please check your internet "
+                "connection and try again.</em></p>"
+            )
+        else:
+            final_content = f"<p><em>Error generating response: {e}</em></p>"
+
+    # Intent follow-up pass
+    if final_content and not all_suggestions:
+        content_lower = final_content.lower()
+        if any(phrase in content_lower for phrase in _INTENT_PHRASES):
+            logger.info(
+                "Project notes copilot: model described intent without tool call — prompting execution for project %s",
+                project_id,
+            )
+            try:
+                messages.append({"role": "assistant", "content": final_content})
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "You described what you would do but didn't call any tool. "
+                        "Please call suggest_note_create or suggest_note_edit now to actually create/edit the note."
+                    ),
+                })
+                exec_response = client.chat.completions.create(
+                    model=model_id,
+                    messages=messages,
+                    tools=TOOLS,
+                    **completion_params(model_id, max_tokens=4096, temperature=0.7),
+                )
+                record_openai_usage(exec_response.usage, model_id)
+                exec_choice = exec_response.choices[0]
+                if exec_choice.message.content:
+                    final_content = exec_choice.message.content
+                if exec_choice.message.tool_calls:
+                    for tc in exec_choice.message.tool_calls:
+                        suggestion, _ = _process_tool_call(tc)
+                        if suggestion:
+                            all_suggestions.append(suggestion)
+            except Exception as e:
+                logger.warning("Project notes copilot intent follow-up failed: %s", e)
+
+    # Plain-text recovery pass
+    if not final_content and not all_suggestions:
+        logger.warning(
+            "Project notes copilot: empty first pass for project %s — attempting plain-text recovery",
+            project_id,
+        )
+        try:
+            recovery = client.chat.completions.create(
+                model=model_id,
+                messages=messages,
+                **completion_params(model_id, max_tokens=2048, temperature=0.7),
+            )
+            record_openai_usage(recovery.usage, model_id)
+            final_content = recovery.choices[0].message.content or ""
+        except Exception as e:
+            logger.warning("Project notes copilot plain-text recovery failed: %s", e)
+
+    # Fallback summary when the model only used output tools
+    if not final_content:
+        if all_suggestions:
+            n = len(all_suggestions)
+            creates = sum(1 for s in all_suggestions if s["type"] == "create")
+            edits = sum(1 for s in all_suggestions if s["type"] == "edit")
+            parts = []
+            if edits:
+                parts.append(f"{edits} edit{'s' if edits > 1 else ''}")
+            if creates:
+                parts.append(f"{creates} new note{'s' if creates > 1 else ''}")
+            final_content = (
+                f"<p>Here {'are' if n > 1 else 'is'} my suggestion{'s' if n > 1 else ''}: "
+                f"{' and '.join(parts)}. Review each one below.</p>"
+            )
+        else:
+            final_content = "<p><em>Sorry, I wasn't able to generate a response. Try rephrasing your question or adding context via @.</em></p>"
+
+    assistant_msg = _make_message(
+        project_id,
+        "assistant",
+        final_content,
+        suggestions=all_suggestions if all_suggestions else None,
+    )
+    _try_save_message(project_id, assistant_msg)
+    return assistant_msg

@@ -105,7 +105,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -116,6 +116,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 5. Integration Polish | 1/1 | Complete   | 2026-03-16 |
 | 6. CSV Loading Framework | 3/3 | Complete    | 2026-03-17 |
 | 7. Experiment Table View | 4/4 | Complete   | 2026-03-17 |
+| 8. Project Notes IDE | 0/3 | Planning   | — |
 
 ### Phase 6: CSV Loading Framework for Experiments
 **Goal**: Researchers can import CSV files containing experiment results into the experiment tree, with a multi-step wizard for column mapping, tree preview with interactive editing, and collision resolution for re-imports
@@ -160,3 +161,21 @@ Plans:
 - [ ] 07-01-PLAN.md — Core table rendering: ExperimentTableView with view toggle, columns, sorting, sticky layout, selection
 - [ ] 07-02-PLAN.md — Column management (picker, resize, DnD reorder, add new) + inline editing + inline new row
 - [ ] 07-03-PLAN.md — Filter bar, detail side panel, best-metric highlighting + human verification
+
+### Phase 8: Project Notes IDE
+**Goal**: Researchers have a full-featured notes IDE for project notes matching the library notes experience — with sidebar, pinned notes, tabs, wikilinks to experiments and literature, graph view with experiment hulls, and an AI copilot that understands experiment context (config, metrics, results)
+**Depends on:** Phase 7
+**Requirements**: IDE-01, IDE-02, IDE-03, IDE-04, IDE-05, IDE-06
+**Success Criteria** (what must be TRUE):
+  1. User sees a w-64 sidebar with Pinned, Recent, Project Notes, and per-experiment folders matching LibraryNotes layout
+  2. User can open notes from any experiment or project level in tabs simultaneously, with experiment name prefix labels
+  3. WikiLink autocomplete includes project notes, experiment notes, experiments, and linked literature with type badges
+  4. Graph view shows all four node types with experiment group hull boundaries and physics controls
+  5. AI copilot accepts @-mentioned experiments with config/metrics context and linked literature references
+  6. Copilot produces suggestion tabs with diff view, accept/reject, and inline metric comparison charts
+**Plans:** 3 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Backend copilot infrastructure (migration, service, router) + NoteGraphView/NotesCopilotPanel prop extensions
+- [ ] 08-02-PLAN.md — ProjectNotesIDE core: sidebar, pinned notes, tabs, editor, wikilinks, route wiring
+- [ ] 08-03-PLAN.md — Graph view, AI copilot with experiment context, inline charts, suggestion tabs + human verification
