@@ -12,7 +12,7 @@ import Typography from '@tiptap/extension-typography'
 import Mathematics from '@tiptap/extension-mathematics'
 import { TableKit } from '@tiptap/extension-table'
 import 'katex/dist/katex.min.css'
-import { notesApi, experimentsApi, projectNotesCopilotApi } from '../services/api'
+import { notesApi, experimentsApi, projectNotesCopilotApi, projectPapersApi, papersApi, websitesApi, githubReposApi } from '../services/api'
 import { createWikiLinkExtension, extractWikiLinks } from '../components/WikiLinkExtension'
 import NoteGraphView from '../components/NoteGraphView'
 import NotesCopilotPanel, { SuggestionTabView } from '../components/NotesCopilotPanel'
@@ -485,6 +485,92 @@ function ExperimentFolder({
   )
 }
 
+const ITEM_TYPE_CONFIG = {
+  paper:       { icon: 'article',    color: 'blue',   label: 'Paper' },
+  website:     { icon: 'language',   color: 'purple', label: 'Website' },
+  github_repo: { icon: 'code',       color: 'violet', label: 'GitHub' },
+}
+
+function LiteratureItemFolder({
+  item, notes, loaded, isOpen,
+  selectedNoteId, isActiveSource,
+  expandedNotes,
+  onToggle, onSelectNote, onToggleNote, onNoteContextMenu, onItemContextMenu,
+  creating, newName, setNewName, onCreateSubmit, onCancelCreate,
+  onPin,
+  draggingNoteId, onDragStart, onDragEnd,
+}) {
+  const sourceKey = `${item.itemType}:${item.id}`
+  const cfg = ITEM_TYPE_CONFIG[item.itemType] || ITEM_TYPE_CONFIG.paper
+  const rootNotes = (notes || []).filter(n => !n.parentId).sort((a, b) => {
+    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
+    if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+
+  return (
+    <div>
+      <div
+        onClick={onToggle}
+        onContextMenu={e => { e.preventDefault(); onItemContextMenu?.(e) }}
+        title={item.title || item.name}
+        className={`group flex items-center gap-1.5 py-[3px] px-1.5 rounded cursor-pointer text-[12px] transition-colors hover:bg-${cfg.color}-50 ${isActiveSource ? `bg-${cfg.color}-50` : ''}`}
+      >
+        <Icon name={isOpen ? 'expand_more' : 'chevron_right'} className={`text-[12px] text-${cfg.color}-400 flex-shrink-0`} />
+        <Icon name={cfg.icon} className={`text-[13px] text-${cfg.color}-500 flex-shrink-0`} />
+        <span className={`flex-1 truncate font-medium text-${cfg.color}-700 min-w-0`}>{item.title || item.name || 'Untitled'}</span>
+        {loaded && (notes || []).length > 0 && (
+          <span className={`text-[10px] opacity-60 text-${cfg.color}-600 flex-shrink-0`}>{(notes || []).length}</span>
+        )}
+      </div>
+
+      {isOpen && (
+        <div>
+          {!loaded && (
+            <div className="flex items-center gap-1.5 pl-9 pr-2 py-1 text-[11px] text-slate-400">
+              <Icon name="autorenew" className="text-[12px] animate-spin" />
+              Loading…
+            </div>
+          )}
+          {loaded && rootNotes.map(note => (
+            <NoteTreeNode
+              key={note.id}
+              note={note}
+              allNotes={notes}
+              selectedNoteId={isActiveSource ? selectedNoteId : null}
+              expandedNotes={expandedNotes}
+              onSelect={onSelectNote}
+              onToggle={onToggleNote}
+              onContextMenu={onNoteContextMenu}
+              depth={1}
+              sourceKey={sourceKey}
+              draggingNoteId={draggingNoteId}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onPin={onPin}
+            />
+          ))}
+          {loaded && rootNotes.length === 0 && !creating && (
+            <p className="pl-9 py-1 text-[11px] text-slate-400 italic">No notes yet</p>
+          )}
+          {creating && (
+            <form onSubmit={onCreateSubmit} className="pl-7 pr-2 py-0.5">
+              <div className="flex items-center gap-1">
+                <Icon name={creating.type === 'folder' ? 'folder' : 'description'}
+                  className={`text-[12px] flex-shrink-0 ${creating.type === 'folder' ? 'text-amber-500' : 'text-slate-400'}`} />
+                <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => e.key === 'Escape' && onCancelCreate()}
+                  placeholder={creating.type === 'folder' ? 'Folder name' : 'File name'}
+                  className="flex-1 min-w-0 px-1.5 py-0.5 text-[11px] border border-slate-300 rounded focus:outline-none focus:border-blue-400" />
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Breadcrumb helper ────────────────────────────────────────────────────────
 function buildPath(noteId, allNotes, sourceLabel) {
   const parts = []
@@ -654,10 +740,16 @@ function stripHtml(html) {
 const PROJECT_GRAPH_SOURCE_COLORS = {
   project: '#64748b',
   experiment: '#6366f1',
+  paper: '#3b82f6',
+  website: '#a855f7',
+  github: '#8b5cf6',
 }
 const PROJECT_GRAPH_SOURCE_LABELS = {
   project: 'Project Notes',
   experiment: 'Experiment Notes',
+  paper: 'Paper Notes',
+  website: 'Website Notes',
+  github: 'GitHub Notes',
 }
 
 // ─── Main ProjectNotesIDE component ──────────────────────────────────────────
@@ -669,11 +761,15 @@ export default function ProjectNotesIDE() {
   const [experiments, setExperiments] = useState([])
   const [expNotes, setExpNotes] = useState({})       // expId -> Note[]
   const [loadedExps, setLoadedExps] = useState({})   // expId -> bool
+  const [linkedItems, setLinkedItems] = useState([])  // { id, title, itemType, _linkId }
+  const [itemNotes, setItemNotes] = useState({})      // sourceKey -> Note[]
+  const [loadedItems, setLoadedItems] = useState({})  // sourceKey -> bool
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   // ── UI state ───────────────────────────────────────────────────────────────
   const [expandedExps, setExpandedExps] = useState({})
+  const [expandedLitItems, setExpandedLitItems] = useState({})
   const [expandedNotes, setExpandedNotes] = useState({})
   const [openTabs, setOpenTabs] = useState([])
   const [activeTabId, setActiveTabId] = useState(null)
@@ -707,7 +803,7 @@ export default function ProjectNotesIDE() {
   // Track active editor source for note creation routing
   const activeEditorSourceRef = useRef('project')
 
-  // ── Load project notes + experiments on mount ──────────────────────────────
+  // ── Load project notes + experiments + linked literature on mount ──────────
   useEffect(() => {
     if (!projectId) return
     setLoading(true)
@@ -715,9 +811,31 @@ export default function ProjectNotesIDE() {
     Promise.all([
       notesApi.listForProject(projectId).catch(() => []),
       experimentsApi.list(projectId).catch(() => []),
-    ]).then(([pNotes, exps]) => {
+      projectPapersApi.list(projectId).catch(() => []),
+    ]).then(async ([pNotes, exps, links]) => {
       setProjectNotes(pNotes || [])
       setExperiments(exps || [])
+      // Resolve linked literature items
+      const items = []
+      for (const link of (links || [])) {
+        if (link.paperId) {
+          try {
+            const paper = await papersApi.get(link.paperId)
+            if (paper) items.push({ ...paper, itemType: 'paper', _linkId: link.id })
+          } catch {}
+        } else if (link.websiteId) {
+          try {
+            const site = await websitesApi.get(link.websiteId)
+            if (site) items.push({ ...site, itemType: 'website', _linkId: link.id })
+          } catch {}
+        } else if (link.githubRepoId) {
+          try {
+            const repo = await githubReposApi.get(link.githubRepoId)
+            if (repo) items.push({ ...repo, itemType: 'github_repo', _linkId: link.id })
+          } catch {}
+        }
+      }
+      setLinkedItems(items)
     }).catch(err => {
       setError(err.message)
     }).finally(() => setLoading(false))
@@ -741,6 +859,27 @@ export default function ProjectNotesIDE() {
     }
   }, [experiments]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Eagerly load all linked literature notes for wiki-link + graph ────────
+  useEffect(() => {
+    for (const item of linkedItems) {
+      const sk = `${item.itemType}:${item.id}`
+      if (loadedItems[sk]) continue
+      setLoadedItems(prev => ({ ...prev, [sk]: 'loading' }))
+      const fetchFn = item.itemType === 'paper' ? notesApi.list
+        : item.itemType === 'website' ? notesApi.listForWebsite
+        : notesApi.listForGitHubRepo
+      fetchFn(item.id)
+        .then(notes => {
+          setItemNotes(prev => ({ ...prev, [sk]: notes || [] }))
+          setLoadedItems(prev => ({ ...prev, [sk]: true }))
+        })
+        .catch(() => {
+          setItemNotes(prev => ({ ...prev, [sk]: [] }))
+          setLoadedItems(prev => ({ ...prev, [sk]: true }))
+        })
+    }
+  }, [linkedItems]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Flat list of all notes (for wiki-link, graph, pinned, recent) ─────────
   const allLoadedNotes = useMemo(() => {
     const result = projectNotes.map(n => ({
@@ -752,8 +891,16 @@ export default function ProjectNotesIDE() {
         result.push({ ...note, source: 'experiment', sourceName: exp.name, sourceKey: `experiment:${exp.id}` })
       }
     }
+    for (const item of linkedItems) {
+      const sk = `${item.itemType}:${item.id}`
+      const notes = itemNotes[sk] || []
+      const sourceLabel = item.itemType === 'paper' ? 'paper' : item.itemType === 'website' ? 'website' : 'github'
+      for (const note of notes) {
+        result.push({ ...note, source: sourceLabel, sourceName: item.title || item.name || 'Untitled', sourceKey: sk })
+      }
+    }
     return result
-  }, [projectNotes, experiments, expNotes])
+  }, [projectNotes, experiments, expNotes, linkedItems, itemNotes])
 
   // ── Note content search ────────────────────────────────────────────────────
   function getMatchSnippet(text, query) {
@@ -790,18 +937,28 @@ export default function ProjectNotesIDE() {
   // ── Source note helpers ────────────────────────────────────────────────────
   function getSourceNotes(sourceKey) {
     if (sourceKey === 'project') return projectNotes
-    const expId = sourceKey.replace('experiment:', '')
-    return expNotes[expId] || []
+    if (sourceKey.startsWith('experiment:')) {
+      const expId = sourceKey.replace('experiment:', '')
+      return expNotes[expId] || []
+    }
+    // paper:id, website:id, github_repo:id
+    return itemNotes[sourceKey] || []
   }
 
   function setSourceNotes(sourceKey, updater) {
     if (sourceKey === 'project') {
       setProjectNotes(prev => typeof updater === 'function' ? updater(prev) : updater)
-    } else {
+    } else if (sourceKey.startsWith('experiment:')) {
       const expId = sourceKey.replace('experiment:', '')
       setExpNotes(prev => ({
         ...prev,
         [expId]: typeof updater === 'function' ? updater(prev[expId] || []) : updater,
+      }))
+    } else {
+      // paper:id, website:id, github_repo:id
+      setItemNotes(prev => ({
+        ...prev,
+        [sourceKey]: typeof updater === 'function' ? updater(prev[sourceKey] || []) : updater,
       }))
     }
   }
@@ -825,9 +982,14 @@ export default function ProjectNotesIDE() {
   // ── Source label for breadcrumb ────────────────────────────────────────────
   function sourceLabel(sourceKey) {
     if (sourceKey === 'project') return project?.name || 'Project Notes'
-    const expId = sourceKey.replace('experiment:', '')
-    const exp = experiments.find(e => e.id === expId)
-    return exp?.name || 'Experiment'
+    if (sourceKey.startsWith('experiment:')) {
+      const expId = sourceKey.replace('experiment:', '')
+      const exp = experiments.find(e => e.id === expId)
+      return exp?.name || 'Experiment'
+    }
+    // paper/website/github_repo
+    const item = linkedItems.find(i => `${i.itemType}:${i.id}` === sourceKey)
+    return item?.title || item?.name || 'Literature'
   }
 
   // ── Open a note in a tab ───────────────────────────────────────────────────
@@ -947,10 +1109,13 @@ export default function ProjectNotesIDE() {
       if (sourceKey === 'project') {
         note = await notesApi.createForProject(projectId, data)
         setProjectNotes(prev => [...prev, note])
-      } else {
+      } else if (sourceKey.startsWith('experiment:')) {
         const expId = sourceKey.replace('experiment:', '')
         note = await notesApi.createForExperiment(expId, data)
         setExpNotes(prev => ({ ...prev, [expId]: [...(prev[expId] || []), note] }))
+      } else {
+        note = await createNoteForItem(sourceKey, data)
+        setItemNotes(prev => ({ ...prev, [sourceKey]: [...(prev[sourceKey] || []), note] }))
       }
       if (parentId) setExpandedNotes(prev => ({ ...prev, [parentId]: true }))
       setCreating(null)
@@ -958,6 +1123,14 @@ export default function ProjectNotesIDE() {
     } catch (err) {
       console.error('Failed to create folder:', err)
     }
+  }
+
+  function createNoteForItem(sourceKey, data) {
+    const [type, id] = [sourceKey.split(':')[0], sourceKey.split(':').slice(1).join(':')]
+    if (type === 'paper') return notesApi.create(id, data)
+    if (type === 'website') return notesApi.createForWebsite(id, data)
+    if (type === 'github_repo') return notesApi.createForGitHubRepo(id, data)
+    throw new Error(`Unknown source type: ${type}`)
   }
 
   async function handleCreateWithTemplate(templateContent) {
@@ -972,10 +1145,13 @@ export default function ProjectNotesIDE() {
       if (sourceKey === 'project') {
         note = await notesApi.createForProject(projectId, data)
         setProjectNotes(prev => [...prev, note])
-      } else {
+      } else if (sourceKey.startsWith('experiment:')) {
         const expId = sourceKey.replace('experiment:', '')
         note = await notesApi.createForExperiment(expId, data)
         setExpNotes(prev => ({ ...prev, [expId]: [...(prev[expId] || []), note] }))
+      } else {
+        note = await createNoteForItem(sourceKey, data)
+        setItemNotes(prev => ({ ...prev, [sourceKey]: [...(prev[sourceKey] || []), note] }))
       }
       if (parentId) setExpandedNotes(prev => ({ ...prev, [parentId]: true }))
       if (note) openNoteInTab(note.id, sourceKey)
@@ -1071,10 +1247,13 @@ export default function ProjectNotesIDE() {
       if (sourceKey === 'project') {
         note = await notesApi.createForProject(projectId, { name, type: 'file', content: '' })
         setProjectNotes(prev => [...prev, note])
-      } else {
+      } else if (sourceKey.startsWith('experiment:')) {
         const expId = sourceKey.replace('experiment:', '')
         note = await notesApi.createForExperiment(expId, { name, type: 'file', content: '' })
         setExpNotes(prev => ({ ...prev, [expId]: [...(prev[expId] || []), note] }))
+      } else {
+        note = await createNoteForItem(sourceKey, { name, type: 'file', content: '' })
+        setItemNotes(prev => ({ ...prev, [sourceKey]: [...(prev[sourceKey] || []), note] }))
       }
       if (note) openNoteInTab(note.id, sourceKey)
     } catch (err) {
@@ -1433,8 +1612,42 @@ export default function ProjectNotesIDE() {
                 </div>
               )}
 
+              {/* ── Linked literature folders ── */}
+              {linkedItems.length > 0 && (
+                <div className="mb-1">
+                  <p className="px-2 pt-1 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-blue-400">Literature</p>
+                  {linkedItems.map(item => {
+                    const sourceKey = `${item.itemType}:${item.id}`
+                    return (
+                      <LiteratureItemFolder
+                        key={sourceKey}
+                        item={item}
+                        notes={itemNotes[sourceKey] || []}
+                        loaded={loadedItems[sourceKey] === true}
+                        isOpen={!!expandedLitItems[sourceKey]}
+                        selectedNoteId={selected?.noteId}
+                        isActiveSource={selected?.sourceKey === sourceKey}
+                        expandedNotes={expandedNotes}
+                        onToggle={() => setExpandedLitItems(prev => ({ ...prev, [sourceKey]: !prev[sourceKey] }))}
+                        onSelectNote={noteId => openNoteInTab(noteId, sourceKey)}
+                        onToggleNote={id => setExpandedNotes(prev => ({ ...prev, [id]: !prev[id] }))}
+                        onNoteContextMenu={(e, n) => openNoteCtxMenu(e, n, sourceKey)}
+                        onItemContextMenu={() => {}}
+                        creating={creating?.sourceKey === sourceKey ? creating : null}
+                        newName={newName} setNewName={setNewName}
+                        onCreateSubmit={handleCreate} onCancelCreate={() => setCreating(null)}
+                        onPin={noteId => handlePin(noteId, sourceKey)}
+                        draggingNoteId={draggingNoteId}
+                        onDragStart={(noteId) => { dragRef.current = { noteId, sourceKey }; setDraggingNoteId(noteId) }}
+                        onDragEnd={() => { dragRef.current = null; setDraggingNoteId(null) }}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+
               {/* Empty state */}
-              {!loading && projectNotes.length === 0 && experiments.length === 0 && (
+              {!loading && projectNotes.length === 0 && experiments.length === 0 && linkedItems.length === 0 && (
                 <div className="px-3 py-8 text-center">
                   <Icon name="edit_note" className="text-[32px] text-slate-300 mb-2" />
                   <p className="text-[11px] text-slate-400">No notes yet.</p>
