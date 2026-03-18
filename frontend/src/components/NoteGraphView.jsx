@@ -490,20 +490,20 @@ export default function NoteGraphView({
         </div>
       )}
 
-      {nodes.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
-          <Icon name="hub" className="text-[48px] text-slate-200" />
-          <div className="text-center">
-            <p className="text-[13px] text-slate-400 font-medium">No notes to graph yet</p>
-            <p className="text-[11px] text-slate-300 mt-1">
-              Create notes and use{' '}
-              <code className="bg-slate-100 px-1 rounded">[[wiki links]]</code> to connect them
-            </p>
+      {/* SVG area — always rendered so options panel is accessible */}
+      <div ref={svgWrapperRef} className="flex-1 relative overflow-hidden">
+        {nodes.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 z-0">
+            <Icon name="hub" className="text-[48px] text-slate-200" />
+            <div className="text-center">
+              <p className="text-[13px] text-slate-400 font-medium">No notes to graph yet</p>
+              <p className="text-[11px] text-slate-300 mt-1">
+                Create notes and use{' '}
+                <code className="bg-slate-100 px-1 rounded">[[wiki links]]</code> to connect them
+              </p>
+            </div>
           </div>
-        </div>
-      ) : (
-        /* SVG area — relative so the options panel can be absolutely positioned */
-        <div ref={svgWrapperRef} className="flex-1 relative overflow-hidden">
+        )}
           <svg
             ref={svgRef}
             className="w-full h-full"
@@ -708,7 +708,6 @@ export default function NoteGraphView({
             )}
           </div>
         </div>
-      )}
     </div>
   )
 }
