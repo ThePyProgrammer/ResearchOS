@@ -1366,12 +1366,8 @@ export default function ProjectNotesIDE() {
     ? buildPath(selected.noteId, getSourceNotes(selected.sourceKey), sourceLabel(selected.sourceKey))
     : []
 
-  // ── Graph-view data: allLoadedNotes with source remapped ──────────────────
-  const graphNotes = useMemo(() => allLoadedNotes.map(n => ({
-    ...n,
-    // NoteGraphView uses 'source' field for color lookup
-    source: n.sourceKey === 'project' ? 'project' : 'experiment',
-  })), [allLoadedNotes])
+  // ── Graph-view data: allLoadedNotes already have correct source field ─────
+  const graphNotes = allLoadedNotes
 
   // ── Graph experiment hull grouping ─────────────────────────────────────────
   // sourceKeyCollections: maps each experiment's sourceKey to its parent group ID
