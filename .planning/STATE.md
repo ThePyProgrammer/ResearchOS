@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 07-03-PLAN.md (human verification approved — Phase 7 complete)
-last_updated: "2026-03-17T19:04:47.700Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-18T08:10:50.420Z"
 last_activity: 2026-03-17 — Completed plan 07-00 (Extract useLocalStorage hook, table view test scaffolds RED phase)
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 7
-  total_plans: 24
-  completed_plans: 24
+  total_plans: 27
+  completed_plans: 25
   percent: 100
 ---
 
@@ -68,6 +68,7 @@ Progress: [████████████] 100%
 | Phase 07-experiment-table-view P01 | 8 | 2 tasks | 1 files |
 | Phase 07-experiment-table-view P02 | 4 min | 2 tasks | 1 files |
 | Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design P02 | 10 | 2 tasks | 1 files |
+| Phase 08-port-library-notes-ide-features-to-project-notes P01 | 20 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -147,11 +148,15 @@ Recent decisions affecting current work:
 - [Phase 07-experiment-table-view]: Bulk actions (set status, duplicate, delete) shared between tree and table views via same selectedIds state
 - [Phase 07-experiment-table-view]: Group separator borders used instead of colored group headers in table view — less visual noise
 - [Phase 07-experiment-table-view]: Status and Parent columns pinned before config/metric groups so they are always visible on the left
+- [Phase 08-port-library-notes-ide-features-to-project-notes]: project_notes_copilot_service.py is separate from notes_copilot_service.py to avoid branching — same architecture, different scope key
+- [Phase 08-port-library-notes-ide-features-to-project-notes]: storagePrefix prop on NoteGraphView prevents localStorage key collisions between library and project graph views
+- [Phase 08-port-library-notes-ide-features-to-project-notes]: sendFn/scopeId prop injection pattern lets NotesCopilotPanel serve both library and project scopes without forking
 
 ### Roadmap Evolution
 
 - Phase 6 added: Implement a CSV loading framework to nest into the experimental design
 - Phase 7 added: Implement an alternative table view for experiments with spreadsheet-like filters and sorts
+- Phase 8 added: Port library notes IDE features to project notes (sidebar width, pinned notes, tabs, wikilinks, graph view, AI copilot with experiment results)
 
 ### Pending Todos
 
@@ -174,5 +179,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T19:30:00Z
-Stopped at: Completed quick task 6 (experiment folders in ProjectNotes via composite notes array)
+Last session: 2026-03-18T08:10:50.415Z
+Stopped at: Completed 08-01-PLAN.md
