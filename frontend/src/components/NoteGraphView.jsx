@@ -49,8 +49,8 @@ export default function NoteGraphView({
 }) {
   // Merge custom colors/labels with defaults so callers can add new node types
   // (e.g. 'project', 'experiment') without forking the component.
-  const mergedColors = { ...SOURCE_COLOR, ...customSourceColors }
-  const mergedLabels = { ...SOURCE_LABEL, ...customSourceLabels }
+  const mergedColors = customSourceColors ? { ...customSourceColors } : { ...SOURCE_COLOR }
+  const mergedLabels = customSourceLabels ? { ...customSourceLabels } : { ...SOURCE_LABEL }
 
   const svgRef          = useRef(null)
   const svgWrapperRef   = useRef(null)   // used for D3 size measurement
