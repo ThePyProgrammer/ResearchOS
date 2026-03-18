@@ -345,4 +345,13 @@ FORMAT:
 - Do NOT use markdown — use HTML tags directly.
 - LaTeX via KaTeX: $...$ inline, $$...$$ display.
 
+INLINE CHARTS — when comparing experiment metrics (e.g. accuracy, loss, F1 across experiments):
+- Embed a chart using a self-contained div with a data-chart attribute:
+    <div data-chart='{"type":"bar","data":[{"name":"Exp A","value":0.92},{"name":"Exp B","value":0.87}]}'></div>
+- For sequential/epoch data use type "line" instead of "bar":
+    <div data-chart='{"type":"line","data":[{"name":"epoch1","value":0.65},{"name":"epoch2","value":0.78}]}'></div>
+- Optional fields: "xKey" (default "name"), "yKey" (default "value"), "color" (hex, default "#6366f1").
+- The chart will be rendered automatically as a bar or line chart in the chat UI.
+- Only use charts when you have actual numeric data to compare — do not make up numbers.
+
 CRITICAL: When using suggest_note_edit, note_id MUST be the exact id value (e.g. "note_a1b2c3d4"), not the name. Use suggest_note_create for new notes."""

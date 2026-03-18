@@ -17,8 +17,13 @@
 import {
   useState, useEffect, useRef, useCallback, useMemo
 } from 'react'
+import { createRoot } from 'react-dom/client'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import {
+  BarChart, Bar, LineChart, Line,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from 'recharts'
 import { notesCopilotApi, notesApi } from '../services/api'
 
 /* ─── Utilities ────────────────────────────────────────────────────────────── */
@@ -86,6 +91,69 @@ function computeDiff(oldText, newText) {
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
+}
+
+/* ─── Inline metric chart (rendered into data-chart divs) ───────────────────── */
+function MetricComparisonChart({ type = 'bar', data = [], xKey = 'name', yKey = 'value', color = '#6366f1' }) {
+  if (!data || data.length === 0) return null
+  return (
+    <div style={{ width: '100%', height: 140, marginTop: 8, marginBottom: 8 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        {type === 'line' ? (
+          <LineChart data={data} margin={{ top: 4, right: 12, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: '#64748b' }} />
+            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
+            <Tooltip contentStyle={{ fontSize: 11 }} />
+            <Line type="monotone" dataKey={yKey} stroke={color} strokeWidth={2} dot={{ r: 3 }} />
+          </LineChart>
+        ) : (
+          <BarChart data={data} margin={{ top: 4, right: 12, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: '#64748b' }} />
+            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
+            <Tooltip contentStyle={{ fontSize: 11 }} />
+            <Bar dataKey={yKey} fill={color} radius={[3, 3, 0, 0]} />
+          </BarChart>
+        )}
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+/**
+ * Hook: after every render of a message bubble, find [data-chart] placeholder
+ * divs injected by the LLM and mount a Recharts chart into each one.
+ *
+ * Chart data format the LLM is instructed to produce:
+ *   <div data-chart='{"type":"bar","data":[{"name":"exp1","value":0.92}]}'></div>
+ * Optional keys: xKey, yKey, color.
+ */
+function useChartRenderer(containerRef, rendered) {
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const roots = []
+    const els = container.querySelectorAll('[data-chart]')
+    els.forEach(el => {
+      try {
+        const spec = JSON.parse(el.dataset.chart)
+        const { type = 'bar', data = [], xKey = 'name', yKey = 'value', color } = spec
+        el.style.display = 'block'
+        const root = createRoot(el)
+        root.render(
+          <MetricComparisonChart type={type} data={data} xKey={xKey} yKey={yKey} color={color} />
+        )
+        roots.push(root)
+      } catch {
+        // Ignore malformed chart data
+      }
+    })
+    return () => {
+      // Unmount chart roots on next render to avoid react root warnings
+      setTimeout(() => roots.forEach(r => { try { r.unmount() } catch {} }), 0)
+    }
+  }, [rendered]) // re-run whenever rendered HTML changes
 }
 
 /* ─── Item type styling ──────────────────────────────────────────────────────── */
@@ -318,6 +386,10 @@ function ChatBubble({ message, onAccept, onReject, onWikiLinkClick }) {
   const isUser = message.role === 'user'
   const rendered = useMemo(() => renderChatHtml(message.content), [message.content])
   const suggestions = message.suggestions || []
+  const contentRef = useRef(null)
+
+  // Mount inline recharts for any data-chart placeholder divs in assistant messages
+  useChartRenderer(contentRef, rendered)
 
   function handleContentClick(e) {
     const el = e.target.closest('[data-wiki-name]')
@@ -346,7 +418,7 @@ function ChatBubble({ message, onAccept, onReject, onWikiLinkClick }) {
           <div className={`text-[13px] leading-relaxed rounded-xl px-3.5 py-2.5 ${
             isUser ? 'bg-blue-600 text-white rounded-br-md' : 'bg-slate-100 text-slate-700 rounded-bl-md'
           }`}>
-            <div className="copilot-message-content" dangerouslySetInnerHTML={{ __html: rendered }} onClick={handleContentClick} />
+            <div ref={contentRef} className="copilot-message-content" dangerouslySetInnerHTML={{ __html: rendered }} onClick={handleContentClick} />
           </div>
         )}
 

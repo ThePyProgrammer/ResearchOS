@@ -1194,6 +1194,29 @@ export default function ProjectNotesIDE() {
     source: n.sourceKey === 'project' ? 'project' : 'experiment',
   })), [allLoadedNotes])
 
+  // ── Graph experiment hull grouping ─────────────────────────────────────────
+  // sourceKeyCollections: maps each experiment's sourceKey to its parent group ID
+  // so NoteGraphView can draw hull boundaries around sibling experiments.
+  const graphSourceKeyCollections = useMemo(() => {
+    const map = {}
+    for (const exp of experiments) {
+      const groupKey = exp.parentId || exp.id
+      map[`experiment:${exp.id}`] = [groupKey]
+    }
+    return map
+  }, [experiments])
+
+  // graphCollections: one entry per unique parent group for hull labels
+  const graphCollections = useMemo(() => {
+    const seen = new Set()
+    return experiments
+      .map(exp => ({
+        id: exp.parentId || exp.id,
+        name: (experiments.find(e => e.id === (exp.parentId || exp.id)) || exp).name,
+      }))
+      .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true })
+  }, [experiments])
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-full overflow-hidden bg-white" style={{ minHeight: 0 }}>
@@ -1442,8 +1465,8 @@ export default function ProjectNotesIDE() {
           /* ── Graph view ── */
           <NoteGraphView
             allNotes={graphNotes}
-            collections={[]}
-            sourceKeyCollections={{}}
+            collections={graphCollections}
+            sourceKeyCollections={graphSourceKeyCollections}
             customSourceColors={PROJECT_GRAPH_SOURCE_COLORS}
             customSourceLabels={PROJECT_GRAPH_SOURCE_LABELS}
             storagePrefix="researchos.project.graph."
