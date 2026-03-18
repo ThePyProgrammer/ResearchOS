@@ -2664,8 +2664,8 @@ function ExperimentDetailPanel({ experiment, flatTree, onClose, onRefresh, libra
     }
   }
 
-  async function handleUnlink(paperId, websiteId) {
-    await experimentsApi.unlinkPaper(experiment.id, { paper_id: paperId || null, website_id: websiteId || null })
+  async function handleUnlink(linkId) {
+    await experimentsApi.unlinkPaper(experiment.id, linkId)
     try {
       const updated = await experimentsApi.listPapers(experiment.id)
       onExpPapersChange?.(experiment.id, Array.isArray(updated) ? updated : [])
@@ -2763,7 +2763,7 @@ function ExperimentDetailPanel({ experiment, flatTree, onClose, onRefresh, libra
             <div className="border border-slate-100 rounded-lg overflow-hidden">
               <NotesPanel
                 notes={expNotes}
-                onNotesChange={setExpNotes}
+                setNotes={setExpNotes}
                 createFn={data => notesApi.createForExperiment(experiment.id, data)}
               />
             </div>
@@ -2811,7 +2811,7 @@ function ExperimentDetailPanel({ experiment, flatTree, onClose, onRefresh, libra
                       {item.title || item.url || '—'}
                     </span>
                     <button
-                      onClick={() => handleUnlink(lp.paper_id, lp.website_id)}
+                      onClick={() => handleUnlink(lp.id)}
                       className="opacity-0 group-hover/lit:opacity-100 text-slate-300 hover:text-red-400 transition-colors flex-shrink-0"
                     >
                       <Icon name="close" className="text-[13px]" />
