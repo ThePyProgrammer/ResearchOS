@@ -170,8 +170,9 @@ None yet.
 | 2 | Change projects sidebar icon from science to topic | 2026-03-17 | 9e94105 | [2-change-projects-sidebar-icon-to-be-consi](./quick/2-change-projects-sidebar-icon-to-be-consi/) |
 | 3 | Move projects into main sidebar with collapsible nodes | 2026-03-17 | f85c896 | [3-move-projects-into-main-sidebar-with-col](./quick/3-move-projects-into-main-sidebar-with-col/) |
 | 5 | Add JSON, JSONL, and XLSX import support | 2026-03-18 | c04253f | [5-add-json-jsonl-and-xlsx-import-support-t](./quick/5-add-json-jsonl-and-xlsx-import-support-t/) |
+| 6 | Show experiment notes as separate folder in ProjectNotes tab | 2026-03-18 | d6e411c | [6-show-experiment-notes-as-separate-folder](./quick/6-show-experiment-notes-as-separate-folder/) |
 
 ## Session Continuity
 
-Last session: 2026-03-18T19:15:08Z
-Stopped at: Completed quick task 5 (JSON/JSONL/XLSX import support in CSVImportModal)
+Last session: 2026-03-18T19:30:00Z
+Stopped at: Completed quick task 6 (experiment folders in ProjectNotes via composite notes array)
