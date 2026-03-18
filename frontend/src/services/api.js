@@ -299,6 +299,22 @@ export const notesCopilotApi = {
     apiFetch(`/libraries/${libraryId}/notes-copilot`, { method: 'DELETE' }),
 }
 
+export const projectNotesCopilotApi = {
+  /** List all copilot messages for a project. */
+  list: (projectId) => apiFetch(`/projects/${projectId}/notes-copilot`),
+  /**
+   * Send a message to the project Notes-page AI copilot.
+   * Supports experiment context items with config/metrics/children in metadata.
+   * @param {string} projectId
+   * @param {{ content: string, contextItems: object[], history: object[] }} data
+   */
+  send: (projectId, data) =>
+    apiFetch(`/projects/${projectId}/notes-copilot`, { method: 'POST', body: data }),
+  /** Clear all copilot chat history for a project. */
+  clear: (projectId) =>
+    apiFetch(`/projects/${projectId}/notes-copilot`, { method: 'DELETE' }),
+}
+
 export const searchApi = {
   /**
    * Search across papers, websites, and GitHub repos.

@@ -95,6 +95,16 @@ const ITEM_STYLE = {
   github_repo: { icon: 'code',        color: 'text-violet-500', bg: 'bg-violet-50', pill: 'bg-violet-100 text-violet-700' },
   library:     { icon: 'local_library', color: 'text-slate-500', bg: 'bg-slate-50', pill: 'bg-slate-100 text-slate-600' },
   collection:  { icon: 'folder',      color: 'text-amber-500',  bg: 'bg-amber-50',  pill: 'bg-amber-100 text-amber-700' },
+  experiment:  { icon: 'science',     color: 'text-indigo-500', bg: 'bg-indigo-50', pill: 'bg-indigo-100 text-indigo-700' },
+}
+
+/* Status dot color for experiment status badges */
+const EXPERIMENT_STATUS_COLOR = {
+  running:   'bg-blue-400',
+  completed: 'bg-emerald-400',
+  failed:    'bg-red-400',
+  pending:   'bg-amber-400',
+  cancelled: 'bg-slate-400',
 }
 
 /* ─── Diff viewer ────────────────────────────────────────────────────────────── */
@@ -374,7 +384,7 @@ function ChatBubble({ message, onAccept, onReject, onWikiLinkClick }) {
 }
 
 /* ─── @ mention dropdown ────────────────────────────────────────────────────── */
-function MentionDropdown({ query, papers, websites, githubRepos, collections, onSelect, anchorRef }) {
+function MentionDropdown({ query, papers, websites, githubRepos, collections, experiments = [], onSelect, anchorRef }) {
   const qLow = query.toLowerCase()
 
   const matchItems = (items, type) =>
@@ -399,11 +409,42 @@ function MentionDropdown({ query, papers, websites, githubRepos, collections, on
     { type: 'library',      id: '__library__',       name: 'Library notes'   },
   ].filter(s => !qLow || s.name.toLowerCase().includes(qLow))
 
+  // Build experiment items with experiment-specific metadata (status, config, metrics, children)
+  const experimentItems = experiments
+    .filter(exp => {
+      const name = (exp.name || '').toLowerCase()
+      return !qLow || name.includes(qLow)
+    })
+    .slice(0, 8)
+    .map(exp => {
+      // Collect child experiments for this experiment
+      const children = experiments
+        .filter(e => e.parentId === exp.id || e.parent_id === exp.id)
+        .map(child => ({
+          id: child.id,
+          name: child.name || 'Unnamed',
+          status: child.status || '',
+          metrics: child.metrics || {},
+        }))
+      return {
+        type: 'experiment',
+        id: exp.id,
+        name: exp.name || 'Unnamed',
+        metadata: {
+          status: exp.status || '',
+          config: exp.config || {},
+          metrics: exp.metrics || {},
+          children,
+        },
+      }
+    })
+
   const groups = [
     { label: 'Papers',      items: matchItems(papers, 'paper'),       style: ITEM_STYLE.paper       },
     { label: 'Websites',    items: matchItems(websites, 'website'),   style: ITEM_STYLE.website     },
     { label: 'GitHub',      items: matchItems(githubRepos, 'github_repo'), style: ITEM_STYLE.github_repo },
     { label: 'Collections', items: matchItems(collections, 'collection'), style: ITEM_STYLE.collection },
+    { label: 'Experiments', items: experimentItems, style: ITEM_STYLE.experiment, isExperiment: true },
   ].filter(g => g.items.length > 0)
 
   const hasResults = groups.some(g => g.items.length) || specialItems.length
@@ -443,16 +484,49 @@ function MentionDropdown({ query, papers, websites, githubRepos, collections, on
         <div key={g.label} className="px-2 pt-2">
           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-1 mb-1">{g.label}</p>
           <div className="space-y-0.5">
-            {g.items.map(item => (
-              <button
-                key={item.id}
-                onMouseDown={e => { e.preventDefault(); onSelect(item) }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 text-left"
-              >
-                <Icon name={g.style.icon} className={`text-[15px] ${g.style.color} flex-shrink-0`} />
-                <span className="text-[12px] text-slate-700 truncate">{item.name}</span>
-              </button>
-            ))}
+            {g.items.map(item => {
+              if (g.isExperiment) {
+                // Experiment items: show status dot + first 2 metric values as preview
+                const status = item.metadata?.status || ''
+                const statusDotColor = EXPERIMENT_STATUS_COLOR[status] || 'bg-slate-300'
+                const metrics = item.metadata?.metrics || {}
+                const metricsPreview = Object.entries(metrics).slice(0, 2)
+                  .map(([k, v]) => `${k}=${v}`).join(', ')
+                return (
+                  <button
+                    key={item.id}
+                    onMouseDown={e => { e.preventDefault(); onSelect(item) }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-indigo-50 text-left"
+                  >
+                    <Icon name="science" className="text-[15px] text-indigo-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12px] text-slate-700 truncate">{item.name}</span>
+                        {status && (
+                          <span className="flex items-center gap-0.5 flex-shrink-0">
+                            <span className={`w-1.5 h-1.5 rounded-full ${statusDotColor}`} />
+                            <span className="text-[9px] text-slate-400">{status}</span>
+                          </span>
+                        )}
+                      </div>
+                      {metricsPreview && (
+                        <p className="text-[10px] text-slate-400 truncate">{metricsPreview}</p>
+                      )}
+                    </div>
+                  </button>
+                )
+              }
+              return (
+                <button
+                  key={item.id}
+                  onMouseDown={e => { e.preventDefault(); onSelect(item) }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 text-left"
+                >
+                  <Icon name={g.style.icon} className={`text-[15px] ${g.style.color} flex-shrink-0`} />
+                  <span className="text-[12px] text-slate-700 truncate">{item.name}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
       ))}
@@ -518,7 +592,7 @@ function ContextChip({ item, onRemove, onToggleNotes, onTogglePdf }) {
 }
 
 /* ─── Chat input with @ trigger ─────────────────────────────────────────────── */
-function ChatInput({ onSend, sending, papers, websites, githubRepos, collections,
+function ChatInput({ onSend, sending, papers, websites, githubRepos, collections, experiments = [],
                      contextItems, onAddContext, onRemoveContext, onToggleNotes, onTogglePdf }) {
   const [value, setValue] = useState('')
   const [mentionQuery, setMentionQuery] = useState(null) // null = no dropdown
@@ -603,6 +677,7 @@ function ChatInput({ onSend, sending, papers, websites, githubRepos, collections
             websites={websites}
             githubRepos={githubRepos}
             collections={collections}
+            experiments={experiments}
             onSelect={handleSelectMention}
           />
         )}
@@ -662,6 +737,9 @@ export default function NotesCopilotPanel({
   onOpenSuggestionTab,    // callback(suggestion, onAccept, onReject) → opens tab in IDE
   onWikiLinkClick,        // callback(noteName) → navigate to note in IDE
   width = 340,
+  sendFn = null,          // override send function: (scopeId, payload) => Promise<ChatMessage>
+  scopeId = null,         // override the ID passed to sendFn (e.g. project ID)
+  experiments = [],       // experiments to show in @ mention dropdown
 }) {
   const [messages, setMessages] = useState([])      // local history
   const [sending, setSending]   = useState(false)
@@ -775,7 +853,8 @@ export default function NotesCopilotPanel({
         history,
       }
 
-      const assistantMsg = await notesCopilotApi.send(libraryId, payload)
+      const sendCall = sendFn || ((id, data) => notesCopilotApi.send(id, data))
+      const assistantMsg = await sendCall(scopeId || libraryId, payload)
 
       // Open each suggestion as its own IDE tab instead of embedding diff cards
       // in the chat. The chat will show compact status pills for reference.
@@ -1013,6 +1092,7 @@ export default function NotesCopilotPanel({
         websites={websites}
         githubRepos={githubRepos}
         collections={collections}
+        experiments={experiments}
         contextItems={contextItems}
         onAddContext={handleAddContext}
         onRemoveContext={handleRemoveContext}

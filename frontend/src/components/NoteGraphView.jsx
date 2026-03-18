@@ -38,7 +38,20 @@ function paddedHullPoints(nodePoints, radius = 30, resolution = 10) {
 // Smooth closed path through hull vertices using Catmull-Rom
 const smoothLine = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5))
 
-export default function NoteGraphView({ allNotes, collections = [], sourceKeyCollections = {}, onNoteClick }) {
+export default function NoteGraphView({
+  allNotes,
+  collections = [],
+  sourceKeyCollections = {},
+  onNoteClick,
+  customSourceColors = {},
+  customSourceLabels = {},
+  storagePrefix = 'researchos.graph.',
+}) {
+  // Merge custom colors/labels with defaults so callers can add new node types
+  // (e.g. 'project', 'experiment') without forking the component.
+  const mergedColors = { ...SOURCE_COLOR, ...customSourceColors }
+  const mergedLabels = { ...SOURCE_LABEL, ...customSourceLabels }
+
   const svgRef          = useRef(null)
   const svgWrapperRef   = useRef(null)   // used for D3 size measurement
   const simRef          = useRef(null)
@@ -50,13 +63,13 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
   const hullEntriesRef  = useRef([])     // hull {path, label, nodes}   — for search highlight
 
   const [hoveredNode,     setHoveredNode]     = useState(null)
-  const [clusterStrength, setClusterStrength] = useLocalStorage('researchos.graph.clusterStrength', 0.3)
-  const [gravityStrength, setGravityStrength] = useLocalStorage('researchos.graph.gravityStrength', 0.5)
+  const [clusterStrength, setClusterStrength] = useLocalStorage(`${storagePrefix}clusterStrength`, 0.3)
+  const [gravityStrength, setGravityStrength] = useLocalStorage(`${storagePrefix}gravityStrength`, 0.5)
 
   // Options panel
-  const [panelOpen,       setPanelOpen]       = useLocalStorage('researchos.graph.panelOpen',       false)
-  const [visibleTypes,    setVisibleTypes]    = useLocalStorage('researchos.graph.visibleTypes',    { library: true, paper: true, website: true, github: true })
-  const [hullCollections, setHullCollections] = useLocalStorage('researchos.graph.hullCollections', [])
+  const [panelOpen,       setPanelOpen]       = useLocalStorage(`${storagePrefix}panelOpen`,       false)
+  const [visibleTypes,    setVisibleTypes]    = useLocalStorage(`${storagePrefix}visibleTypes`,    { library: true, paper: true, website: true, github: true })
+  const [hullCollections, setHullCollections] = useLocalStorage(`${storagePrefix}hullCollections`, [])
   const [collSearch,      setCollSearch]      = useState('')
   const [collDropOpen,    setCollDropOpen]    = useState(false)
 
@@ -136,7 +149,7 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
       name:       n.name,
       source:     n.source     ?? 'library',
       sourceKey:  n.sourceKey  ?? n.source ?? 'library',
-      sourceName: n.sourceName ?? SOURCE_LABEL[n.source] ?? 'Library',
+      sourceName: n.sourceName ?? mergedLabels[n.source] ?? 'Library',
     }))
 
     const nodeIdSet = new Set(nodes.map(n => n.id))
@@ -239,8 +252,8 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
     const hullEntries = []
     for (const [key, groupNodes] of groupMap) {
       const source   = groupNodes[0].source
-      const color    = SOURCE_COLOR[source] || SOURCE_COLOR.library
-      const label    = groupNodes[0].sourceName || SOURCE_LABEL[source] || key
+      const color    = mergedColors[source] || mergedColors.library
+      const label    = groupNodes[0].sourceName || mergedLabels[source] || key
 
       const hullPath = hullLayer.append('path')
         .attr('fill',           color)
@@ -312,7 +325,7 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
 
     nodeEls.append('circle').attr('r', d => nodeRadius(d.degree) + 5).attr('fill', 'transparent')
     nodeEls.append('circle').attr('r', d => nodeRadius(d.degree))
-      .attr('fill',   d => SOURCE_COLOR[d.source] || SOURCE_COLOR.library)
+      .attr('fill',   d => mergedColors[d.source] || mergedColors.library)
       .attr('stroke', '#fff').attr('stroke-width', 2.5)
     nodeEls.append('text').text(d => d.name)
       .attr('x', 0).attr('y', d => nodeRadius(d.degree) + 13)
@@ -454,9 +467,9 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
               <div key={src} className="flex items-center gap-1">
                 <div
                   className="w-2 h-2 rounded-full"
-                  style={{ background: SOURCE_COLOR[src] }}
+                  style={{ background: mergedColors[src] }}
                 />
-                <span className="text-[10px] text-slate-500">{SOURCE_LABEL[src]}</span>
+                <span className="text-[10px] text-slate-500">{mergedLabels[src]}</span>
               </div>
             ))}
           </div>
@@ -472,7 +485,7 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
           className="absolute z-50 bg-slate-800 text-white text-[11px] rounded-md px-2 py-1 pointer-events-none"
           style={{ bottom: 12, left: 12 }}
         >
-          <span className="opacity-60 mr-1">{SOURCE_LABEL[hoveredNode.source]}</span>
+          <span className="opacity-60 mr-1">{mergedLabels[hoveredNode.source]}</span>
           {hoveredNode.name}
         </div>
       )}
@@ -566,20 +579,20 @@ export default function NoteGraphView({ allNotes, collections = [], sourceKeyCol
                     Show
                   </p>
                   <div className="grid grid-cols-2 gap-y-2 gap-x-3">
-                    {(['library', 'paper', 'website', 'github']).map(type => (
+                    {Object.keys(mergedColors).map(type => (
                       <label key={type} className="flex items-center gap-2 cursor-pointer group">
                         <input
                           type="checkbox"
-                          checked={!!visibleTypes[type]}
+                          checked={visibleTypes[type] !== false}
                           onChange={() => toggleType(type)}
                           className="accent-indigo-500 cursor-pointer w-3.5 h-3.5"
                         />
                         <div
                           className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ background: SOURCE_COLOR[type] }}
+                          style={{ background: mergedColors[type] }}
                         />
                         <span className="text-[11px] text-slate-600 group-hover:text-slate-800 transition-colors">
-                          {SOURCE_LABEL[type]}
+                          {mergedLabels[type]}
                         </span>
                       </label>
                     ))}
