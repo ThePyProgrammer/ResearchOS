@@ -4883,12 +4883,151 @@ export function ProjectExperiments() {
 }
 
 export function ProjectNotes() {
-  const { notes, setNotes, id } = useOutletContext()
+  const { notes: projectNotes, setNotes: setProjectNotes, id } = useOutletContext()
+
+  // Experiments list loaded on mount
+  const [experiments, setExperiments] = useState([])
+  // Map of expId -> note array (lazy-loaded)
+  const [expNotesMap, setExpNotesMap] = useState({})
+  // Set of experiment IDs whose notes have been fetched
+  const loadedExpsRef = useRef(new Set())
+
+  useEffect(() => {
+    experimentsApi.list(id).then(setExperiments).catch(err => console.error('Failed to load experiments:', err))
+  }, [id])
+
+  // Build a Map of noteId -> expId for routing setNotes updates
+  const noteToExpMap = useMemo(() => {
+    const map = new Map()
+    for (const [expId, notes] of Object.entries(expNotesMap)) {
+      for (const note of notes) {
+        map.set(note.id, expId)
+      }
+    }
+    return map
+  }, [expNotesMap])
+
+  // Build combined notes array: project notes + virtual exp folders + reparented exp notes
+  const combinedNotes = useMemo(() => {
+    const result = [...projectNotes]
+
+    for (const exp of experiments) {
+      const virtualId = `exp_${exp.id}`
+      // Virtual folder node representing this experiment
+      result.push({
+        id: virtualId,
+        name: `Experiment: ${exp.name}`,
+        type: 'folder',
+        parentId: null,
+        _isVirtualExpFolder: true,
+        _expId: exp.id,
+      })
+
+      // Reparent experiment notes under the virtual folder
+      const expNotes = expNotesMap[exp.id] || []
+      for (const note of expNotes) {
+        result.push({
+          ...note,
+          // Top-level notes in the experiment get reparented under the virtual folder
+          parentId: note.parentId == null ? virtualId : note.parentId,
+        })
+      }
+    }
+
+    return result
+  }, [projectNotes, experiments, expNotesMap])
+
+  // Lazy-load experiment notes when a virtual folder is toggled open
+  // NotesPanel calls handleToggle which expands folders — we intercept via setNotes
+  // But we can't intercept toggle. Instead, wrap createFn to trigger loading when needed.
+  // The cleanest approach: load notes for all experiments eagerly on mount once experiments are loaded.
+  // Actually, use a useEffect to lazy-load when expNotesMap doesn't have an experiment yet.
+  // We'll detect toggle via a wrapper — but NotesPanel doesn't expose toggle.
+  // PRAGMATIC: load all experiment notes eagerly when experiments list changes.
+  useEffect(() => {
+    for (const exp of experiments) {
+      if (!loadedExpsRef.current.has(exp.id)) {
+        loadedExpsRef.current.add(exp.id)
+        notesApi.listForExperiment(exp.id)
+          .then(notes => setExpNotesMap(prev => ({ ...prev, [exp.id]: notes })))
+          .catch(err => console.error(`Failed to load notes for experiment ${exp.id}:`, err))
+      }
+    }
+  }, [experiments])
+
+  // combinedSetNotes: intercept setNotes calls and route to correct bucket
+  const combinedSetNotes = useCallback((updater) => {
+    const newCombined = typeof updater === 'function' ? updater(combinedNotes) : updater
+
+    // Partition: virtual folders are discarded, experiment notes routed to expNotesMap, rest to projectNotes
+    const newProjectNotes = []
+    // Map of expId -> new notes for that experiment
+    const newExpNotesBuckets = {}
+
+    for (const exp of experiments) {
+      newExpNotesBuckets[exp.id] = []
+    }
+
+    for (const note of newCombined) {
+      if (note._isVirtualExpFolder) continue // discard virtual folder nodes
+
+      if (noteToExpMap.has(note.id)) {
+        // This note belongs to an experiment — restore original parentId (un-reparent)
+        const expId = noteToExpMap.get(note.id)
+        const virtualId = `exp_${expId}`
+        newExpNotesBuckets[expId] = newExpNotesBuckets[expId] || []
+        newExpNotesBuckets[expId].push({
+          ...note,
+          parentId: note.parentId === virtualId ? null : note.parentId,
+        })
+      } else {
+        newProjectNotes.push(note)
+      }
+    }
+
+    setProjectNotes(newProjectNotes)
+    setExpNotesMap(prev => {
+      const updated = { ...prev }
+      for (const [expId, notes] of Object.entries(newExpNotesBuckets)) {
+        // Only update buckets that have been loaded (avoid overwriting with empty arrays for unloaded exps)
+        if (loadedExpsRef.current.has(expId)) {
+          updated[expId] = notes
+        }
+      }
+      return updated
+    })
+  }, [combinedNotes, experiments, noteToExpMap, setProjectNotes])
+
+  // combinedCreateFn: route note creation to correct API based on parentId
+  const combinedCreateFn = useCallback(async (data) => {
+    const { parentId } = data
+
+    if (parentId && typeof parentId === 'string' && parentId.startsWith('exp_')) {
+      // Creating directly under a virtual experiment folder
+      const expId = parentId.slice(4) // remove 'exp_' prefix
+      const note = await notesApi.createForExperiment(expId, { ...data, parentId: null })
+      // Store in expNotesMap and return a reparented version for the combined array
+      setExpNotesMap(prev => ({ ...prev, [expId]: [...(prev[expId] || []), note] }))
+      return { ...note, parentId: `exp_${expId}` }
+    }
+
+    if (parentId && noteToExpMap.has(parentId)) {
+      // Creating under an experiment note (nested)
+      const expId = noteToExpMap.get(parentId)
+      const note = await notesApi.createForExperiment(expId, data)
+      setExpNotesMap(prev => ({ ...prev, [expId]: [...(prev[expId] || []), note] }))
+      return note
+    }
+
+    // Default: create under project
+    return notesApi.createForProject(id, data)
+  }, [id, noteToExpMap])
+
   return (
     <NotesPanel
-      notes={notes}
-      setNotes={setNotes}
-      createFn={(data) => notesApi.createForProject(id, data)}
+      notes={combinedNotes}
+      setNotes={combinedSetNotes}
+      createFn={combinedCreateFn}
     />
   )
 }
