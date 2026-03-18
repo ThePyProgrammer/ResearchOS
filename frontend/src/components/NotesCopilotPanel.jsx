@@ -475,10 +475,11 @@ function MentionDropdown({ query, papers, websites, githubRepos, collections, ex
     }))
 
   const specialItems = [
-    { type: 'all_papers',   id: '__all_papers__',   name: 'All papers'      },
-    { type: 'all_websites', id: '__all_websites__',  name: 'All websites'    },
-    { type: 'all_repos',    id: '__all_repos__',     name: 'All GitHub repos' },
-    { type: 'library',      id: '__library__',       name: 'Library notes'   },
+    { type: 'all_papers',      id: '__all_papers__',      name: 'All papers'       },
+    { type: 'all_websites',    id: '__all_websites__',     name: 'All websites'     },
+    { type: 'all_repos',       id: '__all_repos__',        name: 'All GitHub repos' },
+    ...(experiments.length > 0 ? [{ type: 'all_experiments', id: '__all_experiments__', name: 'All experiments' }] : []),
+    { type: 'library',         id: '__library__',          name: 'Library notes'    },
   ].filter(s => !qLow || s.name.toLowerCase().includes(qLow))
 
   // Build experiment items with experiment-specific metadata (status, config, metrics, children)
@@ -532,10 +533,12 @@ function MentionDropdown({ query, papers, websites, githubRepos, collections, ex
               const icon = item.type === 'all_papers' ? 'article'
                 : item.type === 'all_websites' ? 'language'
                 : item.type === 'all_repos' ? 'code'
+                : item.type === 'all_experiments' ? 'science'
                 : 'local_library'
               const color = item.type === 'all_papers' ? 'text-blue-500'
                 : item.type === 'all_websites' ? 'text-teal-500'
                 : item.type === 'all_repos' ? 'text-violet-500'
+                : item.type === 'all_experiments' ? 'text-indigo-500'
                 : 'text-slate-500'
               return (
                 <button
@@ -848,6 +851,20 @@ export default function NotesCopilotPanel({
             ? allNotes.filter(n => n.githubRepoId === r.id || (n.sourceKey && n.sourceKey === `github:${r.id}`))
             : undefined
           resolved.push({ type: 'github_repo', id: r.id, name: rName, metadata: r, notes })
+        }
+      } else if (item.type === 'all_experiments') {
+        for (const exp of experiments) {
+          const children = experiments
+            .filter(e => e.parentId === exp.id || e.parent_id === exp.id)
+            .map(child => ({ id: child.id, name: child.name || 'Unnamed', status: child.status || '', metrics: child.metrics || {} }))
+          const notes = item.includeNotes
+            ? allNotes.filter(n => n.sourceKey && n.sourceKey === `experiment:${exp.id}`)
+            : undefined
+          resolved.push({
+            type: 'experiment', id: exp.id, name: exp.name || 'Experiment',
+            metadata: { status: exp.status || '', config: exp.config || {}, metrics: exp.metrics || {}, children },
+            notes,
+          })
         }
       } else if (item.type === 'collection') {
         // Expand collection to all papers/websites/repos in the collection
