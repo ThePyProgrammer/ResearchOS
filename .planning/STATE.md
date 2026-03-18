@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-03-18T08:10:50.420Z"
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-03-18T08:26:23.894Z"
 last_activity: 2026-03-17 — Completed plan 07-00 (Extract useLocalStorage hook, table view test scaffolds RED phase)
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 27
-  completed_plans: 25
+  completed_plans: 26
   percent: 100
 ---
 
@@ -69,6 +69,7 @@ Progress: [████████████] 100%
 | Phase 07-experiment-table-view P02 | 4 min | 2 tasks | 1 files |
 | Phase 06-implement-a-csv-loading-framework-to-nest-into-the-experimental-design P02 | 10 | 2 tasks | 1 files |
 | Phase 08-port-library-notes-ide-features-to-project-notes P01 | 20 min | 2 tasks | 8 files |
+| Phase 08-port-library-notes-ide-features-to-project-notes P02 | 10 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -151,6 +152,8 @@ Recent decisions affecting current work:
 - [Phase 08-port-library-notes-ide-features-to-project-notes]: project_notes_copilot_service.py is separate from notes_copilot_service.py to avoid branching — same architecture, different scope key
 - [Phase 08-port-library-notes-ide-features-to-project-notes]: storagePrefix prop on NoteGraphView prevents localStorage key collisions between library and project graph views
 - [Phase 08-port-library-notes-ide-features-to-project-notes]: sendFn/scopeId prop injection pattern lets NotesCopilotPanel serve both library and project scopes without forking
+- [Phase 08-port-library-notes-ide-features-to-project-notes]: ProjectNotesIDE loads experiments independently (not from ProjectDetail outlet) to keep ProjectDetail lean
+- [Phase 08-port-library-notes-ide-features-to-project-notes]: activeEditorSourceRef (useRef) tracks current note scope for creation routing without triggering re-renders
 
 ### Roadmap Evolution
 
@@ -179,5 +182,5 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T08:10:50.415Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-03-18T08:26:23.889Z
+Stopped at: Completed 08-02-PLAN.md
