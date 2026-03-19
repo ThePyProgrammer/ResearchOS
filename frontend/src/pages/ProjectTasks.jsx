@@ -1,5 +1,21 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  horizontalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { tasksApi, taskColumnsApi, taskFieldDefsApi } from '../services/api'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 
@@ -868,6 +884,576 @@ function TaskListView({ tasks, columns, fieldDefs, selectedTaskId, onSelectTask,
   )
 }
 
+// ─── Color swatch picker ─────────────────────────────────────────────────────
+
+const PRESET_COLORS = [
+  '#93c5fd', '#fbbf24', '#a78bfa', '#4ade80',
+  '#fb923c', '#f472b6', '#34d399', '#60a5fa',
+  '#f87171', '#94a3b8',
+]
+
+function ColumnColorPicker({ currentColor, onSelect }) {
+  return (
+    <div className="absolute z-50 top-full left-0 mt-1 p-2 bg-white border border-slate-200 rounded-lg shadow-lg flex flex-wrap gap-1.5 w-[132px]">
+      {PRESET_COLORS.map(c => (
+        <button
+          key={c}
+          onClick={() => onSelect(c)}
+          className="w-8 h-8 rounded-full border-2 transition-transform hover:scale-110"
+          style={{
+            backgroundColor: c,
+            borderColor: c === currentColor ? '#1e40af' : 'transparent',
+          }}
+          title={c}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ─── Kanban card (sortable) ──────────────────────────────────────────────────
+
+function KanbanCard({ task, columnId, fieldDefs, selectedTaskId, onSelectTask }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+    data: { columnId },
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0 : 1,
+  }
+
+  const overdue = isOverdue(task.dueDate)
+
+  // Show first 1-2 custom field values as chips
+  const customChips = (fieldDefs ?? [])
+    .filter(fd => task.customFields?.[fd.id] != null && task.customFields?.[fd.id] !== '')
+    .slice(0, 2)
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={() => onSelectTask(task.id)}
+      className={`px-3 py-2.5 bg-white rounded-lg border text-sm cursor-pointer select-none transition-shadow shadow-sm hover:shadow-md ${
+        selectedTaskId === task.id
+          ? 'border-blue-400 ring-1 ring-blue-300'
+          : 'border-slate-200 hover:border-slate-300'
+      }`}
+    >
+      <p className="font-medium text-slate-800 leading-snug">{task.title}</p>
+      {task.dueDate && (
+        <p className={`text-xs mt-1 ${overdue ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
+          {overdue ? 'Overdue · ' : 'Due '}{task.dueDate}
+        </p>
+      )}
+      {customChips.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {customChips.map(fd => {
+            const val = task.customFields[fd.id]
+            const display = Array.isArray(val) ? val.join(', ') : String(val)
+            return (
+              <span
+                key={fd.id}
+                className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-xs"
+                title={`${fd.name}: ${display}`}
+              >
+                {display}
+              </span>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Kanban card ghost (DragOverlay) ────────────────────────────────────────
+
+function KanbanCardGhost({ task }) {
+  return (
+    <div className="px-3 py-2.5 bg-white rounded-lg border border-blue-300 ring-1 ring-blue-200 text-sm shadow-xl opacity-90 w-[280px] rotate-1">
+      <p className="font-medium text-slate-800 leading-snug">{task.title}</p>
+    </div>
+  )
+}
+
+// ─── Kanban column ───────────────────────────────────────────────────────────
+
+function KanbanColumn({
+  column,
+  colTasks,
+  fieldDefs,
+  selectedTaskId,
+  onSelectTask,
+  onRefresh,
+  onRenameColumn,
+  onDeleteColumn,
+  onColorColumn,
+  canDelete,
+}) {
+  const [addingTask, setAddingTask] = useState(false)
+  const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [renaming, setRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState(column.name)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const addInputRef = useRef(null)
+  const renameInputRef = useRef(null)
+  const colorPickerRef = useRef(null)
+
+  // Auto-focus on add input appearance
+  useEffect(() => {
+    if (addingTask && addInputRef.current) addInputRef.current.focus()
+  }, [addingTask])
+
+  // Auto-focus on rename
+  useEffect(() => {
+    if (renaming && renameInputRef.current) {
+      renameInputRef.current.focus()
+      renameInputRef.current.select()
+    }
+  }, [renaming])
+
+  // Close color picker on outside click
+  useEffect(() => {
+    if (!showColorPicker) return
+    function handleClickOutside(e) {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target)) {
+        setShowColorPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showColorPicker])
+
+  async function handleAddTask() {
+    const title = newTaskTitle.trim()
+    if (!title) {
+      setAddingTask(false)
+      setNewTaskTitle('')
+      return
+    }
+    try {
+      await tasksApi.create(column.projectId, { title, column_id: column.id })
+      await onRefresh()
+    } catch (err) {
+      console.error('Failed to create task:', err)
+    }
+    setAddingTask(false)
+    setNewTaskTitle('')
+  }
+
+  async function handleRename() {
+    const name = renameValue.trim()
+    setRenaming(false)
+    if (name && name !== column.name) {
+      try {
+        await onRenameColumn(column.id, name)
+      } catch (err) {
+        console.error('Failed to rename column:', err)
+        setRenameValue(column.name)
+      }
+    } else {
+      setRenameValue(column.name)
+    }
+  }
+
+  async function handleColorSelect(color) {
+    setShowColorPicker(false)
+    try {
+      await onColorColumn(column.id, color)
+    } catch (err) {
+      console.error('Failed to update column color:', err)
+    }
+  }
+
+  return (
+    <div className="flex-shrink-0 flex flex-col" style={{ minWidth: 280, maxWidth: 280 }}>
+      {/* Column header */}
+      <div
+        className="flex items-center gap-1.5 px-3 py-2 rounded-t-lg"
+        style={{ backgroundColor: column.color + '22' }}
+      >
+        {/* Color dot */}
+        <div className="relative flex-shrink-0" ref={colorPickerRef}>
+          <button
+            onClick={() => setShowColorPicker(v => !v)}
+            className="w-3 h-3 rounded-full border border-white/50 flex-shrink-0 hover:scale-125 transition-transform"
+            style={{ backgroundColor: column.color }}
+            title="Change color"
+          />
+          {showColorPicker && (
+            <ColumnColorPicker currentColor={column.color} onSelect={handleColorSelect} />
+          )}
+        </div>
+
+        {/* Column name — double-click to rename */}
+        {renaming ? (
+          <input
+            ref={renameInputRef}
+            value={renameValue}
+            onChange={e => setRenameValue(e.target.value)}
+            onBlur={handleRename}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleRename()
+              if (e.key === 'Escape') { setRenaming(false); setRenameValue(column.name) }
+            }}
+            className="flex-1 text-sm font-semibold bg-white/80 border border-slate-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400 min-w-0"
+          />
+        ) : (
+          <span
+            onDoubleClick={() => setRenaming(true)}
+            className="flex-1 text-sm font-semibold text-slate-700 truncate cursor-default select-none"
+            title="Double-click to rename"
+          >
+            {column.name}
+          </span>
+        )}
+
+        {/* Task count badge */}
+        <span className="text-xs font-medium text-slate-400 px-1.5 py-0.5 bg-white/70 rounded-full flex-shrink-0">
+          {colTasks.length}
+        </span>
+
+        {/* Delete column (visible on hover, only if canDelete) */}
+        {canDelete && (
+          <div className="relative flex-shrink-0">
+            {showDeleteConfirm && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg p-2 w-48 text-xs">
+                <p className="text-slate-600 mb-2">Move {colTasks.length} task{colTasks.length !== 1 ? 's' : ''} to adjacent column?</p>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="flex-1 px-2 py-1 border border-slate-200 rounded text-slate-500 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => { setShowDeleteConfirm(false); onDeleteColumn(column.id) }}
+                    className="flex-1 px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => setShowDeleteConfirm(v => !v)}
+              className="p-0.5 rounded hover:bg-red-100 text-slate-300 hover:text-red-500 transition-all"
+              title="Delete column"
+            >
+              <Icon name="delete" className="text-[14px]" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Card list */}
+      <div
+        className="flex-1 bg-slate-50/70 rounded-b-lg border border-slate-200 border-t-0 p-2 flex flex-col gap-2 min-h-[80px] overflow-y-auto"
+        style={{ maxHeight: 'calc(100vh - 220px)' }}
+      >
+        <SortableContext items={colTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          {colTasks.map(task => (
+            <KanbanCard
+              key={task.id}
+              task={task}
+              columnId={column.id}
+              fieldDefs={fieldDefs}
+              selectedTaskId={selectedTaskId}
+              onSelectTask={onSelectTask}
+            />
+          ))}
+        </SortableContext>
+
+        {colTasks.length === 0 && !addingTask && (
+          <p className="text-xs text-slate-400 text-center py-3 select-none">No tasks</p>
+        )}
+
+        {/* Inline task creation */}
+        {addingTask ? (
+          <div className="mt-1">
+            <input
+              ref={addInputRef}
+              type="text"
+              value={newTaskTitle}
+              onChange={e => setNewTaskTitle(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleAddTask()
+                if (e.key === 'Escape') { setAddingTask(false); setNewTaskTitle('') }
+              }}
+              onBlur={() => {
+                if (!newTaskTitle.trim()) { setAddingTask(false); setNewTaskTitle('') }
+              }}
+              placeholder="Task title..."
+              className="w-full px-2 py-1.5 text-sm border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400/30 bg-white shadow-sm"
+            />
+            <div className="flex gap-1 mt-1.5">
+              <button
+                onClick={handleAddTask}
+                className="flex-1 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              >
+                Add
+              </button>
+              <button
+                onClick={() => { setAddingTask(false); setNewTaskTitle('') }}
+                className="px-2 py-1 text-xs border border-slate-200 rounded text-slate-500 hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAddingTask(true)}
+            className="mt-1 flex items-center gap-1 w-full px-2 py-1.5 text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+          >
+            <Icon name="add" className="text-[14px]" />
+            Add task
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── KanbanView ───────────────────────────────────────────────────────────────
+
+function KanbanView({ columns: initialColumns, tasks: initialTasks, fieldDefs, selectedTaskId, onSelectTask, onRefresh }) {
+  const [columns, setColumns] = useState(initialColumns)
+  const [tasks, setTasks] = useState(initialTasks)
+  const [activeCardId, setActiveCardId] = useState(null)
+  const [addingColumn, setAddingColumn] = useState(false)
+  const [newColumnName, setNewColumnName] = useState('')
+  const addColumnInputRef = useRef(null)
+
+  // Sync from parent when external refresh happens
+  useEffect(() => { setColumns(initialColumns) }, [initialColumns])
+  useEffect(() => { setTasks(initialTasks) }, [initialTasks])
+
+  useEffect(() => {
+    if (addingColumn && addColumnInputRef.current) addColumnInputRef.current.focus()
+  }, [addingColumn])
+
+  // ── DnD sensors (5px distance to distinguish click from drag) ──────────────
+  const cardSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  )
+
+  const columnSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  )
+
+  const activeCard = tasks.find(t => t.id === activeCardId) ?? null
+
+  // ── Card drag end ──────────────────────────────────────────────────────────
+  function handleCardDragStart(event) {
+    setActiveCardId(event.active.id)
+  }
+
+  function handleCardDragEnd(event) {
+    setActiveCardId(null)
+    const { active, over } = event
+    if (!over) return
+
+    const activeTask = tasks.find(t => t.id === active.id)
+    if (!activeTask) return
+
+    // Determine target column — over might be a task or a column
+    const overTask = tasks.find(t => t.id === over.id)
+    const targetColumnId = overTask ? overTask.columnId : over.id
+
+    if (!targetColumnId) return
+
+    if (activeTask.columnId !== targetColumnId) {
+      // Cross-column drop: update task column_id optimistically
+      setTasks(prev => prev.map(t => t.id === activeTask.id ? { ...t, columnId: targetColumnId } : t))
+      tasksApi.update(activeTask.id, { column_id: targetColumnId })
+        .then(onRefresh)
+        .catch(err => {
+          console.error('Failed to move task:', err)
+          setTasks(prev => prev.map(t => t.id === activeTask.id ? { ...t, columnId: activeTask.columnId } : t))
+        })
+    } else {
+      // Same column: reorder positions
+      const colTasks = tasks.filter(t => t.columnId === targetColumnId).sort((a, b) => a.position - b.position)
+      const oldIndex = colTasks.findIndex(t => t.id === active.id)
+      const newIndex = colTasks.findIndex(t => t.id === over.id)
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        const reordered = arrayMove(colTasks, oldIndex, newIndex)
+        setTasks(prev => {
+          const otherTasks = prev.filter(t => t.columnId !== targetColumnId)
+          return [...otherTasks, ...reordered.map((t, i) => ({ ...t, position: i }))]
+        })
+        // Persist positions in background
+        reordered.forEach((t, i) => {
+          tasksApi.update(t.id, { position: i }).catch(err => console.error('Failed to update position:', err))
+        })
+      }
+    }
+  }
+
+  // ── Column drag end ────────────────────────────────────────────────────────
+  function handleColumnDragEnd(event) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = columns.findIndex(c => c.id === active.id)
+    const newIndex = columns.findIndex(c => c.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(columns, oldIndex, newIndex)
+    setColumns(reordered)
+    reordered.forEach((col, i) => {
+      taskColumnsApi.update(col.id, { position: i }).catch(err => console.error('Failed to update column position:', err))
+    })
+  }
+
+  // ── Column CRUD handlers ───────────────────────────────────────────────────
+  async function handleRenameColumn(colId, name) {
+    await taskColumnsApi.update(colId, { name })
+    await onRefresh()
+  }
+
+  async function handleDeleteColumn(colId) {
+    const idx = columns.findIndex(c => c.id === colId)
+    const adjacent = idx > 0 ? columns[idx - 1] : columns[idx + 1]
+    if (!adjacent) return
+    try {
+      await taskColumnsApi.remove(colId, adjacent.id)
+      await onRefresh()
+    } catch (err) {
+      console.error('Failed to delete column:', err)
+    }
+  }
+
+  async function handleColorColumn(colId, color) {
+    await taskColumnsApi.update(colId, { color })
+    await onRefresh()
+  }
+
+  async function handleAddColumn() {
+    const name = newColumnName.trim()
+    setAddingColumn(false)
+    setNewColumnName('')
+    if (!name) return
+    try {
+      const projectId = columns[0]?.projectId
+      if (!projectId) return
+      await taskColumnsApi.create(projectId, { name })
+      await onRefresh()
+    } catch (err) {
+      console.error('Failed to create column:', err)
+    }
+  }
+
+  // Sort columns by position
+  const sortedColumns = useMemo(() => [...columns].sort((a, b) => a.position - b.position), [columns])
+
+  return (
+    <div className="flex gap-3 p-6 h-full items-start overflow-x-auto">
+      {/* Column reorder DnD context (separate from card DnD per research pitfall 3) */}
+      <DndContext
+        id="task-column-dnd"
+        sensors={columnSensors}
+        onDragEnd={handleColumnDragEnd}
+      >
+        <SortableContext items={sortedColumns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
+          {/* Card drag DnD context */}
+          <DndContext
+            id="task-card-dnd"
+            sensors={cardSensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleCardDragStart}
+            onDragEnd={handleCardDragEnd}
+          >
+            {sortedColumns.map(col => {
+              const colTasks = tasks
+                .filter(t => t.columnId === col.id)
+                .sort((a, b) => a.position - b.position)
+              return (
+                <KanbanColumn
+                  key={col.id}
+                  column={col}
+                  colTasks={colTasks}
+                  fieldDefs={fieldDefs}
+                  selectedTaskId={selectedTaskId}
+                  onSelectTask={onSelectTask}
+                  onRefresh={onRefresh}
+                  onRenameColumn={handleRenameColumn}
+                  onDeleteColumn={handleDeleteColumn}
+                  onColorColumn={handleColorColumn}
+                  canDelete={columns.length > 1}
+                />
+              )
+            })}
+
+            {/* Drag overlay — card clone during drag */}
+            <DragOverlay>
+              {activeCard ? <KanbanCardGhost task={activeCard} /> : null}
+            </DragOverlay>
+          </DndContext>
+        </SortableContext>
+      </DndContext>
+
+      {/* Add column button / inline input */}
+      <div className="flex-shrink-0">
+        {addingColumn ? (
+          <div className="w-[280px]">
+            <input
+              ref={addColumnInputRef}
+              type="text"
+              value={newColumnName}
+              onChange={e => setNewColumnName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleAddColumn()
+                if (e.key === 'Escape') { setAddingColumn(false); setNewColumnName('') }
+              }}
+              onBlur={() => {
+                if (!newColumnName.trim()) { setAddingColumn(false); setNewColumnName('') }
+              }}
+              placeholder="Column name..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30 bg-white shadow-sm"
+            />
+            <div className="flex gap-1 mt-1.5">
+              <button
+                onClick={handleAddColumn}
+                className="flex-1 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors"
+              >
+                Add column
+              </button>
+              <button
+                onClick={() => { setAddingColumn(false); setNewColumnName('') }}
+                className="px-2 py-1 text-xs border border-slate-200 rounded text-slate-500 hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAddingColumn(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-dashed border-slate-300 hover:border-slate-400 whitespace-nowrap"
+          >
+            <Icon name="add" className="text-[16px]" />
+            Add column
+          </button>
+        )}
+      </div>
+
+      {/* Empty state */}
+      {columns.length === 0 && !addingColumn && (
+        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+          No columns yet
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── TaskDetailPanel ──────────────────────────────────────────────────────────
 
 function TaskDetailPanel({ task, columns, fieldDefs, onClose, onRefresh }) {
@@ -1261,12 +1847,13 @@ export default function ProjectTasks() {
           </div>
         </div>
 
-        {/* View placeholder */}
+        {/* View content */}
         <div className="flex-1 overflow-auto">
           {view === 'kanban' && (
-            <KanbanPlaceholder
+            <KanbanView
               columns={columns}
               tasks={tasks}
+              fieldDefs={fieldDefs}
               selectedTaskId={selectedTaskId}
               onSelectTask={handleSelectTask}
               onRefresh={refreshTasks}
@@ -1307,103 +1894,7 @@ export default function ProjectTasks() {
   )
 }
 
-// ─── Placeholder views (replaced by Plans 02-04) ─────────────────────────────
-
-function KanbanPlaceholder({ columns, tasks, selectedTaskId, onSelectTask, onRefresh }) {
-  return (
-    <div className="flex gap-4 p-6 h-full">
-      {columns.map(col => {
-        const colTasks = tasks.filter(t => t.columnId === col.id).sort((a, b) => a.position - b.position)
-        return (
-          <div key={col.id} className="w-64 flex-shrink-0 flex flex-col">
-            <div
-              className="flex items-center gap-2 px-3 py-2 rounded-t-lg text-sm font-semibold text-white"
-              style={{ backgroundColor: col.color }}
-            >
-              <span>{col.name}</span>
-              <span className="ml-auto bg-white/20 rounded-full px-1.5 py-0.5 text-xs">{colTasks.length}</span>
-            </div>
-            <div className="flex-1 bg-slate-50 rounded-b-lg border border-slate-200 border-t-0 p-2 space-y-2 min-h-[120px]">
-              {colTasks.map(task => (
-                <button
-                  key={task.id}
-                  onClick={() => onSelectTask(task.id)}
-                  className={`w-full text-left px-3 py-2 bg-white rounded-md border text-sm transition-colors shadow-sm hover:shadow ${
-                    selectedTaskId === task.id ? 'border-blue-400 ring-1 ring-blue-300' : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <p className="font-medium text-slate-800 truncate">{task.title}</p>
-                  {task.dueDate && (
-                    <p className={`text-xs mt-1 ${new Date(task.dueDate) < new Date() ? 'text-red-500' : 'text-slate-400'}`}>
-                      Due {task.dueDate}
-                    </p>
-                  )}
-                  {task.priority !== 'none' && (
-                    <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-xs font-medium ${priorityConfig[task.priority]?.class}`}>
-                      {priorityConfig[task.priority]?.label}
-                    </span>
-                  )}
-                </button>
-              ))}
-              {colTasks.length === 0 && (
-                <p className="text-xs text-slate-400 text-center py-4">No tasks</p>
-              )}
-            </div>
-          </div>
-        )
-      })}
-      {columns.length === 0 && (
-        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-          No columns yet — coming soon
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ListPlaceholder({ columns, tasks, selectedTaskId, onSelectTask }) {
-  const colMap = Object.fromEntries(columns.map(c => [c.id, c]))
-  return (
-    <div className="p-6">
-      {tasks.length === 0 ? (
-        <div className="text-slate-400 text-sm text-center py-12">
-          No tasks yet. Full list view coming in Plan 03.
-        </div>
-      ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left border-b border-slate-200">
-              <th className="pb-2 font-medium text-slate-500 pr-4">Title</th>
-              <th className="pb-2 font-medium text-slate-500 pr-4">Status</th>
-              <th className="pb-2 font-medium text-slate-500 pr-4">Priority</th>
-              <th className="pb-2 font-medium text-slate-500">Due Date</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {tasks.map(task => (
-              <tr
-                key={task.id}
-                onClick={() => onSelectTask(task.id)}
-                className={`cursor-pointer hover:bg-slate-50 transition-colors ${selectedTaskId === task.id ? 'bg-blue-50' : ''}`}
-              >
-                <td className="py-2 pr-4 font-medium text-slate-800">{task.title}</td>
-                <td className="py-2 pr-4 text-slate-500">{colMap[task.columnId]?.name ?? '—'}</td>
-                <td className="py-2 pr-4">
-                  {task.priority !== 'none' && (
-                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${priorityConfig[task.priority]?.class}`}>
-                      {priorityConfig[task.priority]?.label}
-                    </span>
-                  )}
-                </td>
-                <td className="py-2 text-slate-400 text-xs">{task.dueDate ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  )
-}
+// ─── Calendar placeholder (replaced by Plan 04) ──────────────────────────────
 
 function CalendarPlaceholder({ tasks }) {
   const scheduled = tasks.filter(t => t.dueDate)
