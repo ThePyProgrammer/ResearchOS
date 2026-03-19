@@ -13,7 +13,6 @@ import {
 import {
   SortableContext,
   verticalListSortingStrategy,
-  horizontalListSortingStrategy,
   useSortable,
   arrayMove,
 } from '@dnd-kit/sortable'
@@ -36,6 +35,12 @@ const priorityConfig = {
 
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2, none: 3 }
 
+function isDoneColumn(col) {
+  if (!col) return false
+  const n = col.name?.toLowerCase()
+  return n === 'done' || n === 'complete' || n === 'completed' || n === 'closed'
+}
+
 // ─── Exported pure helpers (tested in ProjectTasks.tasks.test.jsx) ────────────
 
 /**
@@ -45,7 +50,7 @@ const PRIORITY_RANK = { high: 0, medium: 1, low: 2, none: 3 }
 export function isOverdue(dueDate) {
   if (!dueDate) return false
   const today = new Date().toISOString().slice(0, 10)
-  return dueDate < today
+  return dueDate.slice(0, 10) < today
 }
 
 /**
@@ -624,16 +629,25 @@ function TaskListView({ tasks, columns, fieldDefs, selectedTaskId, onSelectTask,
   function renderCell(task, col) {
     if (col.type === 'default') {
       if (col.id === 'title') {
-        return <span className="font-medium text-slate-800">{task.title}</span>
+        const taskCol = colMap[task.columnId]
+        const done = isDoneColumn(taskCol)
+        return (
+          <span className={`font-medium flex items-center gap-1.5 ${done ? 'text-slate-400' : 'text-slate-800'}`}>
+            {done && <Icon name="check_circle" className="text-[14px] text-green-500 flex-shrink-0" />}
+            <span className={done ? 'line-through' : ''}>{task.title}</span>
+          </span>
+        )
       }
       if (col.id === 'status') {
         const column = colMap[task.columnId]
-        if (!column) return <span className="text-slate-400 text-xs">—</span>
+        if (!column) return <span className="text-slate-400 text-xs">--</span>
+        const done = isDoneColumn(column)
         return (
           <span
-            className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
             style={{ backgroundColor: column.color }}
           >
+            {done && <span className="material-symbols-outlined text-[11px]">check</span>}
             {column.name}
           </span>
         )
@@ -647,11 +661,15 @@ function TaskListView({ tasks, columns, fieldDefs, selectedTaskId, onSelectTask,
         )
       }
       if (col.id === 'dueDate') {
-        if (!task.dueDate) return <span className="text-slate-400 text-xs">—</span>
-        const overdue = isOverdue(task.dueDate)
+        if (!task.dueDate) return <span className="text-slate-400 text-xs">--</span>
+        const taskCol = colMap[task.columnId]
+        const done = isDoneColumn(taskCol)
+        const overdue = isOverdue(task.dueDate) && !done
+        const datePart = task.dueDate.slice(0, 10)
+        const timePart = task.dueDate.length > 10 ? task.dueDate.slice(11, 16) : ''
         return (
           <span className={`text-xs ${overdue ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
-            {task.dueDate}
+            {datePart}{timePart ? ` ${timePart}` : ''}
           </span>
         )
       }
@@ -915,10 +933,10 @@ function ColumnColorPicker({ currentColor, onSelect }) {
 
 // ─── Kanban card (sortable) ──────────────────────────────────────────────────
 
-function KanbanCard({ task, columnId, fieldDefs, selectedTaskId, onSelectTask }) {
+function KanbanCard({ task, column, fieldDefs, selectedTaskId, onSelectTask }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
-    data: { columnId },
+    data: { columnId: column?.id },
   })
 
   const style = {
@@ -928,6 +946,7 @@ function KanbanCard({ task, columnId, fieldDefs, selectedTaskId, onSelectTask })
   }
 
   const overdue = isOverdue(task.dueDate)
+  const done = isDoneColumn(column)
 
   // Show first 1-2 custom field values as chips
   const customChips = (fieldDefs ?? [])
@@ -937,7 +956,7 @@ function KanbanCard({ task, columnId, fieldDefs, selectedTaskId, onSelectTask })
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{ ...style, borderLeftColor: column?.color ?? '#94a3b8', borderLeftWidth: 3 }}
       {...attributes}
       {...listeners}
       onClick={() => onSelectTask(task.id)}
@@ -945,12 +964,15 @@ function KanbanCard({ task, columnId, fieldDefs, selectedTaskId, onSelectTask })
         selectedTaskId === task.id
           ? 'border-blue-400 ring-1 ring-blue-300'
           : 'border-slate-200 hover:border-slate-300'
-      }`}
+      } ${done ? 'opacity-70' : ''}`}
     >
-      <p className="font-medium text-slate-800 leading-snug">{task.title}</p>
+      <div className="flex items-start gap-1.5">
+        {done && <Icon name="check_circle" className="text-[16px] text-green-500 flex-shrink-0 mt-0.5" />}
+        <p className={`font-medium leading-snug flex-1 ${done ? 'line-through text-slate-400' : 'text-slate-800'}`}>{task.title}</p>
+      </div>
       {task.dueDate && (
-        <p className={`text-xs mt-1 ${overdue ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
-          {overdue ? 'Overdue · ' : 'Due '}{task.dueDate}
+        <p className={`text-xs mt-1 ${overdue && !done ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
+          {overdue && !done ? 'Overdue · ' : 'Due '}{task.dueDate.slice(0, 10)}{task.dueDate.length > 10 ? ` ${task.dueDate.slice(11, 16)}` : ''}
         </p>
       )}
       {customChips.length > 0 && (
@@ -998,6 +1020,7 @@ function KanbanColumn({
   onColorColumn,
   canDelete,
 }) {
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id })
   const [addingTask, setAddingTask] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [renaming, setRenaming] = useState(false)
@@ -1155,9 +1178,10 @@ function KanbanColumn({
         )}
       </div>
 
-      {/* Card list */}
+      {/* Card list — droppable zone for cross-column DnD */}
       <div
-        className="flex-1 bg-slate-50/70 rounded-b-lg border border-slate-200 border-t-0 p-2 flex flex-col gap-2 min-h-[80px] overflow-y-auto"
+        ref={setDropRef}
+        className={`flex-1 bg-slate-50/70 rounded-b-lg border border-slate-200 border-t-0 p-2 flex flex-col gap-2 min-h-[80px] overflow-y-auto transition-colors ${isOver ? 'bg-blue-50/60 ring-1 ring-blue-300' : ''}`}
         style={{ maxHeight: 'calc(100vh - 220px)' }}
       >
         <SortableContext items={colTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
@@ -1165,7 +1189,7 @@ function KanbanColumn({
             <KanbanCard
               key={task.id}
               task={task}
-              columnId={column.id}
+              column={column}
               fieldDefs={fieldDefs}
               selectedTaskId={selectedTaskId}
               onSelectTask={onSelectTask}
@@ -1247,10 +1271,6 @@ function KanbanView({ columns: initialColumns, tasks: initialTasks, fieldDefs, s
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
-  const columnSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  )
-
   const activeCard = tasks.find(t => t.id === activeCardId) ?? null
 
   // ── Card drag end ──────────────────────────────────────────────────────────
@@ -1266,9 +1286,10 @@ function KanbanView({ columns: initialColumns, tasks: initialTasks, fieldDefs, s
     const activeTask = tasks.find(t => t.id === active.id)
     if (!activeTask) return
 
-    // Determine target column — over might be a task or a column
+    // Determine target column — over might be a task (sortable) or a column (droppable)
     const overTask = tasks.find(t => t.id === over.id)
-    const targetColumnId = overTask ? overTask.columnId : over.id
+    const overColumn = columns.find(c => c.id === over.id)
+    const targetColumnId = overTask ? overTask.columnId : overColumn ? overColumn.id : null
 
     if (!targetColumnId) return
 
@@ -1298,20 +1319,6 @@ function KanbanView({ columns: initialColumns, tasks: initialTasks, fieldDefs, s
         })
       }
     }
-  }
-
-  // ── Column drag end ────────────────────────────────────────────────────────
-  function handleColumnDragEnd(event) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = columns.findIndex(c => c.id === active.id)
-    const newIndex = columns.findIndex(c => c.id === over.id)
-    if (oldIndex === -1 || newIndex === -1) return
-    const reordered = arrayMove(columns, oldIndex, newIndex)
-    setColumns(reordered)
-    reordered.forEach((col, i) => {
-      taskColumnsApi.update(col.id, { position: i }).catch(err => console.error('Failed to update column position:', err))
-    })
   }
 
   // ── Column CRUD handlers ───────────────────────────────────────────────────
@@ -1357,48 +1364,39 @@ function KanbanView({ columns: initialColumns, tasks: initialTasks, fieldDefs, s
 
   return (
     <div className="flex gap-3 p-6 h-full items-start overflow-x-auto">
-      {/* Column reorder DnD context (separate from card DnD per research pitfall 3) */}
+      {/* Single DnD context for card movement across columns */}
       <DndContext
-        id="task-column-dnd"
-        sensors={columnSensors}
-        onDragEnd={handleColumnDragEnd}
+        id="task-card-dnd"
+        sensors={cardSensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleCardDragStart}
+        onDragEnd={handleCardDragEnd}
       >
-        <SortableContext items={sortedColumns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
-          {/* Card drag DnD context */}
-          <DndContext
-            id="task-card-dnd"
-            sensors={cardSensors}
-            collisionDetection={closestCorners}
-            onDragStart={handleCardDragStart}
-            onDragEnd={handleCardDragEnd}
-          >
-            {sortedColumns.map(col => {
-              const colTasks = tasks
-                .filter(t => t.columnId === col.id)
-                .sort((a, b) => a.position - b.position)
-              return (
-                <KanbanColumn
-                  key={col.id}
-                  column={col}
-                  colTasks={colTasks}
-                  fieldDefs={fieldDefs}
-                  selectedTaskId={selectedTaskId}
-                  onSelectTask={onSelectTask}
-                  onRefresh={onRefresh}
-                  onRenameColumn={handleRenameColumn}
-                  onDeleteColumn={handleDeleteColumn}
-                  onColorColumn={handleColorColumn}
-                  canDelete={columns.length > 1}
-                />
-              )
-            })}
+        {sortedColumns.map(col => {
+          const colTasks = tasks
+            .filter(t => t.columnId === col.id)
+            .sort((a, b) => a.position - b.position)
+          return (
+            <KanbanColumn
+              key={col.id}
+              column={col}
+              colTasks={colTasks}
+              fieldDefs={fieldDefs}
+              selectedTaskId={selectedTaskId}
+              onSelectTask={onSelectTask}
+              onRefresh={onRefresh}
+              onRenameColumn={handleRenameColumn}
+              onDeleteColumn={handleDeleteColumn}
+              onColorColumn={handleColorColumn}
+              canDelete={columns.length > 1}
+            />
+          )
+        })}
 
-            {/* Drag overlay — card clone during drag */}
-            <DragOverlay>
-              {activeCard ? <KanbanCardGhost task={activeCard} /> : null}
-            </DragOverlay>
-          </DndContext>
-        </SortableContext>
+        {/* Drag overlay — card clone during drag */}
+        <DragOverlay>
+          {activeCard ? <KanbanCardGhost task={activeCard} /> : null}
+        </DragOverlay>
       </DndContext>
 
       {/* Add column button / inline input */}
@@ -1458,10 +1456,14 @@ function KanbanView({ columns: initialColumns, tasks: initialTasks, fieldDefs, s
 
 // ─── TaskDetailPanel ──────────────────────────────────────────────────────────
 
-function TaskDetailPanel({ task, columns, fieldDefs, onClose, onRefresh }) {
+function TaskDetailPanel({ task, columns, fieldDefs, onClose, onRefresh, mode = 'peek', onModeChange }) {
   const [form, setForm] = useState({ ...task })
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  // Split dueDate into date + time parts for separate inputs
+  const dueDatePart = (form.dueDate ?? '').slice(0, 10)
+  const dueTimePart = (form.dueDate ?? '').length > 10 ? form.dueDate.slice(11, 16) : ''
 
   // Keep form in sync when task prop changes (e.g. another task selected)
   useEffect(() => {
@@ -1480,6 +1482,14 @@ function TaskDetailPanel({ task, columns, fieldDefs, onClose, onRefresh }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleDateChange(newDate, newTime) {
+    const d = newDate ?? dueDatePart
+    const t = newTime ?? dueTimePart
+    const combined = d ? (t ? `${d}T${t}` : d) : null
+    setForm(prev => ({ ...prev, dueDate: combined }))
+    saveField('dueDate', combined)
   }
 
   async function saveCustomField(defId, value) {
@@ -1594,13 +1604,27 @@ function TaskDetailPanel({ task, columns, fieldDefs, onClose, onRefresh }) {
     }
   }
 
+  const column = columns.find(c => c.id === form.columnId)
+  const done = isDoneColumn(column)
+
   return (
-    <div className="w-[380px] flex-shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden">
+    <div className="flex-1 bg-white flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-        <h3 className="text-sm font-semibold text-slate-700 truncate">Task Details</h3>
+        <div className="flex items-center gap-2">
+          {done && <Icon name="check_circle" className="text-[18px] text-green-500" />}
+          <h3 className="text-sm font-semibold text-slate-700 truncate">Task Details</h3>
+        </div>
         <div className="flex items-center gap-1">
           {saving && <span className="text-xs text-slate-400">Saving...</span>}
+          {/* View mode switcher */}
+          <button
+            onClick={() => onModeChange?.(mode === 'peek' ? 'modal' : 'peek')}
+            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+            title={mode === 'peek' ? 'Expand to modal' : 'Shrink to peek'}
+          >
+            <Icon name={mode === 'peek' ? 'open_in_full' : 'close_fullscreen'} className="text-[16px]" />
+          </button>
           <button
             onClick={onClose}
             className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
@@ -1638,21 +1662,24 @@ function TaskDetailPanel({ task, columns, fieldDefs, onClose, onRefresh }) {
           />
         </div>
 
-        {/* Status (column) */}
+        {/* Status (column) with color */}
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Status</label>
-          <select
-            value={form.columnId ?? ''}
-            onChange={e => {
-              setForm(prev => ({ ...prev, columnId: e.target.value }))
-              saveField('columnId', e.target.value)
-            }}
-            className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
-          >
-            {columns.map(col => (
-              <option key={col.id} value={col.id}>{col.name}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: column?.color ?? '#94a3b8' }} />
+            <select
+              value={form.columnId ?? ''}
+              onChange={e => {
+                setForm(prev => ({ ...prev, columnId: e.target.value }))
+                saveField('columnId', e.target.value)
+              }}
+              className="flex-1 px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+            >
+              {columns.map(col => (
+                <option key={col.id} value={col.id}>{col.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Priority */}
@@ -1673,18 +1700,48 @@ function TaskDetailPanel({ task, columns, fieldDefs, onClose, onRefresh }) {
           </select>
         </div>
 
-        {/* Due Date */}
+        {/* Due Date + Time */}
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Due Date</label>
-          <input
-            type="date"
-            value={form.dueDate ?? ''}
-            onChange={e => {
-              setForm(prev => ({ ...prev, dueDate: e.target.value || null }))
-              saveField('dueDate', e.target.value || null)
-            }}
-            className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={dueDatePart}
+              onChange={e => handleDateChange(e.target.value, dueTimePart)}
+              className="flex-1 px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            />
+            {dueDatePart && (
+              <button
+                onClick={() => handleDateChange('', '')}
+                className="p-1 rounded hover:bg-slate-100 text-slate-300 hover:text-slate-500"
+                title="Clear date"
+              >
+                <Icon name="close" className="text-[14px]" />
+              </button>
+            )}
+          </div>
+          {dueDatePart && (
+            <div className="mt-1.5">
+              <label className="block text-xs font-medium text-slate-400 mb-1">Time (optional)</label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="time"
+                  value={dueTimePart}
+                  onChange={e => handleDateChange(dueDatePart, e.target.value)}
+                  className="flex-1 px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+                {dueTimePart && (
+                  <button
+                    onClick={() => handleDateChange(dueDatePart, '')}
+                    className="p-1 rounded hover:bg-slate-100 text-slate-300 hover:text-slate-500"
+                    title="Clear time"
+                  >
+                    <Icon name="close" className="text-[14px]" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tags */}
@@ -1761,6 +1818,7 @@ export default function ProjectTasks() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedTaskId, setSelectedTaskId] = useState(null)
+  const [detailMode, setDetailMode] = useState('peek') // 'peek' | 'modal'
 
   const [view, setView] = useLocalStorage(`tasks-view-${projectId}`, 'kanban')
 
@@ -1825,8 +1883,8 @@ export default function ProjectTasks() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Main area */}
+    <div className="flex h-full overflow-hidden relative">
+      {/* Main area — always full width */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 flex-shrink-0">
@@ -1884,15 +1942,33 @@ export default function ProjectTasks() {
         </div>
       </div>
 
-      {/* Detail panel */}
+      {/* Detail overlay — peek (right half) or modal (centered) */}
       {selectedTask && (
-        <TaskDetailPanel
-          task={selectedTask}
-          columns={columns}
-          fieldDefs={fieldDefs}
-          onClose={handleClosePanel}
-          onRefresh={refreshTasks}
-        />
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={handleClosePanel}
+            className={`fixed inset-0 z-40 transition-all duration-200 ${
+              detailMode === 'modal' ? 'bg-black/50' : 'bg-black/15'
+            }`}
+          />
+          {/* Panel container */}
+          <div className={`fixed z-50 bg-white flex flex-col overflow-hidden shadow-2xl transition-all duration-200 ${
+            detailMode === 'modal'
+              ? 'inset-y-8 left-[15%] right-[15%] rounded-xl border border-slate-200'
+              : 'top-0 right-0 bottom-0 w-[480px] border-l border-slate-200'
+          }`}>
+            <TaskDetailPanel
+              task={selectedTask}
+              columns={columns}
+              fieldDefs={fieldDefs}
+              onClose={handleClosePanel}
+              onRefresh={refreshTasks}
+              mode={detailMode}
+              onModeChange={setDetailMode}
+            />
+          </div>
+        </>
       )}
     </div>
   )
@@ -1953,7 +2029,9 @@ function CalendarCell({ dateStr, isToday, dayNumber, dayTasks, columns, selected
 function CalendarTaskChip({ task, column, isSelected, onSelect, today }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id })
   const overdue = isOverdue(task.dueDate)
-  const bgColor = overdue ? '#ef4444' : (column?.color ?? '#94a3b8')
+  const done = isDoneColumn(column)
+  const bgColor = done ? '#86efac' : overdue ? '#ef4444' : (column?.color ?? '#94a3b8')
+  const textColor = done ? '#166534' : '#ffffff'
 
   return (
     <div
@@ -1961,13 +2039,14 @@ function CalendarTaskChip({ task, column, isSelected, onSelect, today }) {
       {...attributes}
       {...listeners}
       onClick={(e) => { e.stopPropagation(); onSelect(task.id) }}
-      className={`px-1.5 py-0.5 rounded text-white text-[10px] font-medium truncate cursor-pointer select-none transition-opacity ${
+      className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium truncate cursor-pointer select-none transition-opacity ${
         isDragging ? 'opacity-30' : 'opacity-100'
       } ${isSelected ? 'ring-1 ring-white ring-offset-1' : ''}`}
-      style={{ backgroundColor: bgColor, maxWidth: '100%' }}
+      style={{ backgroundColor: bgColor, color: textColor, maxWidth: '100%' }}
       title={task.title}
     >
-      {task.title}
+      {done && <span className="material-symbols-outlined text-[10px]">check</span>}
+      <span className="truncate">{task.title}</span>
     </div>
   )
 }
@@ -1975,6 +2054,7 @@ function CalendarTaskChip({ task, column, isSelected, onSelect, today }) {
 // UnscheduledCard: draggable card in the unscheduled sidebar
 function UnscheduledCard({ task, column, isSelected, onSelect }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id })
+  const done = isDoneColumn(column)
 
   return (
     <div
@@ -1986,11 +2066,11 @@ function UnscheduledCard({ task, column, isSelected, onSelect }) {
         isDragging ? 'opacity-30' : 'opacity-100'
       } ${isSelected ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200 hover:border-slate-300'}`}
     >
-      <div
-        className="w-2 h-2 rounded-full flex-shrink-0"
-        style={{ backgroundColor: column?.color ?? '#94a3b8' }}
-      />
-      <span className="truncate text-slate-700 flex-1">{task.title}</span>
+      {done
+        ? <span className="material-symbols-outlined text-[14px] text-green-500 flex-shrink-0">check_circle</span>
+        : <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: column?.color ?? '#94a3b8' }} />
+      }
+      <span className={`truncate flex-1 ${done ? 'line-through text-slate-400' : 'text-slate-700'}`}>{task.title}</span>
     </div>
   )
 }
