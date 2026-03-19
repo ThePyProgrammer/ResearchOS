@@ -4830,7 +4830,7 @@ export default function ProjectDetail() {
         <Link to={`/projects/${id}`} className="text-sm text-slate-500 hover:text-slate-700 truncate font-medium transition-colors">{project.name}</Link>
         {(() => {
           const segment = location.pathname.split('/').pop()
-          const sectionLabels = { literature: 'Literature', experiments: 'Experiments', notes: 'Notes' }
+          const sectionLabels = { literature: 'Literature', experiments: 'Experiments', tasks: 'Tasks', notes: 'Notes' }
           const label = sectionLabels[segment]
           if (!label) return null
           return (

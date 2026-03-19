@@ -15,6 +15,7 @@ import AuthorDetail from './pages/AuthorDetail'
 import Projects from './pages/Projects'
 import ProjectDetail, { ProjectOverview, ProjectLiterature, ProjectExperiments } from './pages/ProjectDetail'
 import ProjectNotesIDE from './pages/ProjectNotesIDE'
+import ProjectTasks from './pages/ProjectTasks'
 import { LibraryProvider } from './context/LibraryContext'
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
               <Route index element={<ProjectOverview />} />
               <Route path="literature" element={<ProjectLiterature />} />
               <Route path="experiments" element={<ProjectExperiments />} />
+              <Route path="tasks" element={<ProjectTasks />} />
               <Route path="notes" element={<ProjectNotesIDE />} />
             </Route>
           </Route>

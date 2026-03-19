@@ -374,3 +374,25 @@ export const experimentsApi = {
     apiFetch(`/projects/${projectId}/experiments/import-csv`, { method: 'POST', body: data }),
 }
 
+export const tasksApi = {
+  list: (projectId) => apiFetch(`/projects/${projectId}/tasks`),
+  create: (projectId, data) => apiFetch(`/projects/${projectId}/tasks`, { method: 'POST', body: data }),
+  update: (taskId, data) => apiFetch(`/tasks/${taskId}`, { method: 'PATCH', body: data }),
+  remove: (taskId) => apiFetch(`/tasks/${taskId}`, { method: 'DELETE' }),
+}
+
+export const taskColumnsApi = {
+  list: (projectId) => apiFetch(`/projects/${projectId}/task-columns`),
+  create: (projectId, data) => apiFetch(`/projects/${projectId}/task-columns`, { method: 'POST', body: data }),
+  update: (colId, data) => apiFetch(`/task-columns/${colId}`, { method: 'PATCH', body: data }),
+  remove: (colId, moveToColId) =>
+    apiFetch(`/task-columns/${colId}?move_to=${encodeURIComponent(moveToColId)}`, { method: 'DELETE' }),
+}
+
+export const taskFieldDefsApi = {
+  list: (projectId) => apiFetch(`/projects/${projectId}/task-field-defs`),
+  create: (projectId, data) => apiFetch(`/projects/${projectId}/task-field-defs`, { method: 'POST', body: data }),
+  update: (defId, data) => apiFetch(`/task-field-defs/${defId}`, { method: 'PATCH', body: data }),
+  remove: (defId) => apiFetch(`/task-field-defs/${defId}`, { method: 'DELETE' }),
+}
+
