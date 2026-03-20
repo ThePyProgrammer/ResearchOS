@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import PaperChipPopover from './PaperChipPopover'
 
 /**
  * SuggestionDetailOverlay — right-side panel for viewing and editing a gap suggestion.
@@ -38,6 +39,7 @@ export default function SuggestionDetailOverlay({ suggestion, onClose, onSave, o
 
   const ablationParams = suggestion.ablationParams || suggestion.ablation_params || []
   const paperRefs = suggestion.paperRefs || suggestion.paper_refs || []
+  const [activePopover, setActivePopover] = useState(null)
 
   function buildUpdated() {
     return {
@@ -164,19 +166,37 @@ export default function SuggestionDetailOverlay({ suggestion, onClose, onSave, o
                 Supporting Papers
               </label>
               <div className="space-y-2">
-                {paperRefs.map((ref, i) => (
-                  <div key={ref.paperId || ref.paper_id || i} className="flex flex-col gap-0.5">
-                    <span className="inline-flex self-start bg-amber-50 text-amber-700 text-xs rounded px-2 py-0.5">
-                      {ref.displayLabel || ref.display_label}
-                    </span>
-                    {(ref.relevanceNote || ref.relevance_note) && (
-                      <p className="text-xs text-slate-400 italic pl-1">
-                        {ref.relevanceNote || ref.relevance_note}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                {paperRefs.map((ref, i) => {
+                  const pid = ref.paperId || ref.paper_id
+                  return (
+                    <div key={pid || i} className="flex flex-col gap-0.5">
+                      <button
+                        onClick={e => {
+                          e.stopPropagation()
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          setActivePopover(prev => prev?.paperId === pid ? null : { paperId: pid, rect })
+                        }}
+                        className="inline-flex self-start bg-amber-50 text-amber-700 text-xs rounded px-2 py-0.5 hover:bg-amber-100 transition-colors cursor-pointer"
+                      >
+                        {ref.displayLabel || ref.display_label}
+                      </button>
+                      {(ref.relevanceNote || ref.relevance_note) && (
+                        <p className="text-xs text-slate-400 italic pl-1">
+                          {ref.relevanceNote || ref.relevance_note}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
+              {activePopover && (
+                <PaperChipPopover
+                  paperId={activePopover.paperId}
+                  displayLabel=""
+                  anchorRect={activePopover.rect}
+                  onClose={() => setActivePopover(null)}
+                />
+              )}
             </div>
           )}
         </div>

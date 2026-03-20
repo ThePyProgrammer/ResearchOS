@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useDraggable } from '@dnd-kit/core'
+import PaperChipPopover from './PaperChipPopover'
 
 /**
  * SuggestionCard — compact card for a single gap analysis suggestion.
@@ -51,6 +53,8 @@ export default function SuggestionCard({ suggestion, onDismiss, onClick, isDragg
 
   // Paper refs: max 2
   const paperRefs = (suggestion.paperRefs || suggestion.paper_refs || []).slice(0, 2)
+
+  const [activePopover, setActivePopover] = useState(null) // { paperId, rect }
 
   const isCurrentlyDragging = isDragging || dndDragging
 
@@ -111,18 +115,34 @@ export default function SuggestionCard({ suggestion, onDismiss, onClick, isDragg
             </p>
           )}
 
-          {/* Paper reference chips */}
+          {/* Paper reference chips — clickable with popover */}
           {paperRefs.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {paperRefs.map((ref, i) => (
-                <span
-                  key={ref.paperId || ref.paper_id || i}
-                  className="bg-amber-50 text-amber-700 text-xs rounded px-1.5 py-0.5"
-                >
-                  {ref.displayLabel || ref.display_label}
-                </span>
-              ))}
+              {paperRefs.map((ref, i) => {
+                const pid = ref.paperId || ref.paper_id
+                return (
+                  <button
+                    key={pid || i}
+                    onClick={e => {
+                      e.stopPropagation()
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      setActivePopover(prev => prev?.paperId === pid ? null : { paperId: pid, rect })
+                    }}
+                    className="bg-amber-50 text-amber-700 text-xs rounded px-1.5 py-0.5 hover:bg-amber-100 transition-colors cursor-pointer"
+                  >
+                    {ref.displayLabel || ref.display_label}
+                  </button>
+                )
+              })}
             </div>
+          )}
+          {activePopover && (
+            <PaperChipPopover
+              paperId={activePopover.paperId}
+              displayLabel=""
+              anchorRect={activePopover.rect}
+              onClose={() => setActivePopover(null)}
+            />
           )}
         </div>
       </div>
