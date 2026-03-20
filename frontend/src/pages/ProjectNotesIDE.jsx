@@ -14,8 +14,12 @@ import { TableKit } from '@tiptap/extension-table'
 import 'katex/dist/katex.min.css'
 import { notesApi, experimentsApi, projectNotesCopilotApi, projectPapersApi, papersApi, websitesApi, githubReposApi } from '../services/api'
 import { createWikiLinkExtension, extractWikiLinks } from '../components/WikiLinkExtension'
+import { createCitationExtension } from '../components/CitationExtension'
 import NoteGraphView from '../components/NoteGraphView'
 import NotesCopilotPanel, { SuggestionTabView } from '../components/NotesCopilotPanel'
+import LaTeXExportModal from '../components/LaTeXExportModal'
+import LaTeXPreviewPanel from '../components/LaTeXPreviewPanel'
+import { htmlToLatex } from '../utils/latexSerializer'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -165,7 +169,7 @@ function TableMenu({ editor }) {
   )
 }
 
-function ExportMenu({ onMarkdown, onPDF }) {
+function ExportMenu({ onMarkdown, onPDF, onLaTeX }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   useEffect(() => {
@@ -181,13 +185,18 @@ function ExportMenu({ onMarkdown, onPDF }) {
         <Icon name="download" className="text-[16px]" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
+        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
           <button onClick={() => { onMarkdown(); setOpen(false) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
             <Icon name="article" className="text-[14px] text-slate-400" /> Export as Markdown
           </button>
           <button onClick={() => { onPDF(); setOpen(false) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
             <Icon name="picture_as_pdf" className="text-[14px] text-slate-400" /> Export as PDF
           </button>
+          {onLaTeX && (
+            <button onClick={() => { onLaTeX(); setOpen(false) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
+              <Icon name="functions" className="text-[14px] text-slate-400" /> Export as LaTeX
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -195,11 +204,25 @@ function ExportMenu({ onMarkdown, onPDF }) {
 }
 
 // ─── Tiptap editor ────────────────────────────────────────────────────────────
-function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick, noteName }) {
+function TiptapEditor({
+  content, onUpdate, onSave, getAllNotes, onWikiLinkClick, noteName,
+  getLinkedItems, getAllLibraryItems, onAutoLink, onOpenItem, getBibtexEntry,
+  onOpenLatexExport,
+}) {
   const getAllNotesRef = useRef(getAllNotes)
   const onWikiLinkClickRef = useRef(onWikiLinkClick)
+  const getLinkedItemsRef = useRef(getLinkedItems)
+  const getAllLibraryItemsRef = useRef(getAllLibraryItems)
+  const onAutoLinkRef = useRef(onAutoLink)
+  const onOpenItemRef = useRef(onOpenItem)
+  const getBibtexEntryRef = useRef(getBibtexEntry)
   useEffect(() => { getAllNotesRef.current = getAllNotes }, [getAllNotes])
   useEffect(() => { onWikiLinkClickRef.current = onWikiLinkClick }, [onWikiLinkClick])
+  useEffect(() => { getLinkedItemsRef.current = getLinkedItems }, [getLinkedItems])
+  useEffect(() => { getAllLibraryItemsRef.current = getAllLibraryItems }, [getAllLibraryItems])
+  useEffect(() => { onAutoLinkRef.current = onAutoLink }, [onAutoLink])
+  useEffect(() => { onOpenItemRef.current = onOpenItem }, [onOpenItem])
+  useEffect(() => { getBibtexEntryRef.current = getBibtexEntry }, [getBibtexEntry])
 
   const wikiLinkExtension = useMemo(
     () => createWikiLinkExtension({
@@ -210,10 +233,27 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick,
     []
   )
 
+  const citationExtension = useMemo(
+    () => createCitationExtension({
+      getLinkedItems: () => getLinkedItemsRef.current?.() ?? [],
+      getAllLibraryItems: () => getAllLibraryItemsRef.current?.() ?? [],
+      onAutoLink: (paperId, websiteId) => onAutoLinkRef.current?.(paperId, websiteId),
+      onOpenItem: (paperId, websiteId) => onOpenItemRef.current?.(paperId, websiteId),
+      getBibtexEntry: (paperId, websiteId) => getBibtexEntryRef.current?.(paperId, websiteId),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
+
+  // ── LaTeX preview state ───────────────────────────────────────────────────
+  const [showLatexPreview, setShowLatexPreview] = useState(false)
+  const [previewLatex, setPreviewLatex] = useState('')
+  const previewTimerRef = useRef(null)
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-      Placeholder.configure({ placeholder: 'Start writing… use [[ to link to other notes' }),
+      Placeholder.configure({ placeholder: 'Start writing… use [[ to link to other notes, @ to cite papers' }),
       Link.configure({ openOnClick: false }),
       Underline,
       TaskList,
@@ -222,11 +262,22 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick,
       Typography,
       Mathematics,
       wikiLinkExtension,
+      citationExtension,
       TableKit.configure({ resizable: true }),
     ],
     content: content || '',
     editorProps: { attributes: { class: 'tiptap-editor focus:outline-none' } },
-    onUpdate: ({ editor }) => onUpdate(editor.getHTML()),
+    onUpdate: ({ editor }) => {
+      onUpdate(editor.getHTML())
+      // Update LaTeX preview with debounce
+      if (showLatexPreview) {
+        clearTimeout(previewTimerRef.current)
+        previewTimerRef.current = setTimeout(() => {
+          const { latex } = htmlToLatex(editor.getHTML())
+          setPreviewLatex(latex)
+        }, 500)
+      }
+    },
     onBlur: () => onSave?.(),
   })
 
@@ -284,33 +335,63 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick,
         <ToolBtn icon="undo" label="Undo" onClick={() => editor.chain().focus().undo().run()} />
         <ToolBtn icon="redo" label="Redo" onClick={() => editor.chain().focus().redo().run()} />
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
-        <ExportMenu onMarkdown={() => exportMarkdown(html, noteName || 'note')} onPDF={() => exportPDF(html, noteName || 'note')} />
-      </div>
-      <div className="flex-1 overflow-y-auto relative">
-        <EditorContent
-          editor={editor}
-          className="h-full p-5 max-w-4xl"
-          onContextMenu={e => {
-            const cell = e.target.closest('td, th')
-            if (!cell) return
-            e.preventDefault()
-            setTableCtx({ x: e.clientX, y: e.clientY })
+        <ToolBtn
+          icon="integration_instructions"
+          label={showLatexPreview ? 'Hide LaTeX preview' : 'Show LaTeX preview'}
+          active={showLatexPreview}
+          onClick={() => {
+            const next = !showLatexPreview
+            setShowLatexPreview(next)
+            if (next) {
+              const { latex } = htmlToLatex(editor.getHTML())
+              setPreviewLatex(latex)
+            }
           }}
         />
-        {tableCtx && (
-          <div
-            style={{ position: 'fixed', top: tableCtx.y, left: tableCtx.x, zIndex: 9999 }}
-            className="w-52 bg-white rounded-lg shadow-xl border border-slate-200 py-1"
-          >
-            <button onClick={() => { editor.chain().focus().addColumnBefore().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"><Icon name="add" className="text-[14px] text-slate-400" /> Add column before</button>
-            <button onClick={() => { editor.chain().focus().addColumnAfter().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"><Icon name="add" className="text-[14px] text-slate-400" /> Add column after</button>
-            <button onClick={() => { editor.chain().focus().deleteColumn().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50"><Icon name="remove" className="text-[14px]" /> Delete column</button>
-            <div className="my-1 border-t border-slate-100" />
-            <button onClick={() => { editor.chain().focus().addRowBefore().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"><Icon name="add" className="text-[14px] text-slate-400" /> Add row before</button>
-            <button onClick={() => { editor.chain().focus().addRowAfter().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"><Icon name="add" className="text-[14px] text-slate-400" /> Add row after</button>
-            <button onClick={() => { editor.chain().focus().deleteRow().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50"><Icon name="remove" className="text-[14px]" /> Delete row</button>
-            <div className="my-1 border-t border-slate-100" />
-            <button onClick={() => { editor.chain().focus().deleteTable().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50"><Icon name="delete" className="text-[14px]" /> Delete table</button>
+        <ExportMenu
+          onMarkdown={() => exportMarkdown(html, noteName || 'note')}
+          onPDF={() => exportPDF(html, noteName || 'note')}
+          onLaTeX={onOpenLatexExport}
+        />
+      </div>
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className={`${showLatexPreview ? 'w-3/5' : 'w-full'} flex-shrink-0 overflow-y-auto relative`}>
+          <EditorContent
+            editor={editor}
+            className="h-full p-5 max-w-4xl"
+            onContextMenu={e => {
+              const cell = e.target.closest('td, th')
+              if (!cell) return
+              e.preventDefault()
+              setTableCtx({ x: e.clientX, y: e.clientY })
+            }}
+          />
+          {tableCtx && (
+            <div
+              style={{ position: 'fixed', top: tableCtx.y, left: tableCtx.x, zIndex: 9999 }}
+              className="w-52 bg-white rounded-lg shadow-xl border border-slate-200 py-1"
+            >
+              <button onClick={() => { editor.chain().focus().addColumnBefore().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"><Icon name="add" className="text-[14px] text-slate-400" /> Add column before</button>
+              <button onClick={() => { editor.chain().focus().addColumnAfter().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"><Icon name="add" className="text-[14px] text-slate-400" /> Add column after</button>
+              <button onClick={() => { editor.chain().focus().deleteColumn().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50"><Icon name="remove" className="text-[14px]" /> Delete column</button>
+              <div className="my-1 border-t border-slate-100" />
+              <button onClick={() => { editor.chain().focus().addRowBefore().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"><Icon name="add" className="text-[14px] text-slate-400" /> Add row before</button>
+              <button onClick={() => { editor.chain().focus().addRowAfter().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"><Icon name="add" className="text-[14px] text-slate-400" /> Add row after</button>
+              <button onClick={() => { editor.chain().focus().deleteRow().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50"><Icon name="remove" className="text-[14px]" /> Delete row</button>
+              <div className="my-1 border-t border-slate-100" />
+              <button onClick={() => { editor.chain().focus().deleteTable().run(); setTableCtx(null) }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50"><Icon name="delete" className="text-[14px]" /> Delete table</button>
+            </div>
+          )}
+        </div>
+        {showLatexPreview && (
+          <div className="w-2/5 flex-shrink-0 border-l border-slate-200 overflow-hidden flex flex-col">
+            <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50 flex items-center gap-1.5 flex-shrink-0">
+              <Icon name="integration_instructions" className="text-[13px] text-purple-500" />
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">LaTeX Preview</span>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <LaTeXPreviewPanel texContent={previewLatex} />
+            </div>
           </div>
         )}
       </div>
@@ -788,6 +869,69 @@ export default function ProjectNotesIDE() {
   const [templatePickerFor, setTemplatePickerFor] = useState(null)
   const [draggingNoteId, setDraggingNoteId] = useState(null)
   const dragRef = useRef(null)
+
+  // ── LaTeX export modal ─────────────────────────────────────────────────────
+  const [latexExportModal, setLatexExportModal] = useState({ open: false, note: null })
+
+  // ── Project papers/websites for citation popup ─────────────────────────────
+  // linkedItems already contains papers and websites, reuse that for citation
+  const projectPapersForCitation = useMemo(
+    () => (linkedItems || []).filter(i => i.itemType === 'paper'),
+    [linkedItems]
+  )
+  const projectWebsitesForCitation = useMemo(
+    () => (linkedItems || []).filter(i => i.itemType === 'website'),
+    [linkedItems]
+  )
+
+  // Citation extension callbacks
+  const getLinkedItemsCb = useCallback(() => {
+    return [...projectPapersForCitation, ...projectWebsitesForCitation].map(item => ({
+      ...item,
+      type: item.itemType,
+    }))
+  }, [projectPapersForCitation, projectWebsitesForCitation])
+
+  const getAllLibraryItemsCb = useCallback(() => {
+    // Return all linked items (library items linked to this project)
+    return (linkedItems || []).map(item => ({ ...item, type: item.itemType }))
+  }, [linkedItems])
+
+  const onAutoLinkCb = useCallback(async (paperId, websiteId) => {
+    try {
+      const id = paperId || websiteId
+      if (!id || !projectId) return
+      await projectPapersApi.link(projectId, paperId ? { paperId: id } : { websiteId: id })
+      // Refresh linked items
+      const links = await projectPapersApi.list(projectId).catch(() => [])
+      const items = []
+      for (const link of (links || [])) {
+        if (link.paperId) {
+          try { const paper = await papersApi.get(link.paperId); if (paper) items.push({ ...paper, itemType: 'paper', _linkId: link.id }) } catch {}
+        } else if (link.websiteId) {
+          try { const site = await websitesApi.get(link.websiteId); if (site) items.push({ ...site, itemType: 'website', _linkId: link.id }) } catch {}
+        }
+      }
+      setLinkedItems(items)
+    } catch (err) {
+      console.error('Failed to auto-link item to project:', err)
+    }
+  }, [projectId])
+
+  const onOpenItemCb = useCallback((paperId, websiteId) => {
+    if (paperId) window.open(`/library/paper/${paperId}`, '_blank')
+    else if (websiteId) window.open(`/library/website/${websiteId}`, '_blank')
+  }, [])
+
+  const getBibtexEntryCb = useCallback(async (paperId, websiteId) => {
+    const id = paperId || websiteId
+    if (!id) return ''
+    try {
+      return await papersApi.exportBibtex({ ids: [id] })
+    } catch {
+      return ''
+    }
+  }, [])
 
   // Recent notes stored in localStorage keyed by project
   const [recentNoteIds, setRecentNoteIds] = useState([])
@@ -1746,6 +1890,12 @@ export default function ProjectNotesIDE() {
                     getAllNotes={getAllNotesForSuggestion}
                     onWikiLinkClick={handleWikiLinkClick}
                     noteName={selectedNote.name}
+                    getLinkedItems={getLinkedItemsCb}
+                    getAllLibraryItems={getAllLibraryItemsCb}
+                    onAutoLink={onAutoLinkCb}
+                    onOpenItem={onOpenItemCb}
+                    getBibtexEntry={getBibtexEntryCb}
+                    onOpenLatexExport={() => setLatexExportModal({ open: true, note: selectedNote })}
                   />
 
                   {(() => {
@@ -1804,6 +1954,17 @@ export default function ProjectNotesIDE() {
           onCancel={() => { setTemplatePickerFor(null); setCreating(null); setNewName('') }}
         />
       )}
+
+      {/* LaTeX export modal */}
+      <LaTeXExportModal
+        open={latexExportModal.open}
+        onClose={() => setLatexExportModal({ open: false, note: null })}
+        notes={allLoadedNotes}
+        allNotes={allLoadedNotes}
+        selectedNote={latexExportModal.note}
+        projectPapers={projectPapersForCitation}
+        projectWebsites={projectWebsitesForCitation}
+      />
 
       {/* Context menu */}
       {ctxMenu && (
@@ -1894,6 +2055,12 @@ export default function ProjectNotesIDE() {
               }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
                 <Icon name="star" className="text-[14px] text-amber-400" />
                 {ctxMenu.note.isPinned ? 'Unpin' : 'Pin to top'}
+              </button>
+              <button onClick={() => {
+                setLatexExportModal({ open: true, note: ctxMenu.note })
+                setCtxMenu(null)
+              }} className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50">
+                <Icon name="functions" className="text-[14px] text-purple-400" /> Export as LaTeX
               </button>
               <div className="my-1 border-t border-slate-100" />
               <button onClick={() => handleDelete(ctxMenu.note.id, ctxMenu.sourceKey)}
