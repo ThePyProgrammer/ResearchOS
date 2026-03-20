@@ -1,3 +1,5 @@
+import { useDraggable } from '@dnd-kit/core'
+
 /**
  * SuggestionCard — compact card for a single gap analysis suggestion.
  *
@@ -5,8 +7,7 @@
  *   suggestion       — GapSuggestion object from API
  *   onDismiss        — callback(suggestion) when X button is clicked
  *   onClick          — callback() when card body is clicked (opens detail overlay)
- *   isDragging       — boolean, true during DnD drag (Plan 03)
- *   dragHandleProps  — spread onto drag indicator icon (Plan 03)
+ *   isDragging       — boolean, true when used as DragOverlay ghost (Plan 03)
  */
 
 function Icon({ name, className = '' }) {
@@ -20,7 +21,21 @@ const TYPE_CONFIG = {
   replication:      { label: 'Replication', class: 'bg-purple-100 text-purple-700' },
 }
 
-export default function SuggestionCard({ suggestion, onDismiss, onClick, isDragging = false, dragHandleProps = null }) {
+export default function SuggestionCard({ suggestion, onDismiss, onClick, isDragging = false }) {
+  // DnD: each card is draggable. The PointerSensor's distance:5 constraint
+  // distinguishes a click (<5px) from a drag (>=5px).
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    isDragging: dndDragging,
+  } = useDraggable({
+    id: suggestion.id,
+    data: { suggestion },
+    // When used as a DragOverlay ghost, suggestion.id may be undefined — guard:
+    disabled: !suggestion?.id,
+  })
+
   const typeConfig = TYPE_CONFIG[suggestion.gapType] || TYPE_CONFIG[suggestion.gap_type] || {
     label: suggestion.gapType || suggestion.gap_type || 'Unknown',
     class: 'bg-slate-100 text-slate-600',
@@ -37,36 +52,32 @@ export default function SuggestionCard({ suggestion, onDismiss, onClick, isDragg
   // Paper refs: max 2
   const paperRefs = (suggestion.paperRefs || suggestion.paper_refs || []).slice(0, 2)
 
+  const isCurrentlyDragging = isDragging || dndDragging
+
   return (
     <div
+      ref={setNodeRef}
       onClick={onClick}
-      className={`bg-white border border-slate-200 rounded-lg p-3 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer select-none ${isDragging ? 'opacity-50' : ''}`}
+      {...attributes}
+      {...listeners}
+      className={`bg-white border border-slate-200 rounded-lg p-3 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer select-none ${isCurrentlyDragging ? 'opacity-50' : ''}`}
     >
       <div className="flex items-start gap-2">
-        {/* Drag handle (Plan 03) */}
-        {dragHandleProps && (
-          <button
-            {...dragHandleProps}
-            onClick={e => e.stopPropagation()}
-            className="mt-0.5 text-slate-300 hover:text-slate-500 flex-shrink-0 cursor-grab active:cursor-grabbing"
-          >
-            <Icon name="drag_indicator" className="text-[16px]" />
-          </button>
-        )}
-
         <div className="flex-1 min-w-0">
           {/* Top row: type badge + dismiss button */}
           <div className="flex items-center justify-between mb-1.5">
             <span className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full ${typeConfig.class}`}>
               {typeConfig.label}
             </span>
-            <button
-              onClick={e => { e.stopPropagation(); onDismiss(suggestion) }}
-              className="text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0 ml-2"
-              title="Dismiss suggestion"
-            >
-              <Icon name="close" className="text-[14px]" />
-            </button>
+            {onDismiss && (
+              <button
+                onClick={e => { e.stopPropagation(); onDismiss(suggestion) }}
+                className="text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0 ml-2"
+                title="Dismiss suggestion"
+              >
+                <Icon name="close" className="text-[14px]" />
+              </button>
+            )}
           </div>
 
           {/* Name */}
