@@ -258,6 +258,7 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
 
         // ── Suggestion: [[ triggers autocomplete popup ───────────────────
         Suggestion({
+          pluginKey: 'wikiLinkSuggestion',
           editor: this.editor,
           char: '[[',
           allowSpaces: true,

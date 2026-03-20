@@ -258,6 +258,7 @@ export function createCitationExtension({
 
         // ── Suggestion: @ triggers autocomplete popup ────────────────────────
         Suggestion({
+          pluginKey: 'citationSuggestion',
           editor: this.editor,
           char: '@',
           allowSpaces: true,
