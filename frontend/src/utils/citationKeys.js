@@ -49,7 +49,12 @@ export function makeCitationKey({ authors, year, title }) {
     }
   }
 
-  return `${lastName}${yearStr}${titleWord}` || 'entry'
+  const key = `${lastName}${yearStr}${titleWord}`
+  // Mirror Python: f"{last_name}{year}{title_word}" or "entry"
+  // An empty string is falsy, and "unknown" with no year/title should still be "entry"
+  // when last_name is "unknown" and both yearStr and titleWord are empty
+  if (!yearStr && !titleWord && lastName === 'unknown') return 'entry'
+  return key || 'entry'
 }
 
 /**
@@ -58,24 +63,37 @@ export function makeCitationKey({ authors, year, title }) {
  * @param {{ authors: string[], year: number|string, title: string }} item
  * @returns {string} e.g. "(Vaswani et al., 2017)"
  */
-export function makeCitationLabel({ authors, year, title }) {
+export function makeCitationLabel({ authors, year, title } = {}) {
   const authorList = Array.isArray(authors) ? authors : (authors ? [authors] : [])
-  let authorPart = 'Unknown'
 
-  if (authorList.length > 0) {
-    const first = authorList[0]
-    let lastName
-    if (first.includes(',')) {
-      lastName = first.split(',')[0].trim()
-    } else {
-      const tokens = first.trim().split(/\s+/)
-      lastName = tokens[tokens.length - 1] || first
+  // Extract display last name from an author string
+  function _displayLastName(author) {
+    if (!author) return ''
+    if (author.includes(',')) {
+      return author.split(',')[0].trim()
     }
-    authorPart = authorList.length > 1 ? `${lastName} et al.` : lastName
+    const tokens = author.trim().split(/\s+/)
+    return tokens[tokens.length - 1] || author
   }
 
-  const yearStr = year ? String(year) : 'n.d.'
-  return `(${authorPart}, ${yearStr})`
+  let authorPart
+  if (authorList.length === 0) {
+    // No authors: fall back to first word of title
+    const firstWord = (title || '').split(/\s+/).find(w => w.length > 0) || 'Unknown'
+    authorPart = firstWord
+  } else if (authorList.length === 1) {
+    authorPart = _displayLastName(authorList[0])
+  } else if (authorList.length === 2) {
+    authorPart = `${_displayLastName(authorList[0])} & ${_displayLastName(authorList[1])}`
+  } else {
+    authorPart = `${_displayLastName(authorList[0])} et al.`
+  }
+
+  // Year is optional — omit entirely when null/undefined
+  if (year != null) {
+    return `(${authorPart}, ${year})`
+  }
+  return `(${authorPart})`
 }
 
 /**
@@ -87,17 +105,22 @@ export function makeCitationLabel({ authors, year, title }) {
  * @returns {Array} items with `_resolvedKey` field added
  */
 export function deduplicateKeys(items) {
+  // seen maps base key -> count of times seen so far
+  // First occurrence: count = 1, no suffix
+  // Second occurrence: count = 2, suffix = chr(96 + 2) = 'b'
+  // Third occurrence: count = 3, suffix = chr(96 + 3) = 'c'
+  // Mirrors Python export_bibtex dedup: seen_keys[key] starts at 1, increments, then chr(96 + seen_keys[key])
   const seen = {}
   return items.map(item => {
     const base = makeCitationKey(item)
-    if (!(base in seen)) {
+    if (base in seen) {
+      seen[base] += 1
+      // second collision -> chr(96+2) = 'b', third -> chr(96+3) = 'c', etc.
+      const suffix = String.fromCharCode(96 + seen[base])
+      return { ...item, _resolvedKey: `${base}${suffix}` }
+    } else {
       seen[base] = 1
       return { ...item, _resolvedKey: base }
     }
-    const count = seen[base]
-    seen[base] = count + 1
-    // 1 -> 'a', 2 -> 'b', etc (chr(96 + count) mirrors Python)
-    const suffix = String.fromCharCode(96 + count)
-    return { ...item, _resolvedKey: `${base}${suffix}` }
   })
 }
