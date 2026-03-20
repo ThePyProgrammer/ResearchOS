@@ -223,23 +223,26 @@ describe('folderToLatex', () => {
     expect(usedKeys.size).toBe(0)
   })
 
-  it('renders subfolder children as \\subsection', () => {
+  it('renders subfolder as \\section with file content underneath (no subsection for files)', () => {
     const subfolder = { id: 'sub1', name: 'Background', type: 'folder', parentId: 'folder1' }
     const subChild = { id: 'sc1', name: 'Prior Work', type: 'file', parentId: 'sub1', content: '<p>Prior work text</p>' }
     const { body } = folderToLatex(folder, null, [folder, child1, subfolder, subChild])
     expect(body).toContain('\\section{Background}')
-    expect(body).toContain('\\subsection{Prior Work}')
     expect(body).toContain('Prior work text')
+    // File inside subfolder should NOT get its own subsection heading
+    expect(body).not.toContain('\\subsection{Prior Work}')
   })
 
-  it('renders deeply nested folders as \\subsubsection', () => {
+  it('renders nested subfolders as \\subsection with file content underneath', () => {
     const subfolder = { id: 'sub1', name: 'Background', type: 'folder', parentId: 'folder1' }
     const deepFolder = { id: 'deep1', name: 'Theory', type: 'folder', parentId: 'sub1' }
     const deepChild = { id: 'dc1', name: 'Axioms', type: 'file', parentId: 'deep1', content: '<p>Axioms here</p>' }
     const { body } = folderToLatex(folder, null, [folder, subfolder, deepFolder, deepChild])
     expect(body).toContain('\\section{Background}')
     expect(body).toContain('\\subsection{Theory}')
-    expect(body).toContain('\\subsubsection{Axioms}')
+    expect(body).toContain('Axioms here')
+    // File inside nested folder should NOT get its own subsubsection heading
+    expect(body).not.toContain('\\subsubsection{Axioms}')
   })
 
   it('collects usedKeys from nested subfolder notes', () => {
@@ -250,5 +253,15 @@ describe('folderToLatex', () => {
     }
     const { usedKeys } = folderToLatex(folder, null, [folder, subfolder, subChild])
     expect(usedKeys.has('jones2021')).toBe(true)
+  })
+
+  it('top-level files still get \\section headings', () => {
+    const subfolder = { id: 'sub1', name: 'Background', type: 'folder', parentId: 'folder1' }
+    const subChild = { id: 'sc1', name: 'note', type: 'file', parentId: 'sub1', content: '<p>bg</p>' }
+    const { body } = folderToLatex(folder, null, [folder, child1, subfolder, subChild])
+    // Top-level file gets \section
+    expect(body).toContain('\\section{Introduction}')
+    // Subfolder gets \section
+    expect(body).toContain('\\section{Background}')
   })
 })

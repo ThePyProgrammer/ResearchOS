@@ -125,8 +125,9 @@ export function buildFullLatex({ body, template, title, author, baseName, usedKe
 /**
  * Recursively convert a folder's children to LaTeX sections/subsections.
  *
- * Files become sections at the current depth. Subfolders become sections
- * with their own children as subsections (recursive).
+ * Folders define the document structure — a folder becomes a section heading
+ * and its file children are concatenated as content under that heading.
+ * Top-level files (not inside a subfolder) still get their own section heading.
  *
  * @param {object} folder      — the folder note object
  * @param {string[]|null} sectionOrder — array of note IDs in desired order, or null for alphabetical
@@ -164,20 +165,68 @@ export function folderToLatex(folder, sectionOrder, allNotes, depth = 0) {
   const allUsedKeys = new Set()
   const sections = []
 
-  for (const note of orderedChildren) {
-    if (note.type === 'folder') {
-      // Subfolder becomes a section heading, its children become deeper sections
-      const sub = folderToLatex(note, null, allNotes, depth + 1)
-      for (const key of sub.usedKeys) allUsedKeys.add(key)
-      sections.push(`\\${sectionCmd}{${note.name}}\n\n${sub.body}`)
-    } else {
-      const { latex, usedKeys } = htmlToLatex(note.content || '')
+  // Separate files and subfolders
+  const files = orderedChildren.filter(n => n.type !== 'folder')
+  const subfolders = orderedChildren.filter(n => n.type === 'folder')
+
+  // Files contribute content. At root level (depth 0) each file gets its own
+  // section heading. Inside a subfolder the folder IS the heading, so files
+  // are plain content concatenated under it.
+  if (depth === 0) {
+    // Root: interleave files (each gets \section) and subfolders (each gets \section + recurse)
+    for (const note of orderedChildren) {
+      if (note.type === 'folder') {
+        const sub = _renderFolder(note, allNotes, depth, sectionCmd, allUsedKeys)
+        sections.push(sub)
+      } else {
+        const { latex, usedKeys } = htmlToLatex(note.content || '')
+        for (const key of usedKeys) allUsedKeys.add(key)
+        sections.push(`\\${sectionCmd}{${note.name}}\n\n${latex}`)
+      }
+    }
+  } else {
+    // Nested: files are plain content (no heading), subfolders get section headings
+    for (const f of files) {
+      const { latex, usedKeys } = htmlToLatex(f.content || '')
       for (const key of usedKeys) allUsedKeys.add(key)
-      sections.push(`\\${sectionCmd}{${note.name}}\n\n${latex}`)
+      sections.push(latex)
+    }
+    for (const sf of subfolders) {
+      const sub = _renderFolder(sf, allNotes, depth, sectionCmd, allUsedKeys)
+      sections.push(sub)
     }
   }
 
   return { body: sections.join('\n'), usedKeys: allUsedKeys }
+}
+
+/** Render a subfolder as a section heading + its recursive content. */
+function _renderFolder(folder, allNotes, parentDepth, sectionCmd, allUsedKeys) {
+  const SECTION_CMDS = ['section', 'subsection', 'subsubsection']
+  const childCmd = SECTION_CMDS[Math.min(parentDepth + 1, SECTION_CMDS.length - 1)]
+
+  // Get this folder's direct children
+  const children = (allNotes || []).filter(n => n.parentId === folder.id)
+  const files = children.filter(n => n.type !== 'folder').sort((a, b) => a.name.localeCompare(b.name))
+  const subfolders = children.filter(n => n.type === 'folder').sort((a, b) => a.name.localeCompare(b.name))
+
+  const parts = []
+
+  // Files → plain content under this folder's heading
+  for (const f of files) {
+    const { latex, usedKeys } = htmlToLatex(f.content || '')
+    for (const key of usedKeys) allUsedKeys.add(key)
+    parts.push(latex)
+  }
+
+  // Subfolders → deeper section headings
+  for (const sf of subfolders) {
+    const sub = folderToLatex(sf, null, allNotes, parentDepth + 1)
+    for (const key of sub.usedKeys) allUsedKeys.add(key)
+    parts.push(`\\${childCmd}{${sf.name}}\n\n${sub.body}`)
+  }
+
+  return `\\${sectionCmd}{${folder.name}}\n\n${parts.join('\n')}`
 }
 
 /**
