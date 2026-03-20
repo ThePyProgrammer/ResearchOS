@@ -427,6 +427,25 @@
   border-bottom-color: #6366f1;
 }
 
+/* ── Citation chip mark styles ────────────────────────────────────────────── */
+.citation-chip {
+  display: inline;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid #bfdbfe;
+  transition: background 0.15s, border-color 0.15s;
+}
+.citation-chip:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
 /* ── Wiki link autocomplete popup (rendered imperatively outside React tree) */
 .wiki-link-popup {
   font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
