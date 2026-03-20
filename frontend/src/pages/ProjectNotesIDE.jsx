@@ -937,10 +937,21 @@ export default function ProjectNotesIDE() {
     }))
   }, [projectPapersForCitation, projectWebsitesForCitation])
 
-  const getAllLibraryItemsCb = useCallback(() => {
-    // Return all linked items (library items linked to this project)
-    return (linkedItems || []).map(item => ({ ...item, type: item.itemType }))
-  }, [linkedItems])
+  const libraryItemsCache = useRef(null)
+  const getAllLibraryItemsCb = useCallback(async () => {
+    if (libraryItemsCache.current) return libraryItemsCache.current
+    try {
+      const [papers, websites] = await Promise.all([papersApi.list(), websitesApi.list()])
+      const items = [
+        ...(papers || []).map(p => ({ ...p, type: 'paper' })),
+        ...(websites || []).map(w => ({ ...w, type: 'website' })),
+      ]
+      libraryItemsCache.current = items
+      return items
+    } catch {
+      return []
+    }
+  }, [])
 
   const onAutoLinkCb = useCallback(async (paperId, websiteId) => {
     try {

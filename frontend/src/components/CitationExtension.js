@@ -315,11 +315,12 @@ export function createCitationExtension({
             }
           },
 
-          items: ({ query }) => {
+          items: async ({ query }) => {
             const q = query.toLowerCase().trim()
 
             const linkedItems = (getLinkedItems?.() ?? [])
-            const libraryItems = (getAllLibraryItems?.() ?? [])
+            const rawLibrary = getAllLibraryItems?.() ?? []
+            const libraryItems = rawLibrary instanceof Promise ? await rawLibrary : rawLibrary
 
             function matchItem(item) {
               if (!q) return true
