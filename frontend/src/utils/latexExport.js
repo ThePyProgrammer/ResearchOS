@@ -123,42 +123,58 @@ export function buildFullLatex({ body, template, title, author, baseName, usedKe
 }
 
 /**
- * Convert a folder's child notes to concatenated LaTeX sections.
+ * Recursively convert a folder's children to LaTeX sections/subsections.
+ *
+ * Files become sections at the current depth. Subfolders become sections
+ * with their own children as subsections (recursive).
  *
  * @param {object} folder      — the folder note object
  * @param {string[]|null} sectionOrder — array of note IDs in desired order, or null for alphabetical
  * @param {object[]} allNotes  — flat array of all notes (for finding children)
+ * @param {number} [depth=0]   — nesting depth: 0=\section, 1=\subsection, 2=\subsubsection
  * @returns {{ body: string, usedKeys: Set<string> }}
  */
-export function folderToLatex(folder, sectionOrder, allNotes) {
-  // Get file children of this folder
-  const children = (allNotes || []).filter(n => n.parentId === folder.id && n.type === 'file')
+export function folderToLatex(folder, sectionOrder, allNotes, depth = 0) {
+  const SECTION_CMDS = ['section', 'subsection', 'subsubsection']
+  const sectionCmd = SECTION_CMDS[Math.min(depth, SECTION_CMDS.length - 1)]
+
+  // Get all direct children (files + subfolders)
+  const children = (allNotes || []).filter(n => n.parentId === folder.id)
 
   if (children.length === 0) return { body: '', usedKeys: new Set() }
 
-  // Order children by sectionOrder if provided, otherwise alphabetically
+  // Order children by sectionOrder if provided, otherwise folders first then alphabetical
   let orderedChildren
   if (sectionOrder && sectionOrder.length > 0) {
     const childMap = new Map(children.map(c => [c.id, c]))
     orderedChildren = sectionOrder
       .map(id => childMap.get(id))
       .filter(Boolean)
-    // Append any children not in sectionOrder (shouldn't happen normally)
     const inOrder = new Set(sectionOrder)
     for (const child of children) {
       if (!inOrder.has(child.id)) orderedChildren.push(child)
     }
   } else {
-    orderedChildren = [...children].sort((a, b) => a.name.localeCompare(b.name))
+    orderedChildren = [...children].sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
   }
 
   const allUsedKeys = new Set()
   const sections = []
 
   for (const note of orderedChildren) {
-    const { latex, usedKeys } = htmlToLatex(note.content || '')
-    for (const key of usedKeys) allUsedKeys.add(key)
-    sections.push(`\\section{${note.name}}\n\n${latex}`)
+    if (note.type === 'folder') {
+      // Subfolder becomes a section heading, its children become deeper sections
+      const sub = folderToLatex(note, null, allNotes, depth + 1)
+      for (const key of sub.usedKeys) allUsedKeys.add(key)
+      sections.push(`\\${sectionCmd}{${note.name}}\n\n${sub.body}`)
+    } else {
+      const { latex, usedKeys } = htmlToLatex(note.content || '')
+      for (const key of usedKeys) allUsedKeys.add(key)
+      sections.push(`\\${sectionCmd}{${note.name}}\n\n${latex}`)
+    }
   }
 
   return { body: sections.join('\n'), usedKeys: allUsedKeys }

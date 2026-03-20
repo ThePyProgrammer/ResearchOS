@@ -222,4 +222,33 @@ describe('folderToLatex', () => {
     expect(body).toBe('')
     expect(usedKeys.size).toBe(0)
   })
+
+  it('renders subfolder children as \\subsection', () => {
+    const subfolder = { id: 'sub1', name: 'Background', type: 'folder', parentId: 'folder1' }
+    const subChild = { id: 'sc1', name: 'Prior Work', type: 'file', parentId: 'sub1', content: '<p>Prior work text</p>' }
+    const { body } = folderToLatex(folder, null, [folder, child1, subfolder, subChild])
+    expect(body).toContain('\\section{Background}')
+    expect(body).toContain('\\subsection{Prior Work}')
+    expect(body).toContain('Prior work text')
+  })
+
+  it('renders deeply nested folders as \\subsubsection', () => {
+    const subfolder = { id: 'sub1', name: 'Background', type: 'folder', parentId: 'folder1' }
+    const deepFolder = { id: 'deep1', name: 'Theory', type: 'folder', parentId: 'sub1' }
+    const deepChild = { id: 'dc1', name: 'Axioms', type: 'file', parentId: 'deep1', content: '<p>Axioms here</p>' }
+    const { body } = folderToLatex(folder, null, [folder, subfolder, deepFolder, deepChild])
+    expect(body).toContain('\\section{Background}')
+    expect(body).toContain('\\subsection{Theory}')
+    expect(body).toContain('\\subsubsection{Axioms}')
+  })
+
+  it('collects usedKeys from nested subfolder notes', () => {
+    const subfolder = { id: 'sub1', name: 'Related', type: 'folder', parentId: 'folder1' }
+    const subChild = {
+      id: 'sc1', name: 'Cited', type: 'file', parentId: 'sub1',
+      content: '<p><span data-cite-key="jones2021" data-cite-paper-id="p2">(Jones, 2021)</span></p>',
+    }
+    const { usedKeys } = folderToLatex(folder, null, [folder, subfolder, subChild])
+    expect(usedKeys.has('jones2021')).toBe(true)
+  })
 })
