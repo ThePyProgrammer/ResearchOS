@@ -493,8 +493,9 @@ function NoteTreeNode({
       {isFolder && showCreatingHere && (
         <form onSubmit={onCreateSubmit} className="py-0.5" style={{ paddingLeft: `${(depth + 1) * 14 + 8}px`, paddingRight: 6 }}>
           <div className="flex items-center gap-1">
+            <span className="w-[12px] flex-shrink-0" />
             <Icon name={creating.type === 'folder' ? 'folder' : 'description'}
-              className={`text-[12px] flex-shrink-0 ${creating.type === 'folder' ? 'text-amber-500' : 'text-slate-400'}`} />
+              className={`text-[13px] flex-shrink-0 ${creating.type === 'folder' ? 'text-amber-500' : 'text-slate-400'}`} />
             <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Escape' && onCancelCreate?.()}
               placeholder={creating.type === 'folder' ? 'Folder name' : 'File name'}
@@ -1788,8 +1789,9 @@ export default function ProjectNotesIDE() {
                   />
                 ))}
                 {creating?.sourceKey === 'project' && !creating.parentId && (
-                  <form onSubmit={handleCreate} className="px-1 py-0.5">
+                  <form onSubmit={handleCreate} className="py-0.5" style={{ paddingLeft: 8, paddingRight: 6 }}>
                     <div className="flex items-center gap-1">
+                      <span className="w-[12px] flex-shrink-0" />
                       <Icon name={creating.type === 'folder' ? 'folder' : 'description'}
                         className={`text-[13px] flex-shrink-0 ${creating.type === 'folder' ? 'text-amber-500' : 'text-slate-400'}`} />
                       <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
