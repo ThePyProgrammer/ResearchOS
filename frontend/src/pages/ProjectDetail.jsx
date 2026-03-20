@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, Link, Outlet, useLocation, useOutletContext } from 'react-router-dom'
 import { projectsApi, notesApi, researchQuestionsApi, projectPapersApi, papersApi, websitesApi, githubReposApi, experimentsApi } from '../services/api'
+import GapAnalysisTab from '../components/GapAnalysisTab'
 import NotesPanel from '../components/NotesPanel'
 import WindowModal from '../components/WindowModal'
 import { statusConfig } from '../components/PaperInfoPanel'
@@ -3609,6 +3610,7 @@ function ExperimentSection({ projectId, libraryId }) {
   const [compareOpen, setCompareOpen] = useState(false)
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [viewMode, setViewMode] = useLocalStorage(`researchos.exp.view.${projectId}`, 'tree')
+  const [gapActive, setGapActive] = useState(false)
   const [treeFilters, setTreeFilters] = useState([])
   const [treeSort, setTreeSort] = useState(null) // null | 'name-asc' | 'name-desc' | 'status-asc' | 'status-desc'
   const [expandCollapseKey, setExpandCollapseKey] = useState(null) // { key, expand }
@@ -3784,20 +3786,28 @@ function ExperimentSection({ projectId, libraryId }) {
           {/* View toggle */}
           <div className="flex items-center gap-0 border border-slate-200 rounded-lg overflow-hidden h-[34px]">
             <button
-              onClick={() => setViewMode('tree')}
+              onClick={() => { setViewMode('tree'); setGapActive(false) }}
               title="Tree view"
-              className={`flex items-center justify-center px-2 h-full transition-colors ${viewMode === 'tree' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center justify-center px-2 h-full transition-colors ${!gapActive && viewMode === 'tree' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <Icon name="account_tree" className="text-[16px] leading-none" />
             </button>
             <button
-              onClick={() => setViewMode('table')}
+              onClick={() => { setViewMode('table'); setGapActive(false) }}
               title="Table view"
-              className={`flex items-center justify-center px-2 h-full transition-colors ${viewMode === 'table' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center justify-center px-2 h-full transition-colors ${!gapActive && viewMode === 'table' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <Icon name="table_chart" className="text-[16px] leading-none" />
             </button>
           </div>
+          {/* Gap Analysis tab button — separate from icon toggle to avoid localStorage pitfall */}
+          <button
+            onClick={() => setGapActive(true)}
+            className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg font-medium transition-colors ${gapActive ? 'bg-purple-50 text-purple-700' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            <Icon name="psychology" className="text-[16px]" />
+            Gap Analysis
+          </button>
           <button
             onClick={() => setShowCsvModal(true)}
             className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
@@ -3816,7 +3826,7 @@ function ExperimentSection({ projectId, libraryId }) {
       </div>
 
       {/* Filter bar — tree view only */}
-      {viewMode !== 'table' && expTree.length > 0 && (
+      {!gapActive && viewMode !== 'table' && expTree.length > 0 && (
         <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2 border-b border-slate-100 bg-white">
           <div className="flex-1 min-w-0">
             <FilterBar filters={treeFilters} setFilters={setTreeFilters} allColumns={treeFilterColumns} />
@@ -3860,7 +3870,7 @@ function ExperimentSection({ projectId, libraryId }) {
       )}
 
       {/* Bulk action bar — below filter bar, tree view only */}
-      {viewMode !== 'table' && selectedLeafIds.size >= 1 && (
+      {!gapActive && viewMode !== 'table' && selectedLeafIds.size >= 1 && (
         <BulkActionBar
           selectedLeafIds={selectedLeafIds}
           onCompare={() => setCompareOpen(true)}
@@ -3879,7 +3889,13 @@ function ExperimentSection({ projectId, libraryId }) {
         />
       )}
 
-      {loading ? (
+      {gapActive ? (
+        <GapAnalysisTab
+          projectId={projectId}
+          flatExperiments={flatExperiments}
+          onRefreshExperiments={fetchExperiments}
+        />
+      ) : loading ? (
         <div className="space-y-2 animate-pulse">
           <div className="h-8 bg-slate-100 rounded-lg" />
           <div className="h-8 bg-slate-100 rounded-lg" />

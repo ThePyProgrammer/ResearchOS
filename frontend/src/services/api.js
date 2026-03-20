@@ -396,3 +396,8 @@ export const taskFieldDefsApi = {
   remove: (defId) => apiFetch(`/task-field-defs/${defId}`, { method: 'DELETE' }),
 }
 
+export const gapAnalysisApi = {
+  analyze: (projectId, data = {}) =>
+    apiFetch(`/projects/${projectId}/gap-analysis`, { method: 'POST', body: data }),
+}
+
