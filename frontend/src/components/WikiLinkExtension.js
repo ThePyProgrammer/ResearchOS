@@ -1,5 +1,5 @@
 import { Mark, mergeAttributes, markInputRule } from '@tiptap/core'
-import { Plugin } from '@tiptap/pm/state'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import Suggestion from '@tiptap/suggestion'
 
 /**
@@ -258,7 +258,7 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
 
         // ── Suggestion: [[ triggers autocomplete popup ───────────────────
         Suggestion({
-          pluginKey: 'wikiLinkSuggestion',
+          pluginKey: new PluginKey('wikiLinkSuggestion'),
           editor: this.editor,
           char: '[[',
           allowSpaces: true,

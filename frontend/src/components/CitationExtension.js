@@ -1,5 +1,5 @@
 import { Mark, mergeAttributes } from '@tiptap/core'
-import { Plugin } from '@tiptap/pm/state'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import Suggestion from '@tiptap/suggestion'
 import { makeCitationKey, makeCitationLabel } from '../utils/citationKeys.js'
 
@@ -258,7 +258,7 @@ export function createCitationExtension({
 
         // ── Suggestion: @ triggers autocomplete popup ────────────────────────
         Suggestion({
-          pluginKey: 'citationSuggestion',
+          pluginKey: new PluginKey('citationSuggestion'),
           editor: this.editor,
           char: '@',
           allowSpaces: true,
