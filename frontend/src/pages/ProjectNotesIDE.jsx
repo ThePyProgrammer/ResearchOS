@@ -403,12 +403,15 @@ function TiptapEditor({
 function NoteTreeNode({
   note, allNotes, selectedNoteId, expandedNotes, onSelect, onToggle, onContextMenu, depth = 0,
   sourceKey, draggingNoteId, onDragStart, onDragEnd, onPin,
+  creating, newName, setNewName, onCreateSubmit, onCancelCreate,
+  onDropIntoFolder,
 }) {
   const children = allNotes.filter(n => n.parentId === note.id)
   const isFolder = note.type === 'folder'
   const isOpen = expandedNotes[note.id]
   const isSelected = selectedNoteId === note.id
   const isDragging = draggingNoteId === note.id
+  const [dragOver, setDragOver] = useState(false)
 
   const dragProps = !isFolder ? {
     draggable: true,
@@ -416,14 +419,23 @@ function NoteTreeNode({
     onDragEnd: () => onDragEnd?.(),
   } : {}
 
+  const dropProps = isFolder ? {
+    onDragOver: e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; setDragOver(true) },
+    onDragLeave: e => { e.stopPropagation(); setDragOver(false) },
+    onDrop: e => { e.preventDefault(); e.stopPropagation(); setDragOver(false); const noteId = e.dataTransfer.getData('text/plain'); if (noteId && noteId !== note.id) onDropIntoFolder?.(noteId, note.id) },
+  } : {}
+
+  const showCreatingHere = creating && creating.parentId === note.id
+
   return (
     <div>
       <button
         {...dragProps}
+        {...dropProps}
         onClick={() => isFolder ? onToggle(note.id) : onSelect(note.id)}
         onContextMenu={e => { e.preventDefault(); onContextMenu(e, note) }}
         className={`group w-full flex items-center gap-1 py-[3px] text-[12px] rounded transition-colors text-left ${
-          isSelected ? 'bg-blue-100 text-blue-700' : 'text-slate-600 hover:bg-slate-100'
+          isSelected ? 'bg-blue-100 text-blue-700' : dragOver ? 'bg-amber-50 ring-1 ring-amber-300' : 'text-slate-600 hover:bg-slate-100'
         } ${isDragging ? 'opacity-40' : ''}`}
         style={{ paddingLeft: `${depth * 14 + 8}px`, paddingRight: 6 }}
       >
@@ -470,8 +482,26 @@ function NoteTreeNode({
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             onPin={onPin}
+            creating={creating}
+            newName={newName}
+            setNewName={setNewName}
+            onCreateSubmit={onCreateSubmit}
+            onCancelCreate={onCancelCreate}
+            onDropIntoFolder={onDropIntoFolder}
           />
         ))}
+      {isFolder && showCreatingHere && (
+        <form onSubmit={onCreateSubmit} className="py-0.5" style={{ paddingLeft: `${(depth + 1) * 14 + 8}px`, paddingRight: 6 }}>
+          <div className="flex items-center gap-1">
+            <Icon name={creating.type === 'folder' ? 'folder' : 'description'}
+              className={`text-[12px] flex-shrink-0 ${creating.type === 'folder' ? 'text-amber-500' : 'text-slate-400'}`} />
+            <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Escape' && onCancelCreate?.()}
+              placeholder={creating.type === 'folder' ? 'Folder name' : 'File name'}
+              className="flex-1 min-w-0 px-1.5 py-0.5 text-[11px] border border-slate-300 rounded focus:outline-none focus:border-blue-400" />
+          </div>
+        </form>
+      )}
     </div>
   )
 }
@@ -492,6 +522,7 @@ function ExperimentFolder({
   creating, newName, setNewName, onCreateSubmit, onCancelCreate,
   onPin,
   draggingNoteId, onDragStart, onDragEnd,
+  onDropIntoFolder,
 }) {
   const sourceKey = `experiment:${exp.id}`
   const s = EXPERIMENT_STATUS[exp.status] || EXPERIMENT_STATUS.planned
@@ -543,6 +574,12 @@ function ExperimentFolder({
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               onPin={onPin}
+              creating={creating}
+              newName={newName}
+              setNewName={setNewName}
+              onCreateSubmit={onCreateSubmit}
+              onCancelCreate={onCancelCreate}
+              onDropIntoFolder={onDropIntoFolder}
             />
           ))}
           {loaded && rootNotes.length === 0 && !creating && (
@@ -580,6 +617,7 @@ function LiteratureItemFolder({
   creating, newName, setNewName, onCreateSubmit, onCancelCreate,
   onPin,
   draggingNoteId, onDragStart, onDragEnd,
+  onDropIntoFolder,
 }) {
   const sourceKey = `${item.itemType}:${item.id}`
   const cfg = ITEM_TYPE_CONFIG[item.itemType] || ITEM_TYPE_CONFIG.paper
@@ -629,6 +667,12 @@ function LiteratureItemFolder({
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               onPin={onPin}
+              creating={creating}
+              newName={newName}
+              setNewName={setNewName}
+              onCreateSubmit={onCreateSubmit}
+              onCancelCreate={onCancelCreate}
+              onDropIntoFolder={onDropIntoFolder}
             />
           ))}
           {loaded && rootNotes.length === 0 && !creating && (
@@ -1501,6 +1545,30 @@ export default function ProjectNotesIDE() {
     setCtxMenu({ exp, x: e.clientX, y: e.clientY, isExp: true })
   }
 
+  async function handleDropIntoFolder(noteId, folderId, sourceKey) {
+    try {
+      await notesApi.update(noteId, { parentId: folderId })
+      // Refresh the correct note list
+      if (sourceKey === 'project') {
+        setProjectNotes(prev => prev.map(n => n.id === noteId ? { ...n, parentId: folderId } : n))
+      } else if (sourceKey.startsWith('experiment:')) {
+        const expId = sourceKey.replace('experiment:', '')
+        setExpNotes(prev => ({
+          ...prev,
+          [expId]: (prev[expId] || []).map(n => n.id === noteId ? { ...n, parentId: folderId } : n),
+        }))
+      } else {
+        setItemNotes(prev => ({
+          ...prev,
+          [sourceKey]: (prev[sourceKey] || []).map(n => n.id === noteId ? { ...n, parentId: folderId } : n),
+        }))
+      }
+      setExpandedNotes(prev => ({ ...prev, [folderId]: true }))
+    } catch (err) {
+      console.error('Failed to move note into folder:', err)
+    }
+  }
+
   // ── Sidebar tree data ──────────────────────────────────────────────────────
   const projRootNotes = projectNotes
     .filter(n => !n.parentId)
@@ -1711,6 +1779,12 @@ export default function ProjectNotesIDE() {
                     onDragStart={(noteId) => { dragRef.current = { noteId, sourceKey: 'project' }; setDraggingNoteId(noteId) }}
                     onDragEnd={() => { dragRef.current = null; setDraggingNoteId(null) }}
                     onPin={noteId => handlePin(noteId, 'project')}
+                    creating={creating?.sourceKey === 'project' ? creating : null}
+                    newName={newName}
+                    setNewName={setNewName}
+                    onCreateSubmit={handleCreate}
+                    onCancelCreate={() => setCreating(null)}
+                    onDropIntoFolder={(noteId, folderId) => handleDropIntoFolder(noteId, folderId, 'project')}
                   />
                 ))}
                 {creating?.sourceKey === 'project' && !creating.parentId && (
@@ -1758,6 +1832,7 @@ export default function ProjectNotesIDE() {
                         draggingNoteId={draggingNoteId}
                         onDragStart={(noteId) => { dragRef.current = { noteId, sourceKey }; setDraggingNoteId(noteId) }}
                         onDragEnd={() => { dragRef.current = null; setDraggingNoteId(null) }}
+                        onDropIntoFolder={(noteId, folderId) => handleDropIntoFolder(noteId, folderId, sourceKey)}
                       />
                     )
                   })}
@@ -1792,6 +1867,7 @@ export default function ProjectNotesIDE() {
                         draggingNoteId={draggingNoteId}
                         onDragStart={(noteId) => { dragRef.current = { noteId, sourceKey }; setDraggingNoteId(noteId) }}
                         onDragEnd={() => { dragRef.current = null; setDraggingNoteId(null) }}
+                        onDropIntoFolder={(noteId, folderId) => handleDropIntoFolder(noteId, folderId, sourceKey)}
                       />
                     )
                   })}
