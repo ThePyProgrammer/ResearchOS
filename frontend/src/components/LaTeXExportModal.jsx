@@ -40,7 +40,7 @@ function Icon({ name, className = '' }) {
 
 // ── Sortable section item ─────────────────────────────────────────────────────
 
-function SortableSection({ id, name, isFolder, childCount }) {
+function SortableSection({ id, name, isFolder, childCount, expanded, onToggle }) {
   const {
     attributes,
     listeners,
@@ -70,7 +70,12 @@ function SortableSection({ id, name, isFolder, childCount }) {
       >
         <Icon name="drag_indicator" className="text-[16px]" />
       </span>
-      <Icon name={isFolder ? 'folder' : 'description'} className={`text-[14px] flex-shrink-0 ${isFolder ? 'text-amber-500' : 'text-slate-400'}`} />
+      {isFolder && onToggle ? (
+        <button onClick={e => { e.stopPropagation(); onToggle() }} className="flex-shrink-0 text-slate-400 hover:text-slate-600">
+          <Icon name={expanded ? 'expand_more' : 'chevron_right'} className="text-[14px]" />
+        </button>
+      ) : null}
+      <Icon name={isFolder ? (expanded ? 'folder_open' : 'folder') : 'description'} className={`text-[14px] flex-shrink-0 ${isFolder ? 'text-amber-500' : 'text-slate-400'}`} />
       <span className="flex-1 truncate">{name}</span>
       {isFolder && childCount > 0 && (
         <span className="text-[10px] text-slate-400 flex-shrink-0">{childCount} {childCount === 1 ? 'item' : 'items'}</span>
@@ -105,6 +110,8 @@ export default function LaTeXExportModal({
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
   const [sectionOrder, setSectionOrder] = useState([])
+  const [subOrders, setSubOrders] = useState({})       // { folderId: [childId, ...] }
+  const [expandedFolders, setExpandedFolders] = useState({}) // { folderId: true }
   const [generating, setGenerating] = useState(false)
 
   const isFolder = selectedNote?.type === 'folder'
@@ -115,17 +122,31 @@ export default function LaTeXExportModal({
     setTitle(selectedNote.name || '')
     setAuthor('')
     setTemplate('article')
+    setExpandedFolders({})
 
     if (isFolder) {
-      const children = (allNotes || [])
-        .filter(n => n.parentId === selectedNote.id)
+      const sortChildren = parentId => (allNotes || [])
+        .filter(n => n.parentId === parentId)
         .sort((a, b) => {
           if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
           return a.name.localeCompare(b.name)
         })
-      setSectionOrder(children.map(c => c.id))
+
+      const topChildren = sortChildren(selectedNote.id)
+      setSectionOrder(topChildren.map(c => c.id))
+
+      // Build subOrders for every subfolder recursively
+      const orders = {}
+      const walk = parentId => {
+        const kids = sortChildren(parentId)
+        if (kids.length > 0) orders[parentId] = kids.map(c => c.id)
+        kids.filter(k => k.type === 'folder').forEach(k => walk(k.id))
+      }
+      topChildren.filter(c => c.type === 'folder').forEach(c => walk(c.id))
+      setSubOrders(orders)
     } else {
       setSectionOrder([])
+      setSubOrders({})
     }
   }, [open, selectedNote, isFolder, allNotes])
 
@@ -140,6 +161,19 @@ export default function LaTeXExportModal({
       const newIndex = prev.indexOf(over.id)
       return arrayMove(prev, oldIndex, newIndex)
     })
+  }
+
+  function handleSubDragEnd(folderId) {
+    return event => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+      setSubOrders(prev => {
+        const order = prev[folderId] || []
+        const oldIndex = order.indexOf(active.id)
+        const newIndex = order.indexOf(over.id)
+        return { ...prev, [folderId]: arrayMove(order, oldIndex, newIndex) }
+      })
+    }
   }
 
   // ── Compute cited papers list ─────────────────────────────────────────────
@@ -193,7 +227,7 @@ export default function LaTeXExportModal({
       let usedKeys = new Set()
 
       if (isFolder) {
-        const result = folderToLatex(selectedNote, sectionOrder, allNotes || [])
+        const result = folderToLatex(selectedNote, sectionOrder, allNotes || [], 0, subOrders)
         body = result.body
         usedKeys = result.usedKeys
       } else {
@@ -338,7 +372,52 @@ export default function LaTeXExportModal({
                 <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
                   <div className="space-y-1.5">
                     {sectionItems.map(note => (
-                      <SortableSection key={note.id} id={note.id} name={note.name} isFolder={note.type === 'folder'} childCount={note.childCount} />
+                      <div key={note.id}>
+                        <SortableSection
+                          id={note.id}
+                          name={note.name}
+                          isFolder={note.type === 'folder'}
+                          childCount={note.childCount}
+                          expanded={!!expandedFolders[note.id]}
+                          onToggle={note.type === 'folder' ? () => setExpandedFolders(prev => ({ ...prev, [note.id]: !prev[note.id] })) : undefined}
+                        />
+                        {note.type === 'folder' && expandedFolders[note.id] && (() => {
+                          const childOrder = subOrders[note.id] || []
+                          const childItems = childOrder
+                            .map(id => (allNotes || []).find(n => n.id === id))
+                            .filter(Boolean)
+                          if (childItems.length === 0) return null
+                          return (
+                            <div className="ml-6 mt-1 mb-1.5 pl-3 border-l-2 border-slate-200">
+                              <DndContext
+                                id={`latex-sub-dnd-${note.id}`}
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleSubDragEnd(note.id)}
+                              >
+                                <SortableContext items={childOrder} strategy={verticalListSortingStrategy}>
+                                  <div className="space-y-1">
+                                    {childItems.map(child => {
+                                      const grandChildCount = child.type === 'folder'
+                                        ? (allNotes || []).filter(c => c.parentId === child.id).length
+                                        : 0
+                                      return (
+                                        <SortableSection
+                                          key={child.id}
+                                          id={child.id}
+                                          name={child.name}
+                                          isFolder={child.type === 'folder'}
+                                          childCount={grandChildCount}
+                                        />
+                                      )
+                                    })}
+                                  </div>
+                                </SortableContext>
+                              </DndContext>
+                            </div>
+                          )
+                        })()}
+                      </div>
                     ))}
                   </div>
                 </SortableContext>

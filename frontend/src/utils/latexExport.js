@@ -133,9 +133,10 @@ export function buildFullLatex({ body, template, title, author, baseName, usedKe
  * @param {string[]|null} sectionOrder — array of note IDs in desired order, or null for alphabetical
  * @param {object[]} allNotes  — flat array of all notes (for finding children)
  * @param {number} [depth=0]   — nesting depth: 0=\section, 1=\subsection, 2=\subsubsection
+ * @param {Object<string, string[]>} [subOrders={}] — per-folder child ordering: { folderId: [childId, ...] }
  * @returns {{ body: string, usedKeys: Set<string> }}
  */
-export function folderToLatex(folder, sectionOrder, allNotes, depth = 0) {
+export function folderToLatex(folder, sectionOrder, allNotes, depth = 0, subOrders = {}) {
   const SECTION_CMDS = ['section', 'subsection', 'subsubsection']
   const sectionCmd = SECTION_CMDS[Math.min(depth, SECTION_CMDS.length - 1)]
 
@@ -176,7 +177,7 @@ export function folderToLatex(folder, sectionOrder, allNotes, depth = 0) {
     // Root: interleave files (each gets \section) and subfolders (each gets \section + recurse)
     for (const note of orderedChildren) {
       if (note.type === 'folder') {
-        const sub = _renderFolder(note, allNotes, depth, sectionCmd, allUsedKeys)
+        const sub = _renderFolder(note, allNotes, depth, sectionCmd, allUsedKeys, subOrders)
         sections.push(sub)
       } else {
         const { latex, usedKeys } = htmlToLatex(note.content || '')
@@ -192,7 +193,7 @@ export function folderToLatex(folder, sectionOrder, allNotes, depth = 0) {
       sections.push(latex)
     }
     for (const sf of subfolders) {
-      const sub = _renderFolder(sf, allNotes, depth, sectionCmd, allUsedKeys)
+      const sub = _renderFolder(sf, allNotes, depth, sectionCmd, allUsedKeys, subOrders)
       sections.push(sub)
     }
   }
@@ -201,14 +202,29 @@ export function folderToLatex(folder, sectionOrder, allNotes, depth = 0) {
 }
 
 /** Render a subfolder as a section heading + its recursive content. */
-function _renderFolder(folder, allNotes, parentDepth, sectionCmd, allUsedKeys) {
+function _renderFolder(folder, allNotes, parentDepth, sectionCmd, allUsedKeys, subOrders = {}) {
   const SECTION_CMDS = ['section', 'subsection', 'subsubsection']
   const childCmd = SECTION_CMDS[Math.min(parentDepth + 1, SECTION_CMDS.length - 1)]
 
-  // Get this folder's direct children
+  // Get this folder's direct children, ordered by subOrders if available
   const children = (allNotes || []).filter(n => n.parentId === folder.id)
-  const files = children.filter(n => n.type !== 'folder').sort((a, b) => a.name.localeCompare(b.name))
-  const subfolders = children.filter(n => n.type === 'folder').sort((a, b) => a.name.localeCompare(b.name))
+  const folderOrder = subOrders[folder.id]
+  let orderedChildren
+  if (folderOrder && folderOrder.length > 0) {
+    const childMap = new Map(children.map(c => [c.id, c]))
+    orderedChildren = folderOrder.map(id => childMap.get(id)).filter(Boolean)
+    const inOrder = new Set(folderOrder)
+    for (const child of children) {
+      if (!inOrder.has(child.id)) orderedChildren.push(child)
+    }
+  } else {
+    orderedChildren = [...children].sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+  }
+  const files = orderedChildren.filter(n => n.type !== 'folder')
+  const subfolders = orderedChildren.filter(n => n.type === 'folder')
 
   const parts = []
 
@@ -221,7 +237,7 @@ function _renderFolder(folder, allNotes, parentDepth, sectionCmd, allUsedKeys) {
 
   // Subfolders → deeper section headings
   for (const sf of subfolders) {
-    const sub = folderToLatex(sf, null, allNotes, parentDepth + 1)
+    const sub = folderToLatex(sf, subOrders[sf.id] || null, allNotes, parentDepth + 1, subOrders)
     for (const key of sub.usedKeys) allUsedKeys.add(key)
     parts.push(`\\${childCmd}{${sf.name}}\n\n${sub.body}`)
   }
