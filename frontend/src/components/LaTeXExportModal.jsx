@@ -40,7 +40,7 @@ function Icon({ name, className = '' }) {
 
 // ── Sortable section item ─────────────────────────────────────────────────────
 
-function SortableSection({ id, name }) {
+function SortableSection({ id, name, isFolder, childCount }) {
   const {
     attributes,
     listeners,
@@ -70,10 +70,24 @@ function SortableSection({ id, name }) {
       >
         <Icon name="drag_indicator" className="text-[16px]" />
       </span>
-      <Icon name="description" className="text-[14px] text-slate-400 flex-shrink-0" />
+      <Icon name={isFolder ? 'folder' : 'description'} className={`text-[14px] flex-shrink-0 ${isFolder ? 'text-amber-500' : 'text-slate-400'}`} />
       <span className="flex-1 truncate">{name}</span>
+      {isFolder && childCount > 0 && (
+        <span className="text-[10px] text-slate-400 flex-shrink-0">{childCount} {childCount === 1 ? 'item' : 'items'}</span>
+      )}
     </div>
   )
+}
+
+/** Recursively collect all file note IDs under a folder (for citation extraction). */
+function _collectFileIds(folderId, allNotes) {
+  const ids = []
+  for (const n of (allNotes || [])) {
+    if (n.parentId !== folderId) continue
+    if (n.type === 'file') ids.push(n.id)
+    else if (n.type === 'folder') ids.push(..._collectFileIds(n.id, allNotes))
+  }
+  return ids
 }
 
 // ── Main modal ────────────────────────────────────────────────────────────────
@@ -104,8 +118,11 @@ export default function LaTeXExportModal({
 
     if (isFolder) {
       const children = (allNotes || [])
-        .filter(n => n.parentId === selectedNote.id && n.type === 'file')
-        .sort((a, b) => a.name.localeCompare(b.name))
+        .filter(n => n.parentId === selectedNote.id)
+        .sort((a, b) => {
+          if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+          return a.name.localeCompare(b.name)
+        })
       setSectionOrder(children.map(c => c.id))
     } else {
       setSectionOrder([])
@@ -129,11 +146,12 @@ export default function LaTeXExportModal({
   const citedItems = useCallback(() => {
     const allItems = [...(projectPapers || []), ...(projectWebsites || [])]
 
-    // Collect citations from all notes being exported
+    // Collect citations from all notes being exported (recursively for folders)
     let citations = []
     if (isFolder) {
-      const children = (allNotes || []).filter(n => n.parentId === selectedNote?.id && n.type === 'file')
-      for (const child of children) {
+      const fileIds = _collectFileIds(selectedNote?.id, allNotes)
+      const fileNotes = fileIds.map(id => (allNotes || []).find(n => n.id === id)).filter(Boolean)
+      for (const child of fileNotes) {
         citations.push(...extractCitations(child.content || ''))
       }
     } else if (selectedNote) {
@@ -187,8 +205,9 @@ export default function LaTeXExportModal({
       // Resolve cited items from usedKeys
       const allItems = [...(projectPapers || []), ...(projectWebsites || [])]
       const allCitations = isFolder
-        ? (allNotes || [])
-            .filter(n => n.parentId === selectedNote.id && n.type === 'file')
+        ? _collectFileIds(selectedNote.id, allNotes)
+            .map(id => (allNotes || []).find(n => n.id === id))
+            .filter(Boolean)
             .flatMap(n => extractCitations(n.content || ''))
         : extractCitations(selectedNote.content || '')
 
@@ -227,7 +246,14 @@ export default function LaTeXExportModal({
 
   const sectionItems = isFolder
     ? sectionOrder
-        .map(id => (allNotes || []).find(n => n.id === id))
+        .map(id => {
+          const n = (allNotes || []).find(note => note.id === id)
+          if (!n) return null
+          const childCount = n.type === 'folder'
+            ? (allNotes || []).filter(c => c.parentId === n.id).length
+            : 0
+          return { ...n, childCount }
+        })
         .filter(Boolean)
     : []
 
@@ -312,7 +338,7 @@ export default function LaTeXExportModal({
                 <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
                   <div className="space-y-1.5">
                     {sectionItems.map(note => (
-                      <SortableSection key={note.id} id={note.id} name={note.name} />
+                      <SortableSection key={note.id} id={note.id} name={note.name} isFolder={note.type === 'folder'} childCount={note.childCount} />
                     ))}
                   </div>
                 </SortableContext>
