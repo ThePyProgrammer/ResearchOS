@@ -3889,13 +3889,15 @@ function ExperimentSection({ projectId, libraryId }) {
         />
       )}
 
-      {gapActive ? (
+      {/* GapAnalysisTab: always mounted to preserve state, hidden via CSS when not active */}
+      <div className={gapActive ? 'flex-1 min-h-0 flex flex-col' : 'hidden'}>
         <GapAnalysisTab
           projectId={projectId}
           flatExperiments={flatExperiments}
           onRefreshExperiments={fetchExperiments}
         />
-      ) : loading ? (
+      </div>
+      {!gapActive && loading ? (
         <div className="space-y-2 animate-pulse">
           <div className="h-8 bg-slate-100 rounded-lg" />
           <div className="h-8 bg-slate-100 rounded-lg" />

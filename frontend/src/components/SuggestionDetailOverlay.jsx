@@ -102,8 +102,8 @@ export default function SuggestionDetailOverlay({ suggestion, onClose, onSave, o
             <textarea
               value={rationale}
               onChange={e => setRationale(e.target.value)}
-              rows={3}
-              className="w-full text-sm text-slate-700 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 resize-none transition-colors"
+              rows={6}
+              className="w-full text-xs text-slate-700 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 resize-y transition-colors leading-relaxed"
               placeholder="Why this experiment is needed..."
             />
           </div>

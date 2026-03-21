@@ -59,6 +59,7 @@ export default function SuggestionCard({ suggestion, onDismiss, onClick, isDragg
   const isCurrentlyDragging = isDragging || dndDragging
 
   return (
+    <>
     <div
       ref={setNodeRef}
       onClick={onClick}
@@ -123,6 +124,7 @@ export default function SuggestionCard({ suggestion, onDismiss, onClick, isDragg
                 return (
                   <button
                     key={pid || i}
+                    onPointerDown={e => e.stopPropagation()}
                     onClick={e => {
                       e.stopPropagation()
                       const rect = e.currentTarget.getBoundingClientRect()
@@ -136,16 +138,17 @@ export default function SuggestionCard({ suggestion, onDismiss, onClick, isDragg
               })}
             </div>
           )}
-          {activePopover && (
-            <PaperChipPopover
-              paperId={activePopover.paperId}
-              displayLabel=""
-              anchorRect={activePopover.rect}
-              onClose={() => setActivePopover(null)}
-            />
-          )}
         </div>
       </div>
     </div>
+    {activePopover && (
+      <PaperChipPopover
+        paperId={activePopover.paperId}
+        displayLabel=""
+        anchorRect={activePopover.rect}
+        onClose={() => setActivePopover(null)}
+      />
+    )}
+    </>
   )
 }

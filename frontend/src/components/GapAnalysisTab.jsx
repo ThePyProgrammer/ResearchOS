@@ -44,9 +44,10 @@ export default function GapAnalysisTab({ projectId, flatExperiments, onRefreshEx
     try {
       const result = await gapAnalysisApi.analyze(projectId, { dismissedIds })
       setAllSuggestions(result)
-      // Stagger card appearance
+      // Stagger card appearance: start after analyzing spinner clears, 200ms between cards
+      setVisibleCount(0)
       result.forEach((_, i) => {
-        setTimeout(() => setVisibleCount(i + 1), i * 150)
+        setTimeout(() => setVisibleCount(prev => Math.max(prev, i + 1)), (i + 1) * 200)
       })
     } catch (err) {
       setError(err.message || 'Gap analysis failed')
