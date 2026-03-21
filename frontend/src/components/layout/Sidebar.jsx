@@ -707,11 +707,11 @@ function LibraryTree() {
 }
 
 
-const projectStatusDotClass = {
-  active:    'bg-emerald-500',
-  paused:    'bg-amber-500',
-  completed: 'bg-blue-500',
-  archived:  'bg-slate-400',
+const projectStatusIcon = {
+  active:    { name: 'folder_open',   class: 'text-blue-400' },
+  paused:    { name: 'pause_circle',  class: 'text-amber-400' },
+  completed: { name: 'check_circle',  class: 'text-emerald-400' },
+  archived:  { name: 'inventory_2',   class: 'text-slate-400' },
 }
 
 function ProjectsTree({ collapsed }) {
@@ -751,7 +751,7 @@ function ProjectsTree({ collapsed }) {
   function ProjectNode({ project }) {
     const isExpanded = !!expandedProjects[project.id]
     const isProjectActive = location.pathname.startsWith(`/projects/${project.id}`)
-    const dotClass = projectStatusDotClass[project.status] || projectStatusDotClass.active
+    const statusIcon = projectStatusIcon[project.status] || projectStatusIcon.active
 
     function handleRowClick() {
       setExpandedProjects(prev => ({ ...prev, [project.id]: !isExpanded }))
@@ -784,9 +784,7 @@ function ProjectsTree({ collapsed }) {
             name={isExpanded ? 'expand_more' : 'chevron_right'}
             className="text-[14px] flex-shrink-0 opacity-50"
           />
-          <span className="w-[16px] flex items-center justify-center flex-shrink-0">
-            <span className={`w-2 h-2 rounded-full ${dotClass}`} />
-          </span>
+          <Icon name={statusIcon.name} className={`text-[16px] flex-shrink-0 ${statusIcon.class}`} />
           <span className="flex-1 truncate text-[13px]">{project.name}</span>
         </button>
 
