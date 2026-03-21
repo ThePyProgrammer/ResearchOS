@@ -74,6 +74,36 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 
 ![Library Map](img/library_map.png)
 
+### Research Projects & Experiments (v1.0)
+
+- **Projects** — create research projects within a library; each project has its own overview, literature, experiments, tasks, notes, and review sections
+- **Research questions** — hierarchical research question tree with drag-and-drop nesting, status tracking (open/investigating/answered/discarded), and wiki-link references in notes
+- **Experiment tree** — nested experiment hierarchy with configurable status, config (JSONB), and metrics (JSONB); tree view with expand/collapse and drag-and-drop reorder; detail panel with inline editing
+- **Experiment differentiators** — compare experiments side-by-side; link papers to experiments for literature grounding; bulk status changes and duplication
+- **CSV data loading** — import experiment results from CSV files with column mapping, preview, and merge into existing experiment configs/metrics
+- **Experiment table view** — spreadsheet-style view with sortable/filterable columns, bulk selection, multi-select actions (compare, set status, duplicate, delete), and column visibility controls
+- **Project notes IDE** — project-scoped tiptap notes with the same editor features as library notes (math, wiki-links, tables, templates, pinned notes, export); project-level AI copilot with experiment and literature context
+- **Project-linked papers** — link library papers to projects; linked papers appear in the project's Literature tab and provide context for AI features
+
+### Research Productivity (v1.1)
+
+- **Task database** — project-scoped tasks with title, description, status, priority, due date (with optional time), tags, and custom fields (text, number, date, select, multi-select)
+  - **Kanban board** — one column per custom status; drag-and-drop cards between columns; inline task creation; column management (rename, color picker, delete with task migration)
+  - **List view** — sortable, filterable table with all fields as columns; filter chips for status, priority, overdue, and custom fields; column visibility picker; custom field management via "+" button
+  - **Calendar view** — month grid showing tasks on due dates as colored chips; "+N more" overflow; unscheduled sidebar with drag-to-date assignment; drag-to-reschedule between dates
+  - **Task detail** — peek overlay (right half) or modal mode; completed tasks show check icon with strikethrough; status colors consistent across all views
+- **LaTeX export** — export project notes to compilable LaTeX with citation management
+  - **Citation insertion** — `@` mention to insert paper/website citations as inline author-year chips; context menu with open paper, remove, copy key, copy BibTeX entry
+  - **Export modal** — template selection (Article/IEEE/NeurIPS), editable title and author, section reordering for folder exports, cited papers list with auto-generated keys
+  - **LaTeX preview** — side-by-side raw `.tex` source with syntax highlighting, live-updating with ~500ms debounce
+  - **ZIP download** — `.tex` + `.bib` bundle with all citations resolved; collision-safe keys (`smith2024a`/`smith2024b`)
+- **AI experiment gap analysis** — AI-powered detection of missing experiments with a drag-based planning board
+  - **Gap detection** — analyzes experiment tree configs and linked paper abstracts to suggest missing baselines, ablation gaps, config sweeps, and replications
+  - **Planning board** — suggestion cards on the left (~60%), mini experiment tree on the right (~40%); drag a card onto a tree node to create a planned experiment as a child
+  - **Suggestion cards** — compact layout with type badge, name, rationale, config preview, and clickable paper reference chips with inline popover previews
+  - **Detail overlay** — edit suggestion name, rationale, and config before promoting; paper references with relevance notes
+  - **Dismiss/undo** — dismiss unwanted suggestions with fade animation and undo toast; dismissed suggestions remembered across re-runs
+
 ## Tech Stack
 
 - **Backend:** Python 3.11+, FastAPI, pydantic-ai, uv
@@ -132,6 +162,13 @@ backend/migrations/011_github_repo_notes_chat.sql
 backend/migrations/012_library_notes.sql
 backend/migrations/013_notes_copilot.sql
 backend/migrations/014_pin_notes.sql
+backend/migrations/015_projects.sql
+backend/migrations/016_project_notes.sql
+backend/migrations/017_research_questions.sql
+backend/migrations/018_project_github_repos.sql
+backend/migrations/019_experiments.sql
+backend/migrations/020_project_notes_copilot.sql
+backend/migrations/021_task_database.sql
 ```
 
 </details>
@@ -200,6 +237,13 @@ CI (`.github/workflows/tests.yml`) runs backend tests, frontend tests/build, and
 | `/library/settings` | Library settings (rename, AI Auto-Note-Taker, delete) |
 | `/agents` | Workflow catalog + active runs with live logs |
 | `/proposals` | Agent proposals — approve/reject with diff view |
+| `/projects` | Projects list |
+| `/projects/:id` | Project overview |
+| `/projects/:id/literature` | Project-linked papers |
+| `/projects/:id/experiments` | Experiment tree + table + gap analysis |
+| `/projects/:id/tasks` | Task database (Kanban / list / calendar) |
+| `/projects/:id/notes` | Project notes IDE |
+| `/projects/:id/review` | Project review |
 | `/authors` | Authors list |
 | `/authors/:id` | Author detail |
 
@@ -264,6 +308,19 @@ All routes are prefixed `/api`. Responses are camelCase JSON. See the full API r
 | POST | `/api/proposals/batch` | Batch approve/reject |
 | GET | `/api/activity` | Activity feed; `?type=agent\|human` |
 | GET | `/api/user` | User profile |
+| GET | `/api/projects` | List projects; `?library_id=` |
+| POST | `/api/projects` | Create project |
+| GET/PATCH/DELETE | `/api/projects/{id}` | Single project |
+| GET/POST | `/api/projects/{id}/experiments` | List / create experiments |
+| GET/PATCH/DELETE | `/api/experiments/{id}` | Single experiment |
+| GET | `/api/projects/{id}/tasks` | List tasks |
+| POST | `/api/projects/{id}/tasks` | Create task |
+| GET/PATCH/DELETE | `/api/tasks/{id}` | Single task |
+| GET/POST | `/api/projects/{id}/task-columns` | List / create task columns |
+| PATCH/DELETE | `/api/task-columns/{id}` | Update / delete task column |
+| GET/POST | `/api/projects/{id}/task-field-defs` | List / create custom field definitions |
+| PATCH/DELETE | `/api/task-field-defs/{id}` | Update / delete custom field definition |
+| POST | `/api/projects/{id}/gap-analysis` | Trigger AI gap analysis; returns suggestion cards |
 | PATCH/DELETE | `/api/notes/{id}` | Update / delete a note by ID (supports `is_pinned`) |
 | GET | `/api/settings/models` | Get current LLM model assignments and available models |
 | PATCH | `/api/settings/models` | Update model assignments for one or more roles |
@@ -304,11 +361,18 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) to get
 
 Scoped for a single-user, local research OS (no auth, no collaboration, no multi-tenancy).
 
-1. **Library Interchange** — ~~BibTeX import and export~~, ~~duplicate detection~~, RIS/CSL-JSON import and export (planned)
+### Shipped
+
+- ~~**v1.0 Research Projects & Experiments**~~ — project foundation, research questions, experiment tree with differentiators, CSV loading, table view, project notes IDE
+- ~~**v1.1 Research Productivity**~~ — task database (Kanban/list/calendar), LaTeX export with citations, AI experiment gap analysis
+
+### Planned
+
+1. **Library Interchange** — ~~BibTeX import and export~~, ~~duplicate detection~~, RIS/CSL-JSON import and export
 2. **Scholarly Discovery** — ~~Related paper discovery via OpenAlex~~, Semantic Scholar and Unpaywall integrations
 3. **Literature Review Automation** — prompt-to-collection pipeline, continuous refresh, provider-aware throttling
 4. **Search & Retrieval** — ~~hybrid lexical + semantic search~~, full embedding pipeline with persistent index
-5. **Notes IDE** — ~~tables~~, ~~note templates~~, ~~pinned notes~~, ~~export (Markdown/PDF)~~, note version history, spaced repetition / flashcard mode, AI synthesis across selected notes
+5. **Notes IDE** — ~~tables~~, ~~note templates~~, ~~pinned notes~~, ~~export (Markdown/PDF)~~, ~~LaTeX export with citations~~, note version history, spaced repetition / flashcard mode, AI synthesis across selected notes
 6. **PDF Annotations** — in-document highlights, anchored comments, annotation export
 7. **Agent Runtime Hardening** — durable execution, ag-ui-protocol streaming, structured run artifacts
 8. **Advanced PDF Processing** — GROBID integration, citation graph from PDFs, section-aware chunking
