@@ -29,10 +29,17 @@ logger = logging.getLogger(__name__)
 _MODEL = "gpt-4o-mini"
 
 _SYSTEM_PROMPT = (
-    "Extract 3-5 keyword tags for each paper based on its title and abstract. "
+    "Extract 3-5 broad category tags for each paper based on its title and abstract. "
     "Return a JSON object where keys are paper IDs and values are arrays of "
-    "lowercase keyword strings. Tags should capture the paper's main topics, "
-    "methods, and domains."
+    "lowercase keyword strings. "
+    "Use broad, reusable category labels that multiple papers in a research library "
+    "would share. Avoid paper-specific terminology. Think of these as library shelf "
+    "labels, not paper summaries. "
+    "Good examples: 'machine learning', 'computer vision', 'natural language processing', "
+    "'reinforcement learning', 'optimization', 'robotics', 'graph neural networks', "
+    "'generative models', 'speech recognition', 'information retrieval'. "
+    "Bad examples: 'multi-head attention mechanism', 'byte-pair encoding tokenization', "
+    "'residual connections in transformers', 'BERT fine-tuning strategies'."
 )
 
 
