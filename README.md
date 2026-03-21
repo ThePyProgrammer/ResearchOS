@@ -7,6 +7,8 @@
 
 An AI-powered research operating system that merges a Zotero-like reference manager with a multi-agent workflow engine. Agents read from and write back to a shared knowledge library with full provenance.
 
+**Who is this for?** Researchers, graduate students, and anyone managing a body of literature alongside experiments. Clone the repo, connect your own Supabase database and OpenAI key, and you have a self-hosted research workspace. All your data stays in your own Supabase instance — there are no ResearchOS servers. AI features use your OpenAI API key (optional — core features work without it). See [costs & privacy](docs/costs-and-privacy.md) for details.
+
 ![Dashboard](img/dashboard.png)
 
 ## Features
@@ -146,6 +148,9 @@ Detailed documentation lives in [`docs/`](docs/README.md):
 
 | Section | What's covered |
 |---------|---------------|
+| [User Guide](docs/user-guide.md) | Walkthrough from first papers to AI features |
+| [Costs & Privacy](docs/costs-and-privacy.md) | What goes to OpenAI, cost estimates, data ownership |
+| [FAQ](docs/faq.md) | Common questions and troubleshooting |
 | [Getting Started](docs/getting-started.md) | Prerequisites, env setup, database, running |
 | [Architecture](docs/architecture.md) | System design, data model, service layer patterns |
 | [Database](docs/database/schema.md) | Schema reference, migrations, conventions |

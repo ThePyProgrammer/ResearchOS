@@ -1,5 +1,11 @@
 # ResearchOS Documentation
 
+## For Users
+
+- [User Guide](user-guide.md) — Walkthrough: first papers to projects to AI features
+- [Costs & Privacy](costs-and-privacy.md) — What goes to OpenAI, cost estimates, data ownership
+- [FAQ & Troubleshooting](faq.md) — Common questions and fixes
+
 ## Getting Started
 
 - [Getting Started](getting-started.md) — Prerequisites, environment setup, database, running the app
