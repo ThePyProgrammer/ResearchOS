@@ -188,91 +188,90 @@ export default function GapAnalysisTab({ projectId, flatExperiments, onRefreshEx
           </div>
         )}
 
-        {/* Content area */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-          {error && (
-            <div className="border border-red-100 rounded-lg p-4 text-center mb-4">
-              <p className="text-sm text-red-500">{error}</p>
-              <button
-                onClick={handleAnalyze}
-                className="mt-2 text-xs text-red-600 hover:text-red-700 font-medium underline"
-              >
-                Try again
-              </button>
-            </div>
-          )}
+        {/* Content area — flex row: scrollable cards left, sticky tree right */}
+        <div className="flex-1 min-h-0 flex">
+          {/* Left column: scrollable suggestion cards */}
+          <div className="flex-[3] min-h-0 overflow-y-auto px-4 py-4">
+            {error && (
+              <div className="border border-red-100 rounded-lg p-4 text-center mb-4">
+                <p className="text-sm text-red-500">{error}</p>
+                <button
+                  onClick={handleAnalyze}
+                  className="mt-2 text-xs text-red-600 hover:text-red-700 font-medium underline"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
 
-          {showEmpty && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Icon name="psychology" className="text-slate-300 text-[48px] mb-3" />
-              <p className="text-sm font-medium text-slate-500 mb-1">Discover missing experiments</p>
-              <p className="text-xs text-slate-400 mb-4 max-w-xs">
-                AI will analyze your existing experiments and suggest missing baselines, ablations, sweeps, and replications.
-              </p>
-              <button
-                onClick={handleAnalyze}
-                className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                <Icon name="psychology" className="text-[16px]" />
-                Analyze Gaps
-              </button>
-            </div>
-          )}
+            {showEmpty && (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Icon name="psychology" className="text-slate-300 text-[48px] mb-3" />
+                <p className="text-sm font-medium text-slate-500 mb-1">Discover missing experiments</p>
+                <p className="text-xs text-slate-400 mb-4 max-w-xs">
+                  AI will analyze your existing experiments and suggest missing baselines, ablations, sweeps, and replications.
+                </p>
+                <button
+                  onClick={handleAnalyze}
+                  className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                  <Icon name="psychology" className="text-[16px]" />
+                  Analyze Gaps
+                </button>
+              </div>
+            )}
 
-          {analyzing && !hasResults && (
-            <div className="space-y-3">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="animate-pulse bg-slate-100 rounded-lg h-24" />
-              ))}
-            </div>
-          )}
+            {analyzing && !hasResults && (
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="animate-pulse bg-slate-100 rounded-lg h-24" />
+                ))}
+              </div>
+            )}
 
-          {/* Two-column planning board: cards (60%) + tree (40%) */}
-          {hasResults && (
-            <div className="grid grid-cols-5 gap-4">
-              {/* Left: suggestion cards */}
-              <div className="col-span-3">
-                {visibleSuggestions.length > 0 ? (
-                  <div className="space-y-3">
-                    {visibleSuggestions.map((suggestion, index) => (
-                      <div
-                        key={suggestion.id}
-                        className="transition-all duration-300 ease-out"
-                        style={{
-                          opacity: index < visibleCount ? 1 : 0,
-                          transform: index < visibleCount ? 'translateY(0)' : 'translateY(8px)',
-                        }}
-                      >
-                        <SuggestionCard
-                          suggestion={suggestion}
-                          onDismiss={handleDismiss}
-                          onClick={() => setSelectedSuggestion(suggestion)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : !analyzing && (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <Icon name="check_circle" className="text-emerald-400 text-[36px] mb-2" />
-                    <p className="text-sm text-slate-500">All suggestions reviewed</p>
-                    <button
-                      onClick={handleAnalyze}
-                      className="mt-3 text-xs text-purple-600 hover:text-purple-700 font-medium"
+            {hasResults && (
+              visibleSuggestions.length > 0 ? (
+                <div className="space-y-3">
+                  {visibleSuggestions.map((suggestion, index) => (
+                    <div
+                      key={suggestion.id}
+                      className="transition-all duration-300 ease-out"
+                      style={{
+                        opacity: index < visibleCount ? 1 : 0,
+                        transform: index < visibleCount ? 'translateY(0)' : 'translateY(8px)',
+                      }}
                     >
-                      Run fresh analysis
-                    </button>
-                  </div>
-                )}
-              </div>
+                      <SuggestionCard
+                        suggestion={suggestion}
+                        onDismiss={handleDismiss}
+                        onClick={() => setSelectedSuggestion(suggestion)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : !analyzing && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Icon name="check_circle" className="text-emerald-400 text-[36px] mb-2" />
+                  <p className="text-sm text-slate-500">All suggestions reviewed</p>
+                  <button
+                    onClick={handleAnalyze}
+                    className="mt-3 text-xs text-purple-600 hover:text-purple-700 font-medium"
+                  >
+                    Run fresh analysis
+                  </button>
+                </div>
+              )
+            )}
+          </div>
 
-              {/* Right: mini experiment tree */}
-              <div className="col-span-2">
-                <MiniExperimentTree
-                  flatExperiments={flatExperiments}
-                  projectId={projectId}
-                  onRefresh={onRefreshExperiments}
-                />
-              </div>
+          {/* Right column: sticky mini experiment tree */}
+          {hasResults && (
+            <div className="flex-[2] min-h-0 overflow-y-auto border-l border-slate-100 px-4 py-4">
+              <MiniExperimentTree
+                flatExperiments={flatExperiments}
+                projectId={projectId}
+                onRefresh={onRefreshExperiments}
+              />
             </div>
           )}
         </div>
