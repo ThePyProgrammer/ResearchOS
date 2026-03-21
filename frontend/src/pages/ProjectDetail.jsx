@@ -4721,6 +4721,9 @@ function OverviewTab({ project, onUpdate }) {
     try {
       const updated = await projectsApi.update(project.id, { [field]: value })
       onUpdate(updated)
+      if (field === 'status' || field === 'name') {
+        window.dispatchEvent(new Event('researchos:projects-changed'))
+      }
     } catch (err) {
       console.error('Failed to update project:', err)
     }
