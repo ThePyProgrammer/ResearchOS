@@ -11,6 +11,7 @@ import {
   getNodeColor,
   getNodeSize,
   computeTimelinePositions,
+  parsePublishedDate,
   buildHeatmapMatrix,
 } from './ProjectReviewDashboard'
 
@@ -23,6 +24,7 @@ const paperA = {
   title: 'Attention Is All You Need',
   authors: ['Vaswani, Ashish', 'Shazeer, Noam'],
   year: 2017,
+  publishedDate: '2017-06-12',
   venue: 'NeurIPS',
   tags: ['transformers', 'attention'],
   itemType: 'paper',
@@ -33,6 +35,7 @@ const paperB = {
   title: 'BERT: Pre-training',
   authors: ['Ashish Vaswani', 'Devlin, Jacob'],
   year: 2019,
+  publishedDate: '2019-05-24',
   venue: 'NeurIPS',
   tags: ['transformers', 'bert'],
   itemType: 'paper',
@@ -43,6 +46,7 @@ const paperC = {
   title: 'GPT-3',
   authors: ['Brown, Tom'],
   year: 2020,
+  publishedDate: '2020-06',
   venue: 'ICML',
   tags: [],
   itemType: 'paper',
@@ -106,36 +110,25 @@ describe('buildCitationEdges', () => {
     expect(edge.sharedAuthors.length).toBeGreaterThan(0)
   })
 
-  it('produces a venueEdge when two papers share the same venue', () => {
-    const { venueEdges } = buildCitationEdges([paperA, paperB])
-    // Both venue = NeurIPS
-    expect(venueEdges).toHaveLength(1)
-    expect(venueEdges[0].type).toBe('venue')
+  it('does not return venueEdges (venue logic removed)', () => {
+    const result = buildCitationEdges([paperA, paperB])
+    expect(result).not.toHaveProperty('venueEdges')
   })
 
   it('returns no edges when papers share nothing', () => {
-    const { authorEdges, venueEdges } = buildCitationEdges([paperA, paperC])
-    // paperA: Vaswani + NeurIPS; paperC: Brown + ICML — no overlap
+    const { authorEdges } = buildCitationEdges([paperA, paperC])
+    // paperA: Vaswani; paperC: Brown — no overlap
     expect(authorEdges).toHaveLength(0)
-    expect(venueEdges).toHaveLength(0)
   })
 
   it('handles an empty paper list', () => {
-    const { authorEdges, venueEdges } = buildCitationEdges([])
+    const { authorEdges } = buildCitationEdges([])
     expect(authorEdges).toHaveLength(0)
-    expect(venueEdges).toHaveLength(0)
   })
 
   it('handles a single paper without crashing', () => {
-    const { authorEdges, venueEdges } = buildCitationEdges([paperA])
+    const { authorEdges } = buildCitationEdges([paperA])
     expect(authorEdges).toHaveLength(0)
-    expect(venueEdges).toHaveLength(0)
-  })
-
-  it('does not produce a venueEdge when one paper has empty venue', () => {
-    const { venueEdges } = buildCitationEdges([paperA, websiteD])
-    // websiteD has venue = '' — should not match
-    expect(venueEdges).toHaveLength(0)
   })
 })
 
@@ -210,39 +203,92 @@ describe('getNodeSize', () => {
 })
 
 // ---------------------------------------------------------------------------
+// parsePublishedDate
+// ---------------------------------------------------------------------------
+
+describe('parsePublishedDate', () => {
+  it('parses a full date "2023-06-15"', () => {
+    const { ts, key } = parsePublishedDate({ publishedDate: '2023-06-15', year: 2023 })
+    expect(key).toBe('2023-06')
+    expect(ts).toBeGreaterThan(0)
+    const d = new Date(ts)
+    expect(d.getFullYear()).toBe(2023)
+    expect(d.getMonth()).toBe(5) // June = 5 (0-indexed)
+  })
+
+  it('parses a year-month date "2023-06"', () => {
+    const { ts, key } = parsePublishedDate({ publishedDate: '2023-06', year: 2023 })
+    expect(key).toBe('2023-06')
+  })
+
+  it('parses a year-only date "2023"', () => {
+    const { ts, key } = parsePublishedDate({ publishedDate: '2023', year: 2023 })
+    expect(key).toBe('2023-01')
+  })
+
+  it('falls back to year when publishedDate is missing', () => {
+    const { ts, key } = parsePublishedDate({ year: 2020 })
+    expect(key).toBe('2020-01')
+    expect(ts).toBeGreaterThan(0)
+  })
+
+  it('returns ts=0 when both publishedDate and year are missing', () => {
+    const { ts, key } = parsePublishedDate({})
+    expect(ts).toBe(0)
+    expect(key).toBe('0000-00')
+  })
+
+  it('returns ts=0 when year is 0 and no publishedDate', () => {
+    const { ts } = parsePublishedDate({ year: 0 })
+    expect(ts).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // computeTimelinePositions
 // ---------------------------------------------------------------------------
 
 describe('computeTimelinePositions', () => {
-  it('assigns _y=0 and _y=1 for two papers in same year', () => {
-    const p1 = { ...paperA, id: 'p1', year: 2020 }
-    const p2 = { ...paperB, id: 'p2', year: 2020 }
+  it('assigns _y=0 and _y=1 for two papers in same month', () => {
+    const p1 = { ...paperA, id: 'p1', publishedDate: '2020-06-01' }
+    const p2 = { ...paperB, id: 'p2', publishedDate: '2020-06-15' }
     const result = computeTimelinePositions([p1, p2])
     const positions = result.map(p => p._y).sort()
     expect(positions).toEqual([0, 1])
   })
 
-  it('assigns _y=0 for a paper in a unique year', () => {
-    const p3 = { ...paperC, id: 'p3', year: 2021 }
+  it('assigns _y=0 for a paper in a unique month', () => {
+    const p3 = { ...paperC, id: 'p3', publishedDate: '2021-03-01' }
     const result = computeTimelinePositions([p3])
     expect(result[0]._y).toBe(0)
   })
 
-  it('assigns _x equal to year', () => {
+  it('assigns _x as a timestamp', () => {
     const result = computeTimelinePositions([paperA])
-    expect(result[0]._x).toBe(2017)
+    // _x should be a timestamp (large number), not a year integer
+    expect(result[0]._x).toBeGreaterThan(10000)
   })
 
-  it('handles papers with year=0 without crashing', () => {
-    const p = { ...paperA, year: 0 }
+  it('uses publishedDate for _x positioning', () => {
+    const p1 = { id: 'p1', publishedDate: '2020-01-01', year: 2020 }
+    const p2 = { id: 'p2', publishedDate: '2020-06-01', year: 2020 }
+    const result = computeTimelinePositions([p1, p2])
+    // June should have a later timestamp than January
+    expect(result[1]._x).toBeGreaterThan(result[0]._x)
+  })
+
+  it('falls back to year when publishedDate is absent', () => {
+    const p = { id: 'p1', year: 2020 }
+    const result = computeTimelinePositions([p])
+    const expected = new Date(2020, 0, 1).getTime()
+    expect(result[0]._x).toBe(expected)
+  })
+
+  it('handles papers with no date data (ts=0)', () => {
+    const p = { id: 'p1' }
     expect(() => computeTimelinePositions([p])).not.toThrow()
     const result = computeTimelinePositions([p])
     expect(result[0]._x).toBe(0)
-  })
-
-  it('handles papers with year=null without crashing', () => {
-    const p = { ...paperA, year: null }
-    expect(() => computeTimelinePositions([p])).not.toThrow()
   })
 
   it('handles empty array', () => {

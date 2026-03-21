@@ -61,7 +61,6 @@ function buildDegreeMap(papers, activeEdges) {
  *   colorBy          - 'year' | 'venue' | 'type' | 'uniform'
  *   sizeBy           - 'connections' | 'year' | 'uniform'
  *   showAuthorEdges  - boolean
- *   showVenueEdges   - boolean
  *   projectId        - string (unused here, kept for future localStorage keying)
  */
 export default function CitationNetworkViz({
@@ -69,7 +68,6 @@ export default function CitationNetworkViz({
   colorBy = 'year',
   sizeBy = 'connections',
   showAuthorEdges = true,
-  showVenueEdges = true,
 }) {
   const svgRef        = useRef(null)
   const svgWrapperRef = useRef(null)
@@ -99,11 +97,8 @@ export default function CitationNetworkViz({
     const height = svgWrapperRef.current.clientHeight || 500
 
     // Build edges
-    const { authorEdges, venueEdges } = buildCitationEdges(papers)
-    const activeEdges = [
-      ...(showAuthorEdges ? authorEdges : []),
-      ...(showVenueEdges  ? venueEdges  : []),
-    ]
+    const { authorEdges } = buildCitationEdges(papers)
+    const activeEdges = showAuthorEdges ? authorEdges : []
 
     // Build scales and degree map
     const scales = buildScales(papers)
@@ -156,9 +151,8 @@ export default function CitationNetworkViz({
       .selectAll('line')
       .data(links)
       .join('line')
-      .attr('stroke',       d => d.type === 'author' ? '#3b82f6' : '#f97316')
+      .attr('stroke',       '#3b82f6')
       .attr('stroke-width', 1.5)
-      .attr('stroke-dasharray', d => d.type === 'venue' ? '5,3' : null)
       .attr('stroke-opacity', 0.35)
 
     // ── Nodes ────────────────────────────────────────────────────────────────
@@ -252,7 +246,7 @@ export default function CitationNetworkViz({
         simRef.current = null
       }
     }
-  }, [papers, showAuthorEdges, showVenueEdges])
+  }, [papers, showAuthorEdges])
 
   // ── Update colors + sizes when options change, without restarting sim ─────
   useEffect(() => {
@@ -262,11 +256,8 @@ export default function CitationNetworkViz({
     scalesRef.current = scales
 
     // Rebuild degreeMap from current active edges to reflect current toggle state
-    const { authorEdges, venueEdges } = buildCitationEdges(papers)
-    const activeEdges = [
-      ...(showAuthorEdges ? authorEdges : []),
-      ...(showVenueEdges  ? venueEdges  : []),
-    ]
+    const { authorEdges } = buildCitationEdges(papers)
+    const activeEdges = showAuthorEdges ? authorEdges : []
     const degreeMap = buildDegreeMap(papers, activeEdges)
     degreeMapRef.current = degreeMap
 
@@ -278,7 +269,7 @@ export default function CitationNetworkViz({
 
     svg.selectAll('.node-label')
       .attr('y', d => getNodeSize(d, sizeBy, degreeMap) + 12)
-  }, [colorBy, sizeBy, papers, showAuthorEdges, showVenueEdges])
+  }, [colorBy, sizeBy, papers, showAuthorEdges])
 
   // ── Empty state ──────────────────────────────────────────────────────────────
   if (papers.length === 0) {
@@ -333,24 +324,14 @@ export default function CitationNetworkViz({
       </div>
 
       {/* Edge type legend */}
-      {(showAuthorEdges || showVenueEdges) && (
+      {showAuthorEdges && (
         <div className="flex items-center gap-4 mt-2 px-1">
-          {showAuthorEdges && (
-            <div className="flex items-center gap-1.5">
-              <svg width="24" height="8" aria-hidden="true">
-                <line x1="0" y1="4" x2="24" y2="4" stroke="#3b82f6" strokeWidth="2" />
-              </svg>
-              <span className="text-[11px] text-slate-500">Shared Authors</span>
-            </div>
-          )}
-          {showVenueEdges && (
-            <div className="flex items-center gap-1.5">
-              <svg width="24" height="8" aria-hidden="true">
-                <line x1="0" y1="4" x2="24" y2="4" stroke="#f97316" strokeWidth="2" strokeDasharray="5,3" />
-              </svg>
-              <span className="text-[11px] text-slate-500">Same Venue</span>
-            </div>
-          )}
+          <div className="flex items-center gap-1.5">
+            <svg width="24" height="8" aria-hidden="true">
+              <line x1="0" y1="4" x2="24" y2="4" stroke="#3b82f6" strokeWidth="2" />
+            </svg>
+            <span className="text-[11px] text-slate-500">Shared Authors</span>
+          </div>
         </div>
       )}
     </div>

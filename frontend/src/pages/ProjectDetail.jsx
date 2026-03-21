@@ -9,7 +9,16 @@ import CSVImportModal from './CSVImportModal'
 import { PaperDetail, WebsiteDetail, GitHubRepoDetail } from './Library'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { detectType } from '../utils/detectType'
-import ProjectReviewDashboard from './ProjectReviewDashboard'
+import {
+  buildCitationEdges,
+  getNodeColor,
+  getNodeSize,
+  computeTimelinePositions,
+  buildHeatmapMatrix,
+} from './ProjectReviewDashboard'
+import CitationNetworkViz from '../components/CitationNetworkViz'
+import TimelineViz from '../components/TimelineViz'
+import HeatmapViz from '../components/HeatmapViz'
 import {
   DndContext,
   closestCenter,
@@ -4338,12 +4347,89 @@ function LitDetailPanel({ item, onClose, onUnlink }) {
 
 // ─── Literature Tab ────────────────────────────────────────────────────────────
 
+// ─── Option controls helpers (for viz sub-tabs) ──────────────────────────────
+function OptionRow({ label, children }) {
+  return (
+    <div className="flex items-center gap-2">
+      <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function OptionSelect({ value, onChange, options }) {
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="text-xs border border-slate-200 rounded px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+    >
+      {options.map(o => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
+  )
+}
+
+const COLOR_BY_OPTIONS = [
+  { value: 'year', label: 'Year' },
+  { value: 'venue', label: 'Venue' },
+  { value: 'type', label: 'Type' },
+  { value: 'uniform', label: 'Uniform' },
+]
+
+const SIZE_BY_OPTIONS = [
+  { value: 'connections', label: 'Connections' },
+  { value: 'year', label: 'Year' },
+  { value: 'uniform', label: 'Uniform' },
+]
+
+const AXIS_OPTIONS = [
+  { value: 'tags', label: 'Tags' },
+  { value: 'venue', label: 'Venue' },
+  { value: 'year', label: 'Year' },
+  { value: 'author', label: 'Author' },
+]
+
+const LIT_SUB_TABS = [
+  { key: 'papers',   label: 'Papers',   icon: 'description' },
+  { key: 'graph',    label: 'Graph',    icon: 'hub' },
+  { key: 'timeline', label: 'Timeline', icon: 'timeline' },
+  { key: 'heatmap',  label: 'Heatmap',  icon: 'grid_view' },
+]
+
 function LiteratureTab({ projectId, libraryId }) {
   const [links, setLinks] = useState([])
   const [paperLookup, setPaperLookup] = useState({})
   const [websiteLookup, setWebsiteLookup] = useState({})
   const [repoLookup, setRepoLookup] = useState({})
   const [loading, setLoading] = useState(true)
+
+  // Sub-tab state
+  const [activeSubTab, setActiveSubTab] = useLocalStorage(
+    `researchos.project.${projectId}.lit.subTab`,
+    'papers'
+  )
+
+  // ── Visualization options ──────────────────────────────────────────────────
+  const [networkColorBy, setNetworkColorBy] = useLocalStorage(
+    `researchos.review.${projectId}.network.colorBy`, 'year'
+  )
+  const [networkSizeBy, setNetworkSizeBy] = useLocalStorage(
+    `researchos.review.${projectId}.network.sizeBy`, 'connections'
+  )
+  const [networkShowAuthors, setNetworkShowAuthors] = useLocalStorage(
+    `researchos.review.${projectId}.network.showAuthors`, true
+  )
+  const [timelineColorBy, setTimelineColorBy] = useLocalStorage(
+    `researchos.review.${projectId}.timeline.colorBy`, 'year'
+  )
+  const [heatmapRowAxis, setHeatmapRowAxis] = useLocalStorage(
+    `researchos.review.${projectId}.heatmap.rowAxis`, 'venue'
+  )
+  const [heatmapColAxis, setHeatmapColAxis] = useLocalStorage(
+    `researchos.review.${projectId}.heatmap.colAxis`, 'year'
+  )
 
   // Table state
   const [sortKey, setSortKey] = useState('date')
@@ -4484,229 +4570,330 @@ function LiteratureTab({ projectId, libraryId }) {
     )
   }
 
+  // Inline options for each viz sub-tab (rendered in the tab bar)
+  const graphOptions = (
+    <div className="flex items-center gap-3">
+      <OptionRow label="Color">
+        <OptionSelect value={networkColorBy} onChange={setNetworkColorBy} options={COLOR_BY_OPTIONS} />
+      </OptionRow>
+      <OptionRow label="Size">
+        <OptionSelect value={networkSizeBy} onChange={setNetworkSizeBy} options={SIZE_BY_OPTIONS} />
+      </OptionRow>
+      <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={networkShowAuthors}
+          onChange={e => setNetworkShowAuthors(e.target.checked)}
+          className="rounded"
+        />
+        Author edges
+      </label>
+    </div>
+  )
+
+  const timelineOptions = (
+    <div className="flex items-center gap-3">
+      <OptionRow label="Color">
+        <OptionSelect value={timelineColorBy} onChange={setTimelineColorBy} options={COLOR_BY_OPTIONS} />
+      </OptionRow>
+    </div>
+  )
+
+  const heatmapOptions = (
+    <div className="flex items-center gap-3">
+      <OptionRow label="Rows">
+        <OptionSelect value={heatmapRowAxis} onChange={setHeatmapRowAxis} options={AXIS_OPTIONS} />
+      </OptionRow>
+      <OptionRow label="Cols">
+        <OptionSelect value={heatmapColAxis} onChange={setHeatmapColAxis} options={AXIS_OPTIONS} />
+      </OptionRow>
+    </div>
+  )
+
   return (
-    <div className="flex h-full">
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top toolbar */}
-        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b border-slate-200">
-          {/* Search filter */}
-          <div className="relative flex-1">
-            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400" />
-            <input
-              type="text"
-              placeholder="Filter literature..."
-              value={searchFilter}
-              onChange={e => setSearchFilter(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-            />
-          </div>
-          {/* Link literature button with inline search picker */}
-          <div className="relative flex-shrink-0">
-            <SearchPicker
-              projectId={projectId}
-              libraryId={libraryId}
-              onLinked={fetchAll}
-              existingPaperIds={existingPaperIds}
-              existingWebsiteIds={existingWebsiteIds}
-              existingRepoIds={existingRepoIds}
-              renderTrigger
-            />
-          </div>
-        </div>
+    <div className="flex flex-col h-full">
+      {/* Sub-tab bar */}
+      <div className="flex-shrink-0 flex items-center gap-1 px-4 py-2 border-b border-slate-200 bg-white">
+        {LIT_SUB_TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveSubTab(tab.key)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              activeSubTab === tab.key
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <Icon name={tab.icon} className="text-[16px]" />
+            {tab.label}
+          </button>
+        ))}
+        {/* Inline options for active viz sub-tab */}
+        {activeSubTab === 'graph' && <div className="ml-auto flex items-center">{graphOptions}</div>}
+        {activeSubTab === 'timeline' && <div className="ml-auto flex items-center">{timelineOptions}</div>}
+        {activeSubTab === 'heatmap' && <div className="ml-auto flex items-center">{heatmapOptions}</div>}
+      </div>
 
-        {/* Bulk action bar */}
-        {selectedIds.size > 0 && (
-          <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2 bg-blue-50 border-b border-blue-100">
-            <span className="text-sm font-medium text-blue-700">{selectedIds.size} selected</span>
-            <button
-              onClick={handleBulkUnlink}
-              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors"
-            >
-              <Icon name="link_off" className="text-[14px]" />
-              Unlink Selected
-            </button>
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="ml-auto text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              <Icon name="close" className="text-[16px]" />
-            </button>
-          </div>
-        )}
+      {/* Sub-tab content */}
+      {activeSubTab === 'papers' && (
+        <div className="flex flex-1 min-h-0">
+          {/* Main content */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Top toolbar */}
+            <div className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b border-slate-200">
+              {/* Search filter */}
+              <div className="relative flex-1">
+                <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter literature..."
+                  value={searchFilter}
+                  onChange={e => setSearchFilter(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                />
+              </div>
+              {/* Link literature button with inline search picker */}
+              <div className="relative flex-shrink-0">
+                <SearchPicker
+                  projectId={projectId}
+                  libraryId={libraryId}
+                  onLinked={fetchAll}
+                  existingPaperIds={existingPaperIds}
+                  existingWebsiteIds={existingWebsiteIds}
+                  existingRepoIds={existingRepoIds}
+                  renderTrigger
+                />
+              </div>
+            </div>
 
-        {/* Table */}
-        {items.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-            <Icon name="menu_book" className="text-slate-300 text-[36px] mb-2" />
-            <p className="text-sm text-slate-400">No literature linked yet. Use the search above to add supporting papers and websites.</p>
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
-                <tr>
-                  <th className="pl-4 pr-2 py-2.5 w-8">
-                    <input
-                      type="checkbox"
-                      className="rounded border-slate-300 text-blue-600"
-                      checked={filtered.length > 0 && selectedIds.size === filtered.length}
-                      ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length }}
-                      onChange={toggleSelectAll}
-                    />
-                  </th>
-                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider w-20">
-                    Type
-                  </th>
-                  <th
-                    className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
-                    onClick={() => toggleSort('title')}
-                  >
-                    <span className="flex items-center gap-1">
-                      Title
-                      {sortKey === 'title' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
-                    </span>
-                  </th>
-                  <th
-                    className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
-                    onClick={() => toggleSort('authors')}
-                  >
-                    <span className="flex items-center gap-1">
-                      Authors
-                      {sortKey === 'authors' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
-                    </span>
-                  </th>
-                  <th
-                    className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
-                    onClick={() => toggleSort('date')}
-                  >
-                    <span className="flex items-center gap-1">
-                      Date
-                      {sortKey === 'date' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
-                    </span>
-                  </th>
-                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Venue</th>
-                  <th className="w-10" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.map(item => {
-                  const isSelected = selectedItem?.id === item.id
-                  const isChecked = selectedIds.has(item.id)
-                  const isWebsite = item.itemType === 'website'
-                  const isRepo = item.itemType === 'github_repo'
-                  return (
-                    <tr
-                      key={item.id}
-                      onClick={() => setSelectedItem(isSelected ? null : item)}
-                      className={`group cursor-pointer transition-colors ${
-                        isSelected ? 'bg-blue-50' : isChecked ? 'bg-blue-50/50' : 'hover:bg-slate-50'
-                      }`}
-                    >
-                      {/* Checkbox */}
-                      <td className="pl-4 pr-2 py-3 w-8">
+            {/* Bulk action bar */}
+            {selectedIds.size > 0 && (
+              <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2 bg-blue-50 border-b border-blue-100">
+                <span className="text-sm font-medium text-blue-700">{selectedIds.size} selected</span>
+                <button
+                  onClick={handleBulkUnlink}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors"
+                >
+                  <Icon name="link_off" className="text-[14px]" />
+                  Unlink Selected
+                </button>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="ml-auto text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <Icon name="close" className="text-[16px]" />
+                </button>
+              </div>
+            )}
+
+            {/* Table */}
+            {items.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                <Icon name="menu_book" className="text-slate-300 text-[36px] mb-2" />
+                <p className="text-sm text-slate-400">No literature linked yet. Use the search above to add supporting papers and websites.</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th className="pl-4 pr-2 py-2.5 w-8">
                         <input
                           type="checkbox"
                           className="rounded border-slate-300 text-blue-600"
-                          checked={isChecked}
-                          onClick={e => e.stopPropagation()}
-                          onChange={() => toggleCheck(item)}
+                          checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                          ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length }}
+                          onChange={toggleSelectAll}
                         />
-                      </td>
-                      {/* Type */}
-                      <td className="px-2 py-3 w-20">
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${
-                          isRepo ? 'bg-violet-100 text-violet-700' : isWebsite ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {isRepo ? 'GitHub' : isWebsite ? 'Website' : 'Paper'}
+                      </th>
+                      <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider w-20">
+                        Type
+                      </th>
+                      <th
+                        className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
+                        onClick={() => toggleSort('title')}
+                      >
+                        <span className="flex items-center gap-1">
+                          Title
+                          {sortKey === 'title' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
                         </span>
-                      </td>
-                      {/* Title */}
-                      <td className="px-2 py-3 max-w-xs">
-                        <span className="text-sm text-slate-800 line-clamp-1 block">{item.title}</span>
-                      </td>
-                      {/* Authors */}
-                      <td className="px-2 py-3 text-sm text-slate-500 w-32">
-                        {litFormatAuthors(item.authors)}
-                      </td>
-                      {/* Date */}
-                      <td className="px-2 py-3 text-sm text-slate-500 w-16">
-                        {litItemYear(item)}
-                      </td>
-                      {/* Venue */}
-                      <td className="px-2 py-3 text-sm text-slate-500 max-w-[140px]">
-                        <span className="line-clamp-1 block">{litItemVenue(item)}</span>
-                      </td>
-                      {/* Unlink */}
-                      <td className="px-2 py-3 w-10">
-                        <button
-                          onClick={e => { e.stopPropagation(); handleUnlink(item._linkId) }}
-                          title="Unlink"
-                          className="text-slate-300 hover:text-red-400 transition-all p-1 rounded"
-                        >
-                          <Icon name="link_off" className="text-[16px]" />
-                        </button>
-                      </td>
+                      </th>
+                      <th
+                        className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
+                        onClick={() => toggleSort('authors')}
+                      >
+                        <span className="flex items-center gap-1">
+                          Authors
+                          {sortKey === 'authors' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
+                        </span>
+                      </th>
+                      <th
+                        className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors"
+                        onClick={() => toggleSort('date')}
+                      >
+                        <span className="flex items-center gap-1">
+                          Date
+                          {sortKey === 'date' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
+                        </span>
+                      </th>
+                      <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Venue</th>
+                      <th className="w-10" />
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            {filtered.length === 0 && items.length > 0 && (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                <Icon name="search_off" className="text-[36px] mb-2" />
-                <p className="text-sm">No items match your filter.</p>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filtered.map(item => {
+                      const isSelected = selectedItem?.id === item.id
+                      const isChecked = selectedIds.has(item.id)
+                      const isWebsite = item.itemType === 'website'
+                      const isRepo = item.itemType === 'github_repo'
+                      return (
+                        <tr
+                          key={item.id}
+                          onClick={() => setSelectedItem(isSelected ? null : item)}
+                          className={`group cursor-pointer transition-colors ${
+                            isSelected ? 'bg-blue-50' : isChecked ? 'bg-blue-50/50' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          {/* Checkbox */}
+                          <td className="pl-4 pr-2 py-3 w-8">
+                            <input
+                              type="checkbox"
+                              className="rounded border-slate-300 text-blue-600"
+                              checked={isChecked}
+                              onClick={e => e.stopPropagation()}
+                              onChange={() => toggleCheck(item)}
+                            />
+                          </td>
+                          {/* Type */}
+                          <td className="px-2 py-3 w-20">
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${
+                              isRepo ? 'bg-violet-100 text-violet-700' : isWebsite ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {isRepo ? 'GitHub' : isWebsite ? 'Website' : 'Paper'}
+                            </span>
+                          </td>
+                          {/* Title */}
+                          <td className="px-2 py-3 max-w-xs">
+                            <span className="text-sm text-slate-800 line-clamp-1 block">{item.title}</span>
+                          </td>
+                          {/* Authors */}
+                          <td className="px-2 py-3 text-sm text-slate-500 w-32">
+                            {litFormatAuthors(item.authors)}
+                          </td>
+                          {/* Date */}
+                          <td className="px-2 py-3 text-sm text-slate-500 w-16">
+                            {litItemYear(item)}
+                          </td>
+                          {/* Venue */}
+                          <td className="px-2 py-3 text-sm text-slate-500 max-w-[140px]">
+                            <span className="line-clamp-1 block">{litItemVenue(item)}</span>
+                          </td>
+                          {/* Unlink */}
+                          <td className="px-2 py-3 w-10">
+                            <button
+                              onClick={e => { e.stopPropagation(); handleUnlink(item._linkId) }}
+                              title="Unlink"
+                              className="text-slate-300 hover:text-red-400 transition-all p-1 rounded"
+                            >
+                              <Icon name="link_off" className="text-[16px]" />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                {filtered.length === 0 && items.length > 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                    <Icon name="search_off" className="text-[36px] mb-2" />
+                    <p className="text-sm">No items match your filter.</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Detail panel — reuse Library.jsx components */}
-      {selectedItem && selectedItem.itemType === 'website' && (
-        <WebsiteDetail
-          item={selectedItem}
-          onClose={() => setSelectedItem(null)}
-          onStatusChange={(id, status) => {
-            websitesApi.update(id, { status }).then(fetchAll)
-          }}
-          onUpdate={(updated) => {
-            setSelectedItem(prev => prev?.id === updated.id ? { ...prev, ...updated, itemType: 'website', _linkId: prev._linkId } : prev)
-            fetchAll()
-          }}
-          onDelete={() => { setSelectedItem(null); fetchAll() }}
-          width={320}
-        />
+          {/* Detail panel — reuse Library.jsx components */}
+          {selectedItem && selectedItem.itemType === 'website' && (
+            <WebsiteDetail
+              item={selectedItem}
+              onClose={() => setSelectedItem(null)}
+              onStatusChange={(id, status) => {
+                websitesApi.update(id, { status }).then(fetchAll)
+              }}
+              onUpdate={(updated) => {
+                setSelectedItem(prev => prev?.id === updated.id ? { ...prev, ...updated, itemType: 'website', _linkId: prev._linkId } : prev)
+                fetchAll()
+              }}
+              onDelete={() => { setSelectedItem(null); fetchAll() }}
+              width={320}
+            />
+          )}
+          {selectedItem && selectedItem.itemType === 'github_repo' && (
+            <GitHubRepoDetail
+              item={selectedItem}
+              onClose={() => setSelectedItem(null)}
+              onStatusChange={(id, status) => {
+                githubReposApi.update(id, { status }).then(fetchAll)
+              }}
+              onUpdate={(updated) => {
+                setSelectedItem(prev => prev?.id === updated.id ? { ...prev, ...updated, itemType: 'github_repo', _linkId: prev._linkId } : prev)
+                fetchAll()
+              }}
+              onDelete={() => { setSelectedItem(null); fetchAll() }}
+              width={320}
+            />
+          )}
+          {selectedItem && selectedItem.itemType !== 'website' && selectedItem.itemType !== 'github_repo' && (
+            <PaperDetail
+              paper={selectedItem}
+              onClose={() => setSelectedItem(null)}
+              onStatusChange={(id, status) => {
+                papersApi.update(id, { status }).then(fetchAll)
+              }}
+              onPaperUpdate={(updated) => {
+                setSelectedItem(prev => prev?.id === updated.id ? { ...prev, ...updated, _linkId: prev._linkId } : prev)
+                fetchAll()
+              }}
+              onDelete={() => { setSelectedItem(null); fetchAll() }}
+              width={320}
+            />
+          )}
+        </div>
       )}
-      {selectedItem && selectedItem.itemType === 'github_repo' && (
-        <GitHubRepoDetail
-          item={selectedItem}
-          onClose={() => setSelectedItem(null)}
-          onStatusChange={(id, status) => {
-            githubReposApi.update(id, { status }).then(fetchAll)
-          }}
-          onUpdate={(updated) => {
-            setSelectedItem(prev => prev?.id === updated.id ? { ...prev, ...updated, itemType: 'github_repo', _linkId: prev._linkId } : prev)
-            fetchAll()
-          }}
-          onDelete={() => { setSelectedItem(null); fetchAll() }}
-          width={320}
-        />
+
+      {activeSubTab === 'graph' && (
+        <div className="flex-1 min-h-0 overflow-auto p-4">
+          <CitationNetworkViz
+            papers={items}
+            colorBy={networkColorBy}
+            sizeBy={networkSizeBy}
+            showAuthorEdges={networkShowAuthors}
+            projectId={projectId}
+          />
+        </div>
       )}
-      {selectedItem && selectedItem.itemType !== 'website' && selectedItem.itemType !== 'github_repo' && (
-        <PaperDetail
-          paper={selectedItem}
-          onClose={() => setSelectedItem(null)}
-          onStatusChange={(id, status) => {
-            papersApi.update(id, { status }).then(fetchAll)
-          }}
-          onPaperUpdate={(updated) => {
-            setSelectedItem(prev => prev?.id === updated.id ? { ...prev, ...updated, _linkId: prev._linkId } : prev)
-            fetchAll()
-          }}
-          onDelete={() => { setSelectedItem(null); fetchAll() }}
-          width={320}
-        />
+
+      {activeSubTab === 'timeline' && (
+        <div className="flex-1 min-h-0 overflow-auto p-4">
+          <TimelineViz
+            papers={items}
+            colorBy={timelineColorBy}
+            projectId={projectId}
+          />
+        </div>
+      )}
+
+      {activeSubTab === 'heatmap' && (
+        <div className="flex-1 min-h-0 overflow-auto p-4">
+          <HeatmapViz
+            papers={items}
+            rowAxis={heatmapRowAxis}
+            colAxis={heatmapColAxis}
+            projectId={projectId}
+            onPapersRefresh={fetchAll}
+          />
+        </div>
       )}
     </div>
   )
@@ -4852,7 +5039,7 @@ export default function ProjectDetail() {
         <Link to={`/projects/${id}`} className="text-sm text-slate-500 hover:text-slate-700 truncate font-medium transition-colors">{project.name}</Link>
         {(() => {
           const segment = location.pathname.split('/').pop()
-          const sectionLabels = { literature: 'Literature', experiments: 'Experiments', tasks: 'Tasks', notes: 'Notes', review: 'Review' }
+          const sectionLabels = { literature: 'Literature', experiments: 'Experiments', tasks: 'Tasks', notes: 'Notes' }
           const label = sectionLabels[segment]
           if (!label) return null
           return (
@@ -4895,15 +5082,6 @@ export function ProjectLiterature() {
 export function ProjectExperiments() {
   const { project } = useOutletContext()
   return <ExperimentSection projectId={project.id} libraryId={project.libraryId} />
-}
-
-export function ProjectReview() {
-  const { project } = useOutletContext()
-  return (
-    <div className="h-full overflow-auto">
-      <ProjectReviewDashboard projectId={project.id} libraryId={project.libraryId} />
-    </div>
-  )
 }
 
 export function ProjectNotes() {

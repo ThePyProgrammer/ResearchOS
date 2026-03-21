@@ -1,21 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { projectPapersApi, papersApi, websitesApi } from '../services/api'
-import { useLocalStorage } from '../hooks/useLocalStorage'
-import CitationNetworkViz from '../components/CitationNetworkViz'
-import TimelineViz from '../components/TimelineViz'
-import HeatmapViz from '../components/HeatmapViz'
-
-// ─── Icon helper ──────────────────────────────────────────────────────────────
-function Icon({ name, className = '' }) {
-  return (
-    <span className={`material-symbols-outlined select-none ${className}`} aria-hidden="true">
-      {name}
-    </span>
-  )
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
-// Pure data utility functions (exported for testing)
+// Pure data utility functions (exported for testing and use by LiteratureTab)
+//
+// The React component that previously lived here has been merged into
+// LiteratureTab (in ProjectDetail.jsx) as sub-tabs: Graph, Timeline, Heatmap.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
@@ -62,15 +49,13 @@ export function normalizeAuthor(name) {
 }
 
 /**
- * Build citation edges between papers based on shared authors or shared venue.
+ * Build citation edges between papers based on shared authors.
  *
  * O(n^2) comparison. Returns:
  *   authorEdges: Array<{ source, target, type: 'author', sharedAuthors: string[] }>
- *   venueEdges:  Array<{ source, target, type: 'venue' }>
  */
 export function buildCitationEdges(papers) {
   const authorEdges = []
-  const venueEdges = []
 
   for (let i = 0; i < papers.length; i++) {
     for (let j = i + 1; j < papers.length; j++) {
@@ -89,21 +74,10 @@ export function buildCitationEdges(papers) {
           sharedAuthors: shared,
         })
       }
-
-      // Venue match (case-insensitive, both non-empty)
-      const venueA = (a.venue || '').trim()
-      const venueB = (b.venue || '').trim()
-      if (venueA && venueB && venueA.toLowerCase() === venueB.toLowerCase()) {
-        venueEdges.push({
-          source: a.id,
-          target: b.id,
-          type: 'venue',
-        })
-      }
     }
   }
 
-  return { authorEdges, venueEdges }
+  return { authorEdges }
 }
 
 /**
@@ -147,27 +121,58 @@ export function getNodeSize(paper, sizeBy, degreeMap) {
 }
 
 /**
- * Compute _x (= year) and _y (= index within year group) for each paper.
- * Papers with null/undefined year are treated as year 0.
+ * Parse a paper's publishedDate (e.g. "2023-06-15", "2023-06", "2023") or
+ * fall back to paper.year.  Returns { ts, key } where ts is a timestamp
+ * (milliseconds) used for x-axis positioning and key is a "YYYY-MM" string
+ * used for grouping / stacking.
  *
- * Returns a new array with _x and _y added to each paper object.
+ * Papers without publishedDate or year are placed at 0 (Jan 1970).
+ */
+export function parsePublishedDate(paper) {
+  const raw = paper.publishedDate
+  if (raw && typeof raw === 'string' && raw.length >= 4) {
+    const parts = raw.split('-')
+    const year  = parseInt(parts[0], 10)
+    const month = parts.length >= 2 ? parseInt(parts[1], 10) - 1 : 0 // 0-indexed
+    if (!isNaN(year)) {
+      const d = new Date(year, month, 1)
+      const key = `${year}-${String(month + 1).padStart(2, '0')}`
+      return { ts: d.getTime(), key }
+    }
+  }
+  // Fallback to year field → placed at January of that year
+  if (paper.year != null && paper.year !== 0) {
+    const d = new Date(paper.year, 0, 1)
+    const key = `${paper.year}-01`
+    return { ts: d.getTime(), key }
+  }
+  return { ts: 0, key: '0000-00' }
+}
+
+/**
+ * Compute _x (= timestamp) and _y (= index within month group) for each paper.
+ *
+ * Uses publishedDate to extract year+month. Falls back to paper.year
+ * (placed at January of that year). Papers with neither are placed at ts 0.
+ *
+ * Returns a new array with _x (timestamp) and _y added to each paper object.
  */
 export function computeTimelinePositions(papers) {
   if (!papers || papers.length === 0) return []
 
-  // Group by year
-  const byYear = {}
+  // Group by year-month key
+  const byMonth = {}
   for (const p of papers) {
-    const yr = p.year == null ? 0 : p.year
-    if (!byYear[yr]) byYear[yr] = []
-    byYear[yr].push(p)
+    const { key } = parsePublishedDate(p)
+    if (!byMonth[key]) byMonth[key] = []
+    byMonth[key].push(p)
   }
 
   return papers.map(p => {
-    const yr = p.year == null ? 0 : p.year
-    const group = byYear[yr]
+    const { ts, key } = parsePublishedDate(p)
+    const group = byMonth[key]
     const _y = group.indexOf(p)
-    return { ...p, _x: yr, _y }
+    return { ...p, _x: ts, _y }
   })
 }
 
@@ -233,326 +238,4 @@ export function buildHeatmapMatrix(papers, rowAxis, colAxis) {
   })
 
   return { rows, cols, cells }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CollapsibleSection component
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function CollapsibleSection({ title, icon, sectionId, projectId, children, options }) {
-  const [collapsed, setCollapsed] = useLocalStorage(
-    `researchos.review.${projectId}.${sectionId}.collapsed`,
-    false
-  )
-  const [optionsOpen, setOptionsOpen] = useLocalStorage(
-    `researchos.review.${projectId}.${sectionId}.optionsOpen`,
-    false
-  )
-  const gearRef = useRef(null)
-  const popoverRef = useRef(null)
-
-  // Close options popover on outside click
-  useEffect(() => {
-    if (!optionsOpen) return
-    function handleMouseDown(e) {
-      if (
-        gearRef.current && !gearRef.current.contains(e.target) &&
-        popoverRef.current && !popoverRef.current.contains(e.target)
-      ) {
-        setOptionsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleMouseDown)
-    return () => document.removeEventListener('mousedown', handleMouseDown)
-  }, [optionsOpen, setOptionsOpen])
-
-  return (
-    <div className="border border-slate-200 rounded-lg overflow-hidden mb-4">
-      {/* Section header */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border-b border-slate-200">
-        <button
-          onClick={() => setCollapsed(c => !c)}
-          className="flex items-center gap-2 flex-1 text-left"
-          aria-expanded={!collapsed}
-        >
-          <Icon name={collapsed ? 'chevron_right' : 'expand_more'} className="text-[18px] text-slate-500" />
-          <Icon name={icon} className="text-[18px] text-slate-600" />
-          <span className="text-sm font-semibold text-slate-700">{title}</span>
-        </button>
-        {/* Gear button */}
-        <div className="relative">
-          <button
-            ref={gearRef}
-            onClick={() => setOptionsOpen(o => !o)}
-            className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors"
-            title="Section options"
-          >
-            <Icon name="settings" className="text-[16px]" />
-          </button>
-          {optionsOpen && options && (
-            <div
-              ref={popoverRef}
-              className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg p-3 min-w-[200px]"
-            >
-              {options}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Section body */}
-      {!collapsed && (
-        <div className="p-4">
-          {children}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Option controls helpers
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function OptionRow({ label, children }) {
-  return (
-    <div className="flex flex-col gap-1 mb-3 last:mb-0">
-      <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</label>
-      {children}
-    </div>
-  )
-}
-
-function OptionSelect({ value, onChange, options }) {
-  return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className="text-xs border border-slate-200 rounded px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-    >
-      {options.map(o => (
-        <option key={o.value} value={o.value}>{o.label}</option>
-      ))}
-    </select>
-  )
-}
-
-const COLOR_BY_OPTIONS = [
-  { value: 'year', label: 'Year' },
-  { value: 'venue', label: 'Venue' },
-  { value: 'type', label: 'Type' },
-  { value: 'uniform', label: 'Uniform' },
-]
-
-const SIZE_BY_OPTIONS = [
-  { value: 'connections', label: 'Connections' },
-  { value: 'year', label: 'Year' },
-  { value: 'uniform', label: 'Uniform' },
-]
-
-const AXIS_OPTIONS = [
-  { value: 'tags', label: 'Tags' },
-  { value: 'venue', label: 'Venue' },
-  { value: 'year', label: 'Year' },
-  { value: 'author', label: 'Author' },
-]
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ProjectReviewDashboard component
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export default function ProjectReviewDashboard({ projectId, libraryId }) {
-  const [papers, setPapers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  // Network options
-  const [networkColorBy, setNetworkColorBy] = useLocalStorage(
-    `researchos.review.${projectId}.network.colorBy`,
-    'year'
-  )
-  const [networkSizeBy, setNetworkSizeBy] = useLocalStorage(
-    `researchos.review.${projectId}.network.sizeBy`,
-    'connections'
-  )
-  const [networkShowAuthors, setNetworkShowAuthors] = useLocalStorage(
-    `researchos.review.${projectId}.network.showAuthors`,
-    true
-  )
-  const [networkShowVenues, setNetworkShowVenues] = useLocalStorage(
-    `researchos.review.${projectId}.network.showVenues`,
-    true
-  )
-
-  // Timeline options
-  const [timelineColorBy, setTimelineColorBy] = useLocalStorage(
-    `researchos.review.${projectId}.timeline.colorBy`,
-    'year'
-  )
-
-  // Heatmap options — default to venue x year (not tags, since tags are likely empty)
-  const [heatmapRowAxis, setHeatmapRowAxis] = useLocalStorage(
-    `researchos.review.${projectId}.heatmap.rowAxis`,
-    'venue'
-  )
-  const [heatmapColAxis, setHeatmapColAxis] = useLocalStorage(
-    `researchos.review.${projectId}.heatmap.colAxis`,
-    'year'
-  )
-
-  const fetchPapers = useCallback(async () => {
-    if (!projectId || !libraryId) return
-    setLoading(true)
-    setError(null)
-    try {
-      // Fetch project paper IDs
-      const links = await projectPapersApi.list(projectId)
-      const linkIds = new Set((links || []).map(l => l.paperId || l.paper_id || l.id))
-
-      // Fetch full paper + website lists from library
-      const [allPapers, allWebsites] = await Promise.all([
-        papersApi.list({ libraryId }),
-        websitesApi.list({ libraryId }),
-      ])
-
-      // Join: keep only items linked to this project
-      const allItems = [
-        ...(allPapers || []).map(p => ({ ...p, itemType: p.itemType || 'paper' })),
-        ...(allWebsites || []).map(w => ({ ...w, itemType: 'website' })),
-      ]
-
-      const projectItems = allItems.filter(item => linkIds.has(item.id))
-      setPapers(projectItems)
-    } catch (err) {
-      console.error('Failed to load project papers for review:', err)
-      setError('Failed to load papers.')
-    } finally {
-      setLoading(false)
-    }
-  }, [projectId, libraryId])
-
-  useEffect(() => {
-    fetchPapers()
-  }, [fetchPapers])
-
-  // Loading skeleton
-  if (loading) {
-    return (
-      <div className="p-6 space-y-4">
-        {[0, 1, 2].map(i => (
-          <div key={i} className="border border-slate-200 rounded-lg overflow-hidden">
-            <div className="h-12 bg-slate-100 animate-pulse" />
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  // Network section options popover
-  const networkOptions = (
-    <>
-      <OptionRow label="Color by">
-        <OptionSelect value={networkColorBy} onChange={setNetworkColorBy} options={COLOR_BY_OPTIONS} />
-      </OptionRow>
-      <OptionRow label="Size by">
-        <OptionSelect value={networkSizeBy} onChange={setNetworkSizeBy} options={SIZE_BY_OPTIONS} />
-      </OptionRow>
-      <OptionRow label="Edge types">
-        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={networkShowAuthors}
-            onChange={e => setNetworkShowAuthors(e.target.checked)}
-            className="rounded"
-          />
-          Shared Authors
-        </label>
-        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer mt-1">
-          <input
-            type="checkbox"
-            checked={networkShowVenues}
-            onChange={e => setNetworkShowVenues(e.target.checked)}
-            className="rounded"
-          />
-          Same Venue
-        </label>
-      </OptionRow>
-    </>
-  )
-
-  // Timeline section options popover
-  const timelineOptions = (
-    <OptionRow label="Color by">
-      <OptionSelect value={timelineColorBy} onChange={setTimelineColorBy} options={COLOR_BY_OPTIONS} />
-    </OptionRow>
-  )
-
-  // Heatmap section options popover
-  const heatmapOptions = (
-    <>
-      <OptionRow label="Row axis">
-        <OptionSelect value={heatmapRowAxis} onChange={setHeatmapRowAxis} options={AXIS_OPTIONS} />
-      </OptionRow>
-      <OptionRow label="Column axis">
-        <OptionSelect value={heatmapColAxis} onChange={setHeatmapColAxis} options={AXIS_OPTIONS} />
-      </OptionRow>
-    </>
-  )
-
-  return (
-    <div className="p-6 max-w-6xl mx-auto">
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      <CollapsibleSection
-        title="Citation Network"
-        icon="hub"
-        sectionId="network"
-        projectId={projectId}
-        options={networkOptions}
-      >
-        <CitationNetworkViz
-          papers={papers}
-          colorBy={networkColorBy}
-          sizeBy={networkSizeBy}
-          showAuthorEdges={networkShowAuthors}
-          showVenueEdges={networkShowVenues}
-          projectId={projectId}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        title="Publication Timeline"
-        icon="timeline"
-        sectionId="timeline"
-        projectId={projectId}
-        options={timelineOptions}
-      >
-        <TimelineViz
-          papers={papers}
-          colorBy={timelineColorBy}
-          projectId={projectId}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        title="Coverage Heatmap"
-        icon="grid_view"
-        sectionId="heatmap"
-        projectId={projectId}
-        options={heatmapOptions}
-      >
-        <HeatmapViz
-          papers={papers}
-          rowAxis={heatmapRowAxis}
-          colAxis={heatmapColAxis}
-          projectId={projectId}
-          onPapersRefresh={fetchPapers}
-        />
-      </CollapsibleSection>
-    </div>
-  )
 }

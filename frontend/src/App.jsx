@@ -13,7 +13,7 @@ import GitHubRepo from './pages/GitHubRepo'
 import Authors from './pages/Authors'
 import AuthorDetail from './pages/AuthorDetail'
 import Projects from './pages/Projects'
-import ProjectDetail, { ProjectOverview, ProjectLiterature, ProjectExperiments, ProjectReview } from './pages/ProjectDetail'
+import ProjectDetail, { ProjectOverview, ProjectLiterature, ProjectExperiments } from './pages/ProjectDetail'
 import ProjectNotesIDE from './pages/ProjectNotesIDE'
 import ProjectTasks from './pages/ProjectTasks'
 import { LibraryProvider } from './context/LibraryContext'
@@ -40,7 +40,6 @@ export default function App() {
               <Route path="experiments" element={<ProjectExperiments />} />
               <Route path="tasks" element={<ProjectTasks />} />
               <Route path="notes" element={<ProjectNotesIDE />} />
-              <Route path="review" element={<ProjectReview />} />
             </Route>
           </Route>
           <Route path="/" element={<LayoutBare />}>
