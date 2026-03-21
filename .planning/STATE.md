@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Research Productivity
 status: planning
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-03-21T06:02:01.320Z"
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-03-21T06:06:12.597Z"
 last_activity: 2026-03-19 — Roadmap created for v1.1 (Phases 9-11)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 15
-  completed_plans: 10
+  completed_plans: 11
   percent: 0
 ---
 
@@ -78,6 +78,7 @@ Progress: [░░░░░░░░░░░░] 0%
 | Phase 10-latex-export P03 | 11 | 2 tasks | 7 files |
 | Phase 11-ai-experiment-gap-analysis P01 | 12 min | 2 tasks | 6 files |
 | Phase 12-literature-review-dashboard P02 | 12 min | 1 tasks | 4 files |
+| Phase 12-literature-review-dashboard P01 | 7 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -181,6 +182,9 @@ Recent decisions affecting current work:
 - [Phase 11-ai-experiment-gap-analysis]: AsyncMock pattern in route tests: mocker.patch(..., new_callable=AsyncMock) for awaited run_gap_analysis — monkeypatch target is routers.gap_analysis.run_gap_analysis
 - [Phase 12-literature-review-dashboard]: Single-batched OpenAI prompt chosen over per-paper calls: all abstracts sent as JSON array in one request, response is {paper_id: [tags]} map — minimizes latency and cost
 - [Phase 12-literature-review-dashboard]: _get_openai_client() uses @lru_cache(maxsize=1) for lazy initialization — consistent with db.py get_client() pattern
+- [Phase 12-literature-review-dashboard]: normalizeAuthor detects Last/First format via comma presence in original string before stripping punctuation — avoids incorrect token order after cleanup
+- [Phase 12-literature-review-dashboard]: buildHeatmapMatrix limits author axis to first 3 authors per paper to prevent matrix explosion with many-author papers
+- [Phase 12-literature-review-dashboard]: CollapsibleSection stores collapsed and optionsOpen state in localStorage keyed by projectId+sectionId — persists across navigation without lifting state to parent
 
 ### v1.1 Decisions
 
@@ -223,5 +227,5 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-21T06:02:01.317Z
-Stopped at: Completed 12-02-PLAN.md
+Last session: 2026-03-21T06:06:12.593Z
+Stopped at: Completed 12-01-PLAN.md

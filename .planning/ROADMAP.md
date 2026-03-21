@@ -102,7 +102,7 @@ Plans:
   3. User can view a coverage heatmap with configurable row/column axes (Tags/Venue/Year/Author) showing paper counts per cell with gap highlighting
   4. User can trigger AI keyword extraction to auto-tag untagged papers from their abstracts
   5. All visualizations support hover tooltips and click-to-navigate to paper detail
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 
 Plans:
 - [ ] 12-01-PLAN.md — Review tab route, shell with collapsible sections, and pure data utility functions with tests
