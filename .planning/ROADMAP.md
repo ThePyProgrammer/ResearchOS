@@ -25,7 +25,7 @@
 
 - [ ] **Phase 9: Task Database** — Project-scoped tasks with Kanban, list, and calendar views
 - [x] **Phase 10: LaTeX Export** — Notes-to-LaTeX serialization with citation management and BibTeX generation (completed 2026-03-20)
-- [ ] **Phase 11: AI Experiment Gap Analysis** — AI-powered gap detection with a drag-based planning board
+- [x] **Phase 11: AI Experiment Gap Analysis** — AI-powered gap detection with a drag-based planning board (completed 2026-03-21)
 
 ## Phase Details
 
@@ -70,7 +70,7 @@ Plans:
   2. Each suggestion card references specific linked papers whose experiments informed the gap detection, and identifies config parameters that have not been varied (ablation coverage)
   3. User can edit a suggestion card's name and config before promoting it, then drag it onto the experiment tree to create a planned experiment with those pre-filled values
   4. User can dismiss suggestions they don't want and re-run gap analysis to get a fresh set
-**Plans:** 1/3 plans executed
+**Plans:** 1/3 plans complete
 Plans:
 - [ ] 11-01-PLAN.md — Backend: GapSuggestion models, gap_analyzer agent (pydantic-ai structured output), POST endpoint, and route tests
 - [ ] 11-02-PLAN.md — Frontend: GapAnalysisTab shell with cards, detail overlay, dismiss/undo, viewMode wiring
@@ -89,8 +89,8 @@ Plans:
 | 7. Experiment Table View | v1.0 | 4/4 | Complete | 2026-03-17 |
 | 8. Project Notes IDE | v1.0 | 3/3 | Complete | 2026-03-18 |
 | 9. Task Database | 4/5 | In Progress|  | - |
-| 10. LaTeX Export | 3/3 | Complete    | 2026-03-20 | - |
-| 11. AI Experiment Gap Analysis | 1/3 | In Progress|  | - |
+| 10. LaTeX Export | 3/3 | Complete    | 2026-03-21 | - |
+| 11. AI Experiment Gap Analysis | 1/3 | Complete    | 2026-03-21 | - |
 
 ### Phase 12: Literature Review Dashboard
 **Goal**: Visual overview of a project's literature — citation network graph between linked papers, publication timeline, coverage heatmap by topic/method with AI keyword extraction. Helps spot literature gaps without AI analysis.
@@ -102,7 +102,7 @@ Plans:
   3. User can view a coverage heatmap with configurable row/column axes (Tags/Venue/Year/Author) showing paper counts per cell with gap highlighting
   4. User can trigger AI keyword extraction to auto-tag untagged papers from their abstracts
   5. All visualizations support hover tooltips and click-to-navigate to paper detail
-**Plans:** 2/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [ ] 12-01-PLAN.md — Review tab route, shell with collapsible sections, and pure data utility functions with tests

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Research Productivity
 status: planning
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-03-21T06:06:12.597Z"
+stopped_at: Completed 12-03-PLAN.md
+last_updated: "2026-03-21T06:34:57.697Z"
 last_activity: 2026-03-19 — Roadmap created for v1.1 (Phases 9-11)
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 13
   percent: 0
 ---
 
@@ -79,6 +79,8 @@ Progress: [░░░░░░░░░░░░] 0%
 | Phase 11-ai-experiment-gap-analysis P01 | 12 min | 2 tasks | 6 files |
 | Phase 12-literature-review-dashboard P02 | 12 min | 1 tasks | 4 files |
 | Phase 12-literature-review-dashboard P01 | 7 min | 2 tasks | 6 files |
+| Phase 12-literature-review-dashboard P04 | 15 min | 2 tasks | 3 files |
+| Phase 12-literature-review-dashboard P03 | 12 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -185,6 +187,10 @@ Recent decisions affecting current work:
 - [Phase 12-literature-review-dashboard]: normalizeAuthor detects Last/First format via comma presence in original string before stripping punctuation — avoids incorrect token order after cleanup
 - [Phase 12-literature-review-dashboard]: buildHeatmapMatrix limits author axis to first 3 authors per paper to prevent matrix explosion with many-author papers
 - [Phase 12-literature-review-dashboard]: CollapsibleSection stores collapsed and optionsOpen state in localStorage keyed by projectId+sectionId — persists across navigation without lifting state to parent
+- [Phase 12-literature-review-dashboard]: buildLocalMatrix defined locally in HeatmapViz to include papers[] per cell — tooltip and click navigation require paper references, not just counts
+- [Phase 12-literature-review-dashboard]: Default heatmap axes changed from tags x year to venue x year — tags are likely empty on first view, giving immediate useful signal
+- [Phase 12-literature-review-dashboard]: Edge legend added to CitationNetworkViz component (not dashboard) since component owns showAuthorEdges/showVenueEdges props
+- [Phase 12-literature-review-dashboard]: Two-effect d3 pattern: rebuild effect (papers/edges change) + visual update effect (colorBy/sizeBy) avoids costly simulation restarts on visual-only updates
 
 ### v1.1 Decisions
 
@@ -227,5 +233,5 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-21T06:06:12.593Z
-Stopped at: Completed 12-01-PLAN.md
+Last session: 2026-03-21T06:34:57.693Z
+Stopped at: Completed 12-03-PLAN.md
