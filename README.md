@@ -125,243 +125,35 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 
 ## Quick Start
 
-### Prerequisites
-
-- Python 3.11+ and [uv](https://docs.astral.sh/uv/)
-- Node.js 18+ and npm
-- A [Supabase](https://supabase.com) project
-- An OpenAI API key
-
-### Environment
-
-Create `backend/.env` (never commit this):
-
 ```bash
-OPENAI_API_KEY=sk-...
-SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_KEY=sb_publishable_...
+# 1. Set up environment
+cp backend/.env.example backend/.env  # Add OPENAI_API_KEY, SUPABASE_URL, SUPABASE_KEY
+
+# 2. Database — run backend/migrations/schema.sql in the Supabase SQL editor
+
+# 3. Backend (port 8000)
+cd backend && uv sync && uv run uvicorn app:app --reload --port 8000
+
+# 4. Frontend (port 5173)
+cd frontend && npm install && npm run dev
 ```
 
-`SUPABASE_KEY` is the **publishable (anon) key** from your Supabase project settings.
+Open [http://localhost:5173](http://localhost:5173). See [docs/getting-started.md](docs/getting-started.md) for full setup details.
 
-### Database
+## Documentation
 
-Open the Supabase SQL editor and run **`backend/migrations/schema.sql`** — this single file creates the complete schema in one shot.
+Detailed documentation lives in [`docs/`](docs/README.md):
 
-<details>
-<summary>Running incremental migrations instead (existing installs)</summary>
-
-If you have an existing database and need to apply changes incrementally, run the numbered files in order:
-
-```
-backend/migrations/001_init.sql
-backend/migrations/002_add_paper_urls.sql
-backend/migrations/002_library_id.sql
-backend/migrations/003_notes.sql
-backend/migrations/003_add_links.sql
-backend/migrations/003_auto_notes.sql
-backend/migrations/004_chat_messages.sql
-backend/migrations/004_website_notes.sql
-backend/migrations/005_paper_texts.sql
-backend/migrations/006_chat_suggestions.sql
-backend/migrations/007_website_chat.sql
-backend/migrations/008_paper_published_date.sql
-backend/migrations/009_authors.sql
-backend/migrations/010_github_repos.sql
-backend/migrations/011_github_repo_notes_chat.sql
-backend/migrations/012_library_notes.sql
-backend/migrations/013_notes_copilot.sql
-backend/migrations/014_pin_notes.sql
-backend/migrations/015_projects.sql
-backend/migrations/016_project_notes.sql
-backend/migrations/017_research_questions.sql
-backend/migrations/018_project_github_repos.sql
-backend/migrations/019_experiments.sql
-backend/migrations/020_project_notes_copilot.sql
-backend/migrations/021_task_database.sql
-```
-
-</details>
-
-### Running
-
-```bash
-# Terminal 1 — backend (port 8000)
-cd backend
-uv sync
-uv run uvicorn app:app --reload --port 8000
-
-# Terminal 2 — frontend (port 5173)
-cd frontend
-npm install
-npm run dev
-```
-
-On first startup the backend seeds Supabase with sample data if the tables are empty.
-
-Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to the backend automatically.
-
-## Testing
-
-Run backend tests:
-
-```bash
-cd backend
-uv run --group dev pytest
-```
-
-Run frontend unit/integration tests:
-
-```bash
-cd frontend
-npm run test:run
-```
-
-Run frontend E2E smoke tests (Playwright):
-
-```bash
-cd frontend
-npx playwright install --with-deps chromium
-npm run test:e2e
-```
-
-Current test coverage includes:
-- **Backend contract + route behavior (pytest):** camelCase payloads, canonical 404 shape, sanitized 500s, papers import/export branches, chat/text branches, notes error mapping, proposal validation
-- **Backend service behavior (pytest):** dedup precedence/confidence and semantic-search fallback
-- **Frontend API wrapper + page smoke (Vitest/RTL):** API error/response handling, library context, proposals page, library page interactions
-- **Frontend E2E smoke (Playwright):** library detail navigation and Quick Add import flow
-
-CI (`.github/workflows/tests.yml`) runs backend tests, frontend tests/build, and Playwright smoke tests on PRs and `main`.
-
-## Routes
-
-| Path | Page |
-|------|------|
-| `/dashboard` | Activity feed + run stats |
-| `/library` | Paper, website, and GitHub repo library with collections, filters, and detail panels |
-| `/library/notes` | Library-level Notes IDE with D3 wiki-link graph |
-| `/library/map` | Semantic library map — 2D UMAP scatter of all items by embedding similarity |
-| `/library/paper/:id` | PDF viewer + Notes IDE + AI Copilot |
-| `/library/website/:id` | Live iframe + Notes IDE + AI Copilot + Details |
-| `/library/github-repo/:id` | Repo overview + Notes IDE + AI Copilot |
-| `/library/settings` | Library settings (rename, AI Auto-Note-Taker, delete) |
-| `/agents` | Workflow catalog + active runs with live logs |
-| `/proposals` | Agent proposals — approve/reject with diff view |
-| `/projects` | Projects list |
-| `/projects/:id` | Project overview |
-| `/projects/:id/literature` | Project-linked papers |
-| `/projects/:id/experiments` | Experiment tree + table + gap analysis |
-| `/projects/:id/tasks` | Task database (Kanban / list / calendar) |
-| `/projects/:id/notes` | Project notes IDE |
-| `/projects/:id/review` | Project review |
-| `/authors` | Authors list |
-| `/authors/:id` | Author detail |
-
-## API
-
-All routes are prefixed `/api`. Responses are camelCase JSON. See the full API reference below.
-
-<details>
-<summary>Full API reference</summary>
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/libraries` | List libraries |
-| POST | `/api/libraries` | Create library |
-| GET/PATCH/DELETE | `/api/libraries/{id}` | Single library |
-| GET/POST | `/api/libraries/{id}/notes` | List / create library-level notes |
-| GET/POST/DELETE | `/api/libraries/{id}/notes-copilot` | Notes-page AI copilot — list history, send message (agentic), clear history |
-| GET | `/api/papers` | List papers; `?library_id=&collection_id=&status=&search=` |
-| POST | `/api/papers` | Create paper |
-| GET/PATCH/DELETE | `/api/papers/{id}` | Single paper |
-| POST | `/api/papers/import` | Resolve DOI/arXiv/URL/OpenReview/Zenodo and add to library |
-| POST | `/api/papers/extract-metadata` | Extract metadata from uploaded PDF via LLM |
-| POST | `/api/papers/import-bibtex/parse` | Parse `.bib` file and preview entries with duplicate detection |
-| POST | `/api/papers/import-bibtex/confirm` | Confirm BibTeX import with selected entries |
-| GET | `/api/papers/export-bibtex` | Export papers/websites as `.bib`; `?ids=&library_id=&collection_id=` |
-| GET | `/api/papers/{id}/related` | Related papers via OpenAlex (citation links + semantic neighbors) |
-| POST | `/api/papers/{id}/pdf` | Upload PDF (multipart/form-data) |
-| POST | `/api/papers/{id}/pdf/fetch` | Download PDF from external URL to Supabase Storage |
-| DELETE | `/api/papers/{id}/pdf` | Remove PDF |
-| GET/POST | `/api/papers/{id}/notes` | List / create notes for a paper |
-| POST | `/api/papers/{id}/notes/generate` | AI-generate notes for a paper |
-| GET/POST/DELETE | `/api/papers/{id}/chat` | Copilot chat for a paper |
-| GET/POST | `/api/papers/{id}/text` | Get cached / extract PDF text |
-| GET/POST | `/api/papers/{id}/authors/link` | List / link authors to a paper |
-| DELETE | `/api/papers/{id}/authors/link/{author_id}` | Unlink an author from a paper |
-| GET | `/api/websites` | List websites; `?library_id=&collection_id=&status=` |
-| POST | `/api/websites` | Create website |
-| GET/PATCH/DELETE | `/api/websites/{id}` | Single website |
-| POST | `/api/websites/import` | Fetch URL metadata and add to library |
-| GET/POST | `/api/websites/{id}/notes` | List / create notes for a website |
-| POST | `/api/websites/{id}/notes/generate` | AI-generate notes for a website |
-| GET/POST/DELETE | `/api/websites/{id}/chat` | Copilot chat for a website |
-| GET | `/api/github-repos` | List GitHub repos |
-| POST | `/api/github-repos` | Add a GitHub repo |
-| GET/PATCH/DELETE | `/api/github-repos/{id}` | Single GitHub repo |
-| GET/POST | `/api/github-repos/{id}/notes` | List / create notes for a GitHub repo |
-| POST | `/api/github-repos/{id}/notes/generate` | AI-generate notes for a GitHub repo |
-| GET/POST/DELETE | `/api/github-repos/{id}/chat` | Copilot chat for a GitHub repo |
-| GET | `/api/collections` | List collections with computed `paperCount` |
-| POST | `/api/collections` | Create collection |
-| GET/PATCH/DELETE | `/api/collections/{id}` | Single collection |
-| GET | `/api/authors` | List authors |
-| GET/PATCH/DELETE | `/api/authors/{id}` | Single author |
-| GET | `/api/search` | Search across all item types; `?q=&mode=lexical\|semantic&library_id=&types=` |
-| GET | `/api/search/map` | UMAP 2D layout for all embedded items in a library; `?library_id=` |
-| GET | `/api/workflows` | Workflow catalog (read-only) |
-| GET/POST | `/api/runs` | List / start a run |
-| GET | `/api/runs/{id}` | Run with logs, trace, and cost |
-| GET | `/api/proposals` | List proposals; `?run_id=` |
-| POST | `/api/proposals/{id}/approve` | Approve proposal |
-| POST | `/api/proposals/{id}/reject` | Reject proposal |
-| POST | `/api/proposals/batch` | Batch approve/reject |
-| GET | `/api/activity` | Activity feed; `?type=agent\|human` |
-| GET | `/api/user` | User profile |
-| GET | `/api/projects` | List projects; `?library_id=` |
-| POST | `/api/projects` | Create project |
-| GET/PATCH/DELETE | `/api/projects/{id}` | Single project |
-| GET/POST | `/api/projects/{id}/experiments` | List / create experiments |
-| GET/PATCH/DELETE | `/api/experiments/{id}` | Single experiment |
-| GET | `/api/projects/{id}/tasks` | List tasks |
-| POST | `/api/projects/{id}/tasks` | Create task |
-| GET/PATCH/DELETE | `/api/tasks/{id}` | Single task |
-| GET/POST | `/api/projects/{id}/task-columns` | List / create task columns |
-| PATCH/DELETE | `/api/task-columns/{id}` | Update / delete task column |
-| GET/POST | `/api/projects/{id}/task-field-defs` | List / create custom field definitions |
-| PATCH/DELETE | `/api/task-field-defs/{id}` | Update / delete custom field definition |
-| POST | `/api/projects/{id}/gap-analysis` | Trigger AI gap analysis; returns suggestion cards |
-| PATCH/DELETE | `/api/notes/{id}` | Update / delete a note by ID (supports `is_pinned`) |
-| GET | `/api/settings/models` | Get current LLM model assignments and available models |
-| PATCH | `/api/settings/models` | Update model assignments for one or more roles |
-
-</details>
-
-## Project Structure
-
-```
-researchos/
-├── backend/
-│   ├── app.py              # FastAPI entry point, CORS, seed data, exception handlers
-│   ├── agents/             # pydantic-ai agent definitions + shared LLM config
-│   ├── models/             # Pydantic domain models (CamelModel-based)
-│   ├── services/           # Business logic + all DB and external API access
-│   ├── routers/            # FastAPI route handlers (thin, transport-only)
-│   └── migrations/         # Numbered SQL migrations for Supabase
-├── frontend/
-│   └── src/
-│       ├── services/api.js       # Single API client; all fetch calls go here
-│       ├── context/              # React context (active library + collections)
-│       ├── hooks/                # Reusable hooks (e.g. useDragResize)
-│       ├── components/           # Shared UI (NotesPanel, CopilotPanel, NotesCopilotPanel, NoteGraphView, etc.)
-│       └── pages/                # Route-level components
-├── ideas/                  # Feature idea documents
-├── ARCHITECTURE.md         # Codebase architecture guide
-├── CONTRIBUTING.md         # How to contribute
-└── LICENSE                 # MIT
-```
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed walkthrough of the codebase.
+| Section | What's covered |
+|---------|---------------|
+| [Getting Started](docs/getting-started.md) | Prerequisites, env setup, database, running |
+| [Architecture](docs/architecture.md) | System design, data model, service layer patterns |
+| [Database](docs/database/schema.md) | Schema reference, migrations, conventions |
+| [API Reference](docs/api/overview.md) | All endpoints by domain with request/response examples |
+| [Frontend](docs/frontend/routing.md) | Routes, state management, key components |
+| [AI System](docs/ai/agents.md) | Agent architecture, copilots, gap analysis |
+| [Developer Guides](docs/guides/adding-a-new-entity.md) | Adding entities, agents, understanding import pipeline |
+| [Testing](docs/testing.md) | Test strategy, running tests, CI |
 
 ## Contributing
 
