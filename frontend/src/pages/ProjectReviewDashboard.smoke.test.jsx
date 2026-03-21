@@ -1,4 +1,8 @@
 /**
+ * @vitest-environment jsdom
+ */
+
+/**
  * Smoke test for ProjectReviewDashboard component (REV-06).
  *
  * Verifies the component renders without crashing and shows the three
@@ -88,13 +92,15 @@ describe('ProjectReviewDashboard smoke test', () => {
     })
   })
 
-  it('renders section placeholder content after load', async () => {
+  it('renders all three sections without crashing after load', async () => {
     renderDashboard()
 
     await waitFor(() => {
-      expect(screen.getByText(/Citation network visualization/i)).toBeInTheDocument()
-      expect(screen.getByText(/Publication timeline visualization/i)).toBeInTheDocument()
-      expect(screen.getByText(/Coverage heatmap visualization/i)).toBeInTheDocument()
+      // Sections render their headers — the actual visualizations (d3/recharts)
+      // may not fully render in jsdom but the section containers should be present
+      expect(screen.getByText('Citation Network')).toBeInTheDocument()
+      expect(screen.getByText('Publication Timeline')).toBeInTheDocument()
+      expect(screen.getByText('Coverage Heatmap')).toBeInTheDocument()
     })
   })
 
