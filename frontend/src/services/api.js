@@ -357,6 +357,9 @@ export const projectPapersApi = {
   list: (projectId) => apiFetch(`/projects/${projectId}/papers`),
   link: (projectId, data) => apiFetch(`/projects/${projectId}/papers`, { method: 'POST', body: data }),
   unlink: (projectId, linkId) => apiFetch(`/projects/${projectId}/papers/${linkId}`, { method: 'DELETE' }),
+  /** Extract AI keyword tags for all untagged papers in the project.
+   *  Returns { updated, skipped, total }. */
+  extractKeywords: (projectId) => apiFetch(`/projects/${projectId}/papers/extract-keywords`, { method: 'POST' }),
 }
 
 export const experimentsApi = {

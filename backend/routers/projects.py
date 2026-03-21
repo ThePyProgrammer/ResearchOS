@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from models.project import ProjectCreate, ProjectUpdate
 from models.project_paper import ProjectPaperCreate
-from services import project_papers_service, project_service
+from services import keyword_extraction_service, project_papers_service, project_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -75,3 +75,21 @@ async def unlink_paper_from_project(project_id: str, link_id: str):
     deleted = project_papers_service.unlink_paper_from_project(link_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=NOT_FOUND_LINK)
+
+
+@router.post("/{project_id}/papers/extract-keywords")
+async def extract_keywords(project_id: str):
+    """Extract AI keyword tags for all untagged papers in the project.
+
+    Calls OpenAI (gpt-4o-mini) in a single batched prompt.  Papers that
+    already have tags or lack an abstract are skipped.
+
+    Returns::
+
+        {"updated": int, "skipped": int, "total": int}
+    """
+    project = project_service.get_project(project_id)
+    if project is None:
+        return JSONResponse(NOT_FOUND, status_code=404)
+    result = keyword_extraction_service.extract_keywords_for_project(project_id)
+    return JSONResponse(result)
