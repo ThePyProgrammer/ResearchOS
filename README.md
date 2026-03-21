@@ -11,6 +11,8 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 
 ## Features
 
+### Reference Library
+
 - **Library management** — import papers and websites via DOI, arXiv ID, URL, OpenReview, or Zenodo; organize into nested collections with drag-and-drop
 
 ![Library](img/library_main.png)
@@ -29,6 +31,8 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 - **Duplicate detection** — centralized three-tier dedup (DOI, arXiv ID, normalized title) across all import paths: identifier import, PDF upload, and BibTeX import; surfaces warnings with "Import anyway" option
 - **PDF upload with metadata extraction** — drag-and-drop PDFs; LLM-powered extraction of title, authors, date, venue, abstract, and DOI
 - **PDF storage** — stored in Supabase Storage, rendered inline; auto-downloaded from source on import
+- **Authors** — first-class author entities with fuzzy name matching across papers
+- **Tags and collections** — editable tags on all item types; collections picker for papers, websites, and GitHub repos; export BibTeX from sidebar collection context menu
 
 ![Quick Add](img/library_quick_add.png)
 
@@ -39,70 +43,76 @@ An AI-powered research operating system that merges a Zotero-like reference mana
 
 ![Website Details](img/website_details.png)
 
-- **Notes IDE** — library-level scratchpad at `/library/notes` covering all notes across papers, websites, GitHub repos, and the library itself; multi-tab tiptap WYSIWYG editor with:
+### Search & Discovery
+
+- **Semantic search** — hybrid lexical and OpenAI-embedding search across papers, websites, and GitHub repos (falls back to lexical when no API key is set); `Ctrl+K` / `Cmd+K` global shortcut
+- **Related paper discovery** — surfaces related works for any paper via OpenAlex citation links and semantic neighbors
+- **Semantic library map** — a 2D scatter plot of all items positioned by semantic similarity (UMAP over cached embeddings); color-coded by collection or item type; brush-select to create collections from clusters
+
+![Library Map](img/library_map.png)
+
+### Notes IDE
+
+- **Rich editor** — multi-tab tiptap WYSIWYG editor available at library level and within each project, covering papers, websites, GitHub repos, and standalone notes
   - LaTeX / KaTeX math rendering
   - `[[wiki-link]]` syntax with autocomplete, click-to-navigate, and a D3 force graph of all link connections
-  - **Tables** — full tiptap table support with resizable columns, a toolbar menu, and a right-click context menu for insert/delete row/column, merge/split cells, and header toggles
-  - **Note templates** — six built-in templates (Blank, Literature Note, Meeting Note, Experiment Log, Literature Review, Paper Summary) shown in a split preview modal on file creation
-  - **Pinned notes** — star any note to float it to the top of the file tree and a dedicated Pinned section; toggle from the star icon or right-click context menu
-  - **Export** — export the active note as Markdown (`.md` download) or PDF (print-ready `window.print()` with KaTeX and wiki-link styles) from a toolbar dropdown
-  - Drag-and-drop reordering, backlinks panel, recent notes section, full-text search
+  - Tables with resizable columns, toolbar menu, and right-click context menu
+  - Six built-in note templates (Blank, Literature Note, Meeting Note, Experiment Log, Literature Review, Paper Summary)
+  - Pinned notes, drag-and-drop reordering, backlinks panel, recent notes, full-text search
+  - Export as Markdown, PDF, or LaTeX
 
 ![Notes IDE](img/notes_ide.png)
 
 ![Notes Graph](img/notes_graph.png)
 
+- **LaTeX export** — export notes to compilable LaTeX with citation management
+  - `@` mention to insert paper/website citations as inline author-year chips; context menu with open paper, remove, copy key, copy BibTeX entry
+  - Export modal with template selection (Article/IEEE/NeurIPS), editable title/author, section reordering for folder exports, cited papers list with auto-generated keys
+  - Side-by-side raw `.tex` preview with syntax highlighting, live-updating with ~500ms debounce
+  - Download `.zip` with `.tex` + `.bib`; collision-safe citation keys (`smith2024a`/`smith2024b`)
+
+### AI Features
+
 - **AI Auto-Note-Taker** — generates a multi-file note structure for any paper, website, or GitHub repo; auto-runs on import and PDF upload
 - **AI copilot** — context-aware research assistant that can suggest diffs to your notes; `[[wiki-link]]` references in chat output are rendered as clickable chips that open the linked note in the IDE
-- **Notes-page AI copilot** — library-scoped AI copilot on the Notes IDE that runs in an agentic loop (up to 6 LLM turns per request). Type `@` in the chat input to select any combination of papers, websites, GitHub repos, collections, or "all items" as context; toggle per-item note inclusion. The model can call `read_note` and `list_item_notes` internally before producing `suggest_note_edit` and `suggest_note_create` proposals targeting any item in the library or the library-level notes tree
+- **Notes-page AI copilot** — library-scoped AI copilot that runs in an agentic loop (up to 6 LLM turns per request); type `@` to select papers, websites, repos, or collections as context; produces `suggest_note_edit` and `suggest_note_create` proposals targeting any item
 
 ![Notes Copilot](img/notes_copilot.png)
-- **Semantic search** — hybrid lexical and OpenAI-embedding search across papers, websites, and GitHub repos (falls back to lexical when no API key is set)
-- **Related paper discovery** — surfaces related works for any paper via OpenAlex citation links and semantic neighbors
+
+- **AI experiment gap analysis** — analyzes experiment tree configs and linked paper abstracts to suggest missing baselines, ablation gaps, config sweeps, and replications
+  - Planning board with suggestion cards on the left, mini experiment tree on the right; drag a card onto a tree node to create a planned experiment
+  - Compact suggestion cards with type badge, rationale, config preview, and clickable paper reference chips with inline popover previews
+  - Edit suggestion name, rationale, and config in a detail overlay before promoting; dismiss with undo toast
 - **Agent workflows** — multi-step research workflows (literature review, model research, experiment design) powered by OpenAI via pydantic-ai
 - **Human-in-the-loop proposals** — agents propose changes that you approve or reject with a diff view
-- **Authors** — first-class author entities with fuzzy name matching across papers
-- **Activity feed** — full audit trail of agent and human actions
 - **LLM configuration** — per-role model selection (chat, notes, metadata, agent, embeddings) configurable at runtime from the settings page
-- **Keyboard shortcut help overlay** — press `?` anywhere in the Library to display a compact modal listing all active keyboard shortcuts (`j`/`k`, `Enter`, `Escape`, status keys, etc.)
-- **⌘K / Ctrl+K global search shortcut** — focuses the Library search box from anywhere in the app
-- **Clickable Dashboard triage cards** — Inbox / To Read / Read stat cards navigate directly to the filtered library view on click
-- **Editable tags for websites and GitHub repos** — tag chip editor available on all item types in detail panels, matching the existing paper tag editing experience
-- **Collections picker for GitHub repos** — GitHub repo detail panels now include the same collections picker available for papers and websites
-- **Export BibTeX from sidebar collection context menu** — the collection right-click menu includes an "Export BibTeX" action, making citation export accessible without opening the Library
-- **Semantic library map** — a 2D scatter plot of all papers, websites, and GitHub repos positioned by semantic similarity (UMAP over cached embeddings). Color-coded by collection or item type; hover for title and collection membership; click to navigate; brush-select a region to create a new collection from items that cluster together. No new AI calls — runs entirely on the existing embedding cache
 
-![Library Map](img/library_map.png)
-
-### Research Projects & Experiments (v1.0)
+### Research Projects
 
 - **Projects** — create research projects within a library; each project has its own overview, literature, experiments, tasks, notes, and review sections
 - **Research questions** — hierarchical research question tree with drag-and-drop nesting, status tracking (open/investigating/answered/discarded), and wiki-link references in notes
+- **Project-linked papers** — link library papers to projects; linked papers appear in the project's Literature tab and provide context for AI features
+
+### Experiments
+
 - **Experiment tree** — nested experiment hierarchy with configurable status, config (JSONB), and metrics (JSONB); tree view with expand/collapse and drag-and-drop reorder; detail panel with inline editing
 - **Experiment differentiators** — compare experiments side-by-side; link papers to experiments for literature grounding; bulk status changes and duplication
 - **CSV data loading** — import experiment results from CSV files with column mapping, preview, and merge into existing experiment configs/metrics
 - **Experiment table view** — spreadsheet-style view with sortable/filterable columns, bulk selection, multi-select actions (compare, set status, duplicate, delete), and column visibility controls
-- **Project notes IDE** — project-scoped tiptap notes with the same editor features as library notes (math, wiki-links, tables, templates, pinned notes, export); project-level AI copilot with experiment and literature context
-- **Project-linked papers** — link library papers to projects; linked papers appear in the project's Literature tab and provide context for AI features
 
-### Research Productivity (v1.1)
+### Task Management
 
 - **Task database** — project-scoped tasks with title, description, status, priority, due date (with optional time), tags, and custom fields (text, number, date, select, multi-select)
   - **Kanban board** — one column per custom status; drag-and-drop cards between columns; inline task creation; column management (rename, color picker, delete with task migration)
   - **List view** — sortable, filterable table with all fields as columns; filter chips for status, priority, overdue, and custom fields; column visibility picker; custom field management via "+" button
   - **Calendar view** — month grid showing tasks on due dates as colored chips; "+N more" overflow; unscheduled sidebar with drag-to-date assignment; drag-to-reschedule between dates
   - **Task detail** — peek overlay (right half) or modal mode; completed tasks show check icon with strikethrough; status colors consistent across all views
-- **LaTeX export** — export project notes to compilable LaTeX with citation management
-  - **Citation insertion** — `@` mention to insert paper/website citations as inline author-year chips; context menu with open paper, remove, copy key, copy BibTeX entry
-  - **Export modal** — template selection (Article/IEEE/NeurIPS), editable title and author, section reordering for folder exports, cited papers list with auto-generated keys
-  - **LaTeX preview** — side-by-side raw `.tex` source with syntax highlighting, live-updating with ~500ms debounce
-  - **ZIP download** — `.tex` + `.bib` bundle with all citations resolved; collision-safe keys (`smith2024a`/`smith2024b`)
-- **AI experiment gap analysis** — AI-powered detection of missing experiments with a drag-based planning board
-  - **Gap detection** — analyzes experiment tree configs and linked paper abstracts to suggest missing baselines, ablation gaps, config sweeps, and replications
-  - **Planning board** — suggestion cards on the left (~60%), mini experiment tree on the right (~40%); drag a card onto a tree node to create a planned experiment as a child
-  - **Suggestion cards** — compact layout with type badge, name, rationale, config preview, and clickable paper reference chips with inline popover previews
-  - **Detail overlay** — edit suggestion name, rationale, and config before promoting; paper references with relevance notes
-  - **Dismiss/undo** — dismiss unwanted suggestions with fade animation and undo toast; dismissed suggestions remembered across re-runs
+
+### Dashboard & Navigation
+
+- **Activity feed** — full audit trail of agent and human actions
+- **Dashboard triage cards** — Inbox / To Read / Read stat cards navigate directly to the filtered library view on click
+- **Keyboard shortcuts** — press `?` for a help overlay listing all active shortcuts (`j`/`k`, `Enter`, `Escape`, status keys, etc.)
 
 ## Tech Stack
 
@@ -356,26 +366,6 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed walkthrough of the codebas
 ## Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) to get started. By participating you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## Roadmap
-
-Scoped for a single-user, local research OS (no auth, no collaboration, no multi-tenancy).
-
-### Shipped
-
-- ~~**v1.0 Research Projects & Experiments**~~ — project foundation, research questions, experiment tree with differentiators, CSV loading, table view, project notes IDE
-- ~~**v1.1 Research Productivity**~~ — task database (Kanban/list/calendar), LaTeX export with citations, AI experiment gap analysis
-
-### Planned
-
-1. **Library Interchange** — ~~BibTeX import and export~~, ~~duplicate detection~~, RIS/CSL-JSON import and export
-2. **Scholarly Discovery** — ~~Related paper discovery via OpenAlex~~, Semantic Scholar and Unpaywall integrations
-3. **Literature Review Automation** — prompt-to-collection pipeline, continuous refresh, provider-aware throttling
-4. **Search & Retrieval** — ~~hybrid lexical + semantic search~~, full embedding pipeline with persistent index
-5. **Notes IDE** — ~~tables~~, ~~note templates~~, ~~pinned notes~~, ~~export (Markdown/PDF)~~, ~~LaTeX export with citations~~, note version history, spaced repetition / flashcard mode, AI synthesis across selected notes
-6. **PDF Annotations** — in-document highlights, anchored comments, annotation export
-7. **Agent Runtime Hardening** — durable execution, ag-ui-protocol streaming, structured run artifacts
-8. **Advanced PDF Processing** — GROBID integration, citation graph from PDFs, section-aware chunking
 
 ## License
 
