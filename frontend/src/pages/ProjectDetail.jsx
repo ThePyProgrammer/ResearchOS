@@ -3897,7 +3897,7 @@ function ExperimentSection({ projectId, libraryId }) {
           onRefreshExperiments={fetchExperiments}
         />
       </div>
-      {!gapActive && loading ? (
+      {gapActive ? null : loading ? (
         <div className="space-y-2 animate-pulse">
           <div className="h-8 bg-slate-100 rounded-lg" />
           <div className="h-8 bg-slate-100 rounded-lg" />
