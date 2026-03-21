@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 /**
  * PaperChipPopover — inline popover showing paper details when a citation chip is clicked.
@@ -55,11 +56,11 @@ export default function PaperChipPopover({ paperId, displayLabel, onClose, ancho
     ? authors.slice(0, 3).join(', ') + ' et al.'
     : authors.join(', ')
 
-  return (
+  return createPortal(
     <div
       ref={ref}
-      className="fixed z-[60] bg-white border border-slate-200 rounded-lg shadow-xl p-3 max-w-sm w-80"
-      style={{ top, left }}
+      className="fixed bg-white border border-slate-200 rounded-lg shadow-xl p-3 max-w-sm w-80"
+      style={{ top, left, zIndex: 9999 }}
     >
       {loading ? (
         <div className="flex items-center gap-2 text-slate-400 text-xs py-2">
@@ -82,6 +83,7 @@ export default function PaperChipPopover({ paperId, displayLabel, onClose, ancho
       ) : (
         <p className="text-xs text-slate-400">Paper not found</p>
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
