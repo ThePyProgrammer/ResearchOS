@@ -32,9 +32,9 @@ function Icon({ name, className = '' }) {
 }
 
 const projectStatusConfig = {
-  active:    { label: 'Active',    class: 'bg-emerald-100 text-emerald-700' },
+  active:    { label: 'Active',    class: 'bg-blue-100 text-blue-700' },
   paused:    { label: 'Paused',    class: 'bg-amber-100 text-amber-700' },
-  completed: { label: 'Completed', class: 'bg-blue-100 text-blue-700' },
+  completed: { label: 'Completed', class: 'bg-emerald-100 text-emerald-700' },
   archived:  { label: 'Archived',  class: 'bg-slate-100 text-slate-600' },
 }
 
