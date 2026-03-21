@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { projectPapersApi, papersApi, websitesApi } from '../services/api'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import CitationNetworkViz from '../components/CitationNetworkViz'
+import TimelineViz from '../components/TimelineViz'
+import HeatmapViz from '../components/HeatmapViz'
 
 // ─── Icon helper ──────────────────────────────────────────────────────────────
 function Icon({ name, className = '' }) {
@@ -387,10 +390,10 @@ export default function ProjectReviewDashboard({ projectId, libraryId }) {
     'year'
   )
 
-  // Heatmap options
+  // Heatmap options — default to venue x year (not tags, since tags are likely empty)
   const [heatmapRowAxis, setHeatmapRowAxis] = useLocalStorage(
     `researchos.review.${projectId}.heatmap.rowAxis`,
-    'tags'
+    'venue'
   )
   const [heatmapColAxis, setHeatmapColAxis] = useLocalStorage(
     `researchos.review.${projectId}.heatmap.colAxis`,
@@ -511,7 +514,14 @@ export default function ProjectReviewDashboard({ projectId, libraryId }) {
         projectId={projectId}
         options={networkOptions}
       >
-        <p className="text-sm text-slate-500">Citation network visualization</p>
+        <CitationNetworkViz
+          papers={papers}
+          colorBy={networkColorBy}
+          sizeBy={networkSizeBy}
+          showAuthorEdges={networkShowAuthors}
+          showVenueEdges={networkShowVenues}
+          projectId={projectId}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection
@@ -521,7 +531,11 @@ export default function ProjectReviewDashboard({ projectId, libraryId }) {
         projectId={projectId}
         options={timelineOptions}
       >
-        <p className="text-sm text-slate-500">Publication timeline visualization</p>
+        <TimelineViz
+          papers={papers}
+          colorBy={timelineColorBy}
+          projectId={projectId}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection
@@ -531,7 +545,13 @@ export default function ProjectReviewDashboard({ projectId, libraryId }) {
         projectId={projectId}
         options={heatmapOptions}
       >
-        <p className="text-sm text-slate-500">Coverage heatmap visualization</p>
+        <HeatmapViz
+          papers={papers}
+          rowAxis={heatmapRowAxis}
+          colAxis={heatmapColAxis}
+          projectId={projectId}
+          onPapersRefresh={fetchPapers}
+        />
       </CollapsibleSection>
     </div>
   )
