@@ -764,6 +764,7 @@ function ProjectsTree({ collapsed }) {
       { label: 'Experiments', icon: 'science',    to: `/projects/${project.id}/experiments`, end: false },
       { label: 'Tasks',       icon: 'task_alt',   to: `/projects/${project.id}/tasks`,       end: false },
       { label: 'Notes',       icon: 'edit_note',  to: `/projects/${project.id}/notes`,       end: false },
+      { label: 'Review',      icon: 'analytics',  to: `/projects/${project.id}/review`,      end: false },
     ]
 
     return (

@@ -9,6 +9,7 @@ import CSVImportModal from './CSVImportModal'
 import { PaperDetail, WebsiteDetail, GitHubRepoDetail } from './Library'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { detectType } from '../utils/detectType'
+import ProjectReviewDashboard from './ProjectReviewDashboard'
 import {
   DndContext,
   closestCenter,
@@ -4848,7 +4849,7 @@ export default function ProjectDetail() {
         <Link to={`/projects/${id}`} className="text-sm text-slate-500 hover:text-slate-700 truncate font-medium transition-colors">{project.name}</Link>
         {(() => {
           const segment = location.pathname.split('/').pop()
-          const sectionLabels = { literature: 'Literature', experiments: 'Experiments', tasks: 'Tasks', notes: 'Notes' }
+          const sectionLabels = { literature: 'Literature', experiments: 'Experiments', tasks: 'Tasks', notes: 'Notes', review: 'Review' }
           const label = sectionLabels[segment]
           if (!label) return null
           return (
@@ -4891,6 +4892,15 @@ export function ProjectLiterature() {
 export function ProjectExperiments() {
   const { project } = useOutletContext()
   return <ExperimentSection projectId={project.id} libraryId={project.libraryId} />
+}
+
+export function ProjectReview() {
+  const { project } = useOutletContext()
+  return (
+    <div className="h-full overflow-auto">
+      <ProjectReviewDashboard projectId={project.id} libraryId={project.libraryId} />
+    </div>
+  )
 }
 
 export function ProjectNotes() {
