@@ -5,10 +5,12 @@
 - [User Guide](user-guide.md) — Walkthrough: first papers to projects to AI features
 - [Costs & Privacy](costs-and-privacy.md) — What goes to OpenAI, cost estimates, data ownership
 - [FAQ & Troubleshooting](faq.md) — Common questions and fixes
+- [Changelog](changelog.md) — What shipped when, grouped by milestone
 
 ## Getting Started
 
 - [Getting Started](getting-started.md) — Prerequisites, environment setup, database, running the app
+- [Deployment](deployment.md) — VPS, Docker, Vercel+Railway deployment options
 
 ## Architecture
 
