@@ -1,11 +1,14 @@
 ﻿import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { papersApi, websitesApi, githubReposApi, searchApi, notesApi, collectionsApi } from '../services/api'
+import { papersApi, websitesApi, githubReposApi, searchApi, notesApi, collectionsApi, batchApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips, TagChips, formatCitationBibTeX } from '../components/PaperInfoPanel'
 import WindowModal from '../components/WindowModal'
 import BibtexExportModal from '../components/BibtexExportModal'
+import ConfirmBulkModal from '../components/ConfirmBulkModal'
+import BulkProgressModal from '../components/BulkProgressModal'
 import { useDragResize } from '../hooks/useDragResize'
+import { useBatchProcessor } from '../hooks/useBatchProcessor'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -1355,9 +1358,17 @@ export default function Library() {
   const [bulkStatusChanging, setBulkStatusChanging] = useState(false)
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const statusDropdownRef = useRef(null)
-  const [showFetchModal, setShowFetchModal] = useState(false)
-  const [fetchStatuses, setFetchStatuses] = useState({}) // { paperId: 'pending' | 'fetching' | 'done' | 'skipped' | error string }
   const [showExportModal, setShowExportModal] = useState(false)
+
+  // Bulk operation state (shared across all four bulk actions)
+  const [bulkOperation, setBulkOperation] = useState(null) // 'notes'|'tags'|'pdfs'|'embeddings'|null
+  const [bulkItems, setBulkItems] = useState([])
+  const [bulkSkipCount, setBulkSkipCount] = useState(0)
+  const [bulkSkipIds, setBulkSkipIds] = useState(new Set())
+  const [bulkConcurrency, setBulkConcurrency] = useState(1)
+  const [showConfirmBulk, setShowConfirmBulk] = useState(false)
+  const [showBulkProgress, setShowBulkProgress] = useState(false)
+  const batch = useBatchProcessor()
   const [exportIds, setExportIds] = useState([]) // ids to export via BibtexExportModal
   const [showShortcuts, setShowShortcuts] = useState(false)
   const showShortcutsRef = useRef(false)
@@ -1494,6 +1505,13 @@ export default function Library() {
     setAuthorFilter(null)
   }, [activeCollection])
 
+  // Refresh items after notes batch completes to show updated notes
+  useEffect(() => {
+    if (!batch.isRunning && showBulkProgress && bulkOperation === 'notes') {
+      setRefreshKey(k => k + 1)
+    }
+  }, [batch.isRunning]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!showStatusDropdown) return
     const handleClickOutside = (e) => {
@@ -1587,34 +1605,154 @@ export default function Library() {
     }
   }
 
-  const handleBulkFetchPdfs = async () => {
-    const selected = items.filter(i => selectedIds.has(i.id) && i.itemType !== 'website' && i.itemType !== 'github_repo')
-    // Build initial statuses
-    const initial = {}
-    for (const item of selected) {
-      if (!item.pdfUrl) {
-        initial[item.id] = 'no_url'
-      } else if (item.pdfUrl.includes('/storage/v1/object/public/pdfs/')) {
-        initial[item.id] = 'skipped'
-      } else {
-        initial[item.id] = 'pending'
-      }
+  const computeSkipCount = async (selected, operation) => {
+    if (operation === 'tags') {
+      const skipIds = new Set(selected.filter(i => i.tags && i.tags.length > 0).map(i => i.id))
+      setBulkSkipIds(skipIds)
+      return skipIds.size
     }
-    setFetchStatuses(initial)
-    setShowFetchModal(true)
-
-    const toFetch = selected.filter(i => initial[i.id] === 'pending')
-    for (const item of toFetch) {
-      setFetchStatuses(prev => ({ ...prev, [item.id]: 'fetching' }))
+    if (operation === 'pdfs') {
+      const skipIds = new Set(selected.filter(i =>
+        i.itemType !== 'paper' || !i.pdfUrl || i.pdfUrl.includes('/storage/v1/object/public/pdfs/')
+      ).map(i => i.id))
+      setBulkSkipIds(skipIds)
+      return skipIds.size
+    }
+    if (operation === 'notes') {
       try {
-        const updated = await papersApi.fetchPdf(item.id)
-        setItems(prev => prev.map(p => p.id === updated.id ? updated : p))
-        if (selectedItem?.id === updated.id) setSelectedItem(updated)
-        setFetchStatuses(prev => ({ ...prev, [item.id]: 'done' }))
-      } catch (err) {
-        setFetchStatuses(prev => ({ ...prev, [item.id]: err.message || 'Failed' }))
+        const itemIds = selected.map(i => i.id)
+        const preview = await batchApi.notesPreview(itemIds)
+        const skipIds = new Set(preview.skip_ids || [])
+        setBulkSkipIds(skipIds)
+        return skipIds.size
+      } catch {
+        setBulkSkipIds(new Set())
+        return 0
       }
     }
+    // embeddings: no client-side skip detection
+    setBulkSkipIds(new Set())
+    return 0
+  }
+
+  const startBulkOperation = async (operation) => {
+    const selected = items.filter(i => selectedIds.has(i.id))
+    const operationItems = operation === 'pdfs'
+      ? selected.filter(i => i.itemType !== 'website' && i.itemType !== 'github_repo')
+      : selected
+    setBulkOperation(operation)
+    setBulkItems(operationItems)
+    setBulkConcurrency(1)
+    const skipCount = await computeSkipCount(operationItems, operation)
+    setBulkSkipCount(skipCount)
+    setShowConfirmBulk(true)
+  }
+
+  const getBulkProcessFn = (operation) => {
+    const libraryId = activeLibrary?.id
+    switch (operation) {
+      case 'notes':
+        return async (item) => {
+          if (bulkSkipIds.has(item.id)) return 'skipped'
+          if (item.itemType === 'website') {
+            await notesApi.generateForWebsite(item.id, libraryId)
+          } else if (item.itemType === 'github_repo') {
+            await notesApi.generateForGitHubRepo(item.id, libraryId)
+          } else {
+            await notesApi.generate(item.id, libraryId)
+          }
+        }
+      case 'tags':
+        return null // handled specially in handleConfirmBulk (single batch API call)
+      case 'pdfs':
+        return async (item) => {
+          if (bulkSkipIds.has(item.id)) return 'skipped'
+          const updated = await papersApi.fetchPdf(item.id)
+          setItems(prev => prev.map(p => p.id === updated.id ? updated : p))
+          if (selectedItem?.id === updated.id) setSelectedItem(updated)
+        }
+      case 'embeddings':
+        return null // handled specially in handleConfirmBulk (single batch API call)
+      default:
+        return null
+    }
+  }
+
+  const handleConfirmBulk = async () => {
+    setShowConfirmBulk(false)
+    setShowBulkProgress(true)
+    const operation = bulkOperation
+    const operationItems = bulkItems
+    const concurrency = bulkConcurrency
+
+    if (operation === 'tags') {
+      const initialStatuses = {}
+      for (const item of operationItems) {
+        initialStatuses[item.id] = bulkSkipIds.has(item.id) ? 'skipped' : 'processing'
+      }
+      batch.setStatuses(initialStatuses)
+      try {
+        const itemIds = operationItems.filter(i => !bulkSkipIds.has(i.id)).map(i => i.id)
+        if (itemIds.length > 0) {
+          await batchApi.tags(itemIds, activeLibrary?.id)
+        }
+        batch.setStatuses(prev => {
+          const next = { ...prev }
+          for (const id of itemIds) next[id] = 'done'
+          return next
+        })
+        // Refresh items to show updated tags
+        setRefreshKey(k => k + 1)
+      } catch (err) {
+        batch.setStatuses(prev => {
+          const next = { ...prev }
+          for (const [id, s] of Object.entries(next)) {
+            if (s === 'processing') next[id] = err.message || 'Failed'
+          }
+          return next
+        })
+      }
+      return
+    }
+
+    if (operation === 'embeddings') {
+      const initialStatuses = {}
+      for (const item of operationItems) initialStatuses[item.id] = 'processing'
+      batch.setStatuses(initialStatuses)
+      try {
+        const itemIds = operationItems.map(i => i.id)
+        await batchApi.embeddings(itemIds)
+        batch.setStatuses(prev => {
+          const next = { ...prev }
+          for (const id of itemIds) next[id] = 'done'
+          return next
+        })
+      } catch (err) {
+        batch.setStatuses(prev => {
+          const next = { ...prev }
+          for (const [id, s] of Object.entries(next)) {
+            if (s === 'processing') next[id] = err.message || 'Failed'
+          }
+          return next
+        })
+      }
+      return
+    }
+
+    // Notes and PDFs: per-item processing via concurrency pool
+    const processFn = getBulkProcessFn(operation)
+    await batch.run(operationItems, concurrency, processFn)
+  }
+
+  const handleRetryFailed = async () => {
+    const processFn = getBulkProcessFn(bulkOperation)
+    if (!processFn) return
+    await batch.retryFailed(bulkConcurrency, processFn)
+  }
+
+  const handleCloseBulkProgress = () => {
+    setShowBulkProgress(false)
+    // Do NOT clear bulkOperation/bulkItems — job may still be running in background
   }
 
   const handleBulkStatusChange = async (status) => {
@@ -2094,11 +2232,32 @@ export default function Library() {
                 )}
               </div>
               <button
-                onClick={handleBulkFetchPdfs}
+                onClick={() => startBulkOperation('notes')}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <Icon name="auto_awesome" className="text-[14px]" />
+                Generate Notes
+              </button>
+              <button
+                onClick={() => startBulkOperation('tags')}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <Icon name="label" className="text-[14px]" />
+                Auto-Tag
+              </button>
+              <button
+                onClick={() => startBulkOperation('pdfs')}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
               >
                 <Icon name="cloud_download" className="text-[14px]" />
                 Fetch PDFs
+              </button>
+              <button
+                onClick={() => startBulkOperation('embeddings')}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <Icon name="memory" className="text-[14px]" />
+                Generate Embeddings
               </button>
               <button
                 onClick={() => {
@@ -2373,96 +2532,45 @@ export default function Library() {
         </WindowModal>
       )}
 
-      {/* Fetch PDFs modal */}
-      {showFetchModal && (
-        <WindowModal
-          open={showFetchModal}
-          onClose={() => {
-            if (!Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending')) {
-              setShowFetchModal(false)
-              setFetchStatuses({})
-            }
-          }}
-          title="Fetching PDFs"
-          iconName="cloud_download"
-          iconWrapClassName="bg-blue-100"
-          iconClassName="text-[16px] text-blue-600"
-          normalPanelClassName="w-full max-w-[480px] max-h-[80vh] rounded-xl"
-          bodyClassName="flex flex-col min-h-0"
-          closeOnBackdrop={false}
-          disableClose={Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending')}
-        >
-          <div className="px-5 pt-4 pb-3">
-            <p className="text-xs text-slate-500 mt-0.5">
-              {(() => {
-                const vals = Object.values(fetchStatuses)
-                const done = vals.filter(s => s === 'done').length
-                const failed = vals.filter(s => s !== 'done' && s !== 'pending' && s !== 'fetching' && s !== 'skipped' && s !== 'no_url').length
-                const total = vals.filter(s => s !== 'skipped' && s !== 'no_url').length
-                const inProgress = vals.some(s => s === 'fetching' || s === 'pending')
-                if (!inProgress) return `Complete - ${done} succeeded, ${failed} failed`
-                return `${done + failed} of ${total} processed...`
-              })()}
-            </p>
-          </div>
+      {/* Bulk confirm modal */}
+      <ConfirmBulkModal
+        open={showConfirmBulk}
+        onClose={() => setShowConfirmBulk(false)}
+        onConfirm={handleConfirmBulk}
+        operation={bulkOperation}
+        items={bulkItems}
+        skipCount={bulkSkipCount}
+        concurrency={bulkConcurrency}
+        onConcurrencyChange={setBulkConcurrency}
+      />
 
-          {/* Progress bar */}
-          {(() => {
-            const vals = Object.values(fetchStatuses)
-            const total = vals.filter(s => s !== 'skipped' && s !== 'no_url').length
-            const completed = vals.filter(s => s !== 'pending' && s !== 'fetching' && s !== 'skipped' && s !== 'no_url').length
-            const pct = total > 0 ? (completed / total) * 100 : 0
-            return (
-              <div className="mx-5 mb-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-600 rounded-full transition-all duration-300"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            )
-          })()}
-
-          <div className="flex-1 overflow-y-auto border-t border-slate-100 divide-y divide-slate-50">
-            {items.filter(i => i.id in fetchStatuses).map(item => {
-              const status = fetchStatuses[item.id]
-              return (
-                <div key={item.id} className="flex items-center gap-3 px-5 py-2.5">
-                  <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                    {status === 'pending' && <Icon name="schedule" className="text-[16px] text-slate-300" />}
-                    {status === 'fetching' && <span className="animate-spin inline-block w-4 h-4 border-2 border-blue-200 border-t-blue-600 rounded-full" />}
-                    {status === 'done' && <Icon name="check_circle" className="text-[16px] text-emerald-500" />}
-                    {status === 'skipped' && <Icon name="skip_next" className="text-[16px] text-slate-300" />}
-                    {status === 'no_url' && <Icon name="link_off" className="text-[16px] text-slate-300" />}
-                    {status !== 'pending' && status !== 'fetching' && status !== 'done' && status !== 'skipped' && status !== 'no_url' && (
-                      <Icon name="error" className="text-[16px] text-red-400" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-slate-700 truncate">{item.title}</p>
-                    <p className="text-[10px] text-slate-400 truncate">
-                      {status === 'pending' && 'Waiting...'}
-                      {status === 'fetching' && 'Downloading PDF...'}
-                      {status === 'done' && 'Uploaded to storage'}
-                      {status === 'skipped' && 'Already in storage'}
-                      {status === 'no_url' && 'No PDF URL available'}
-                      {status !== 'pending' && status !== 'fetching' && status !== 'done' && status !== 'skipped' && status !== 'no_url' && status}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="px-5 py-3 border-t border-slate-100">
-            <button
-              onClick={() => { setShowFetchModal(false); setFetchStatuses({}) }}
-              disabled={Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending')}
-              className="w-full py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
-            >
-              {Object.values(fetchStatuses).some(s => s === 'fetching' || s === 'pending') ? 'Processing...' : 'Close'}
-            </button>
-          </div>
-        </WindowModal>
+      {/* Bulk progress modal */}
+      {showBulkProgress && (
+        <BulkProgressModal
+          open={showBulkProgress}
+          onClose={handleCloseBulkProgress}
+          title={
+            bulkOperation === 'notes' ? 'Generating AI Notes' :
+            bulkOperation === 'tags' ? 'Auto-Tagging Items' :
+            bulkOperation === 'pdfs' ? 'Fetching PDFs' :
+            'Generating Embeddings'
+          }
+          iconName={
+            bulkOperation === 'notes' ? 'auto_awesome' :
+            bulkOperation === 'tags' ? 'label' :
+            bulkOperation === 'pdfs' ? 'cloud_download' :
+            'memory'
+          }
+          items={bulkItems}
+          statuses={batch.statuses}
+          isRunning={batch.isRunning}
+          isPaused={batch.isPaused}
+          onPause={batch.pause}
+          onResume={batch.resume}
+          onCancel={batch.cancel}
+          onRetryFailed={handleRetryFailed}
+          failedCount={batch.getFailedItems().length}
+        />
       )}
 
       {/* Export BibTeX modal */}
