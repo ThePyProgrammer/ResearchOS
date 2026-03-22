@@ -404,3 +404,12 @@ export const gapAnalysisApi = {
     apiFetch(`/projects/${projectId}/gap-analysis`, { method: 'POST', body: data }),
 }
 
+export const batchApi = {
+  tags: (itemIds, libraryId) =>
+    apiFetch('/batch/tags', { method: 'POST', body: { item_ids: itemIds, library_id: libraryId || null } }),
+  embeddings: (itemIds) =>
+    apiFetch('/batch/embeddings', { method: 'POST', body: { item_ids: itemIds } }),
+  notesPreview: (itemIds) =>
+    apiFetch('/batch/notes/preview', { method: 'POST', body: { item_ids: itemIds } }),
+}
+
