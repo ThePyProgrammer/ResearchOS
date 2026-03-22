@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 # Ensure backend/ is on the path so relative imports work
 sys.path.insert(0, str(Path(__file__).parent))
 
-from routers import papers, collections, workflows, runs, proposals, activity, search, libraries, websites, notes, chat, authors, github_repos, settings, notes_copilot, usage, projects, research_questions, experiments, project_notes_copilot, tasks, gap_analysis
+from routers import papers, collections, workflows, runs, proposals, activity, search, libraries, websites, notes, chat, authors, github_repos, settings, notes_copilot, usage, projects, research_questions, experiments, project_notes_copilot, tasks, gap_analysis, batch
 from services.db import get_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -54,6 +54,7 @@ app.include_router(experiments.router)
 app.include_router(project_notes_copilot.router)
 app.include_router(tasks.router)
 app.include_router(gap_analysis.router)
+app.include_router(batch.router)
 
 
 @app.get("/api/user")
