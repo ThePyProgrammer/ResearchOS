@@ -109,3 +109,51 @@ Plans:
 - [ ] 12-02-PLAN.md — Backend AI keyword extraction endpoint and frontend API client
 - [ ] 12-03-PLAN.md — Citation network d3 force graph visualization
 - [ ] 12-04-PLAN.md — Timeline scatter plot, coverage heatmap, Extract Keywords integration, and final verification
+
+### Phase 13: Bulk Paper Processing
+
+**Goal:** Researchers can run batch operations on library items (papers, websites, GitHub repos) from the Library multi-select bulk action bar with progress tracking, pause/resume, cancellation, and retry
+**Requirements**: BULK-01, BULK-02, BULK-03, BULK-04, BULK-05, BULK-06, BULK-07, BULK-08, BULK-09
+**Depends on:** Phase 12
+**Success Criteria** (what must be TRUE):
+  1. User can select items and run bulk AI note generation, auto-tagging, PDF fetch, or embedding generation from the Library bulk action bar
+  2. Each operation shows a confirmation dialog with item count, skip count, cost estimate, and concurrency toggle before starting
+  3. Progress modal shows per-item status with overall progress bar, and user can pause/resume/cancel mid-batch
+  4. Failed items are tracked and retriable with a single click after batch completion
+  5. Auto-tagging works on papers, websites, and GitHub repos at the library level (not just project-scoped)
+**Plans:** 1/3 plans executed
+
+Plans:
+- [ ] 13-01-PLAN.md — Backend batch services (extend keyword extraction for all item types) + batch router + tests
+- [ ] 13-02-PLAN.md — Frontend batch infrastructure: useBatchProcessor hook, BulkProgressModal, ConfirmBulkModal, batch API client
+- [ ] 13-03-PLAN.md — Library.jsx integration: wire all four operations into bulk action bar with confirm + progress modals
+
+### Phase 14: Literature Review Draft Generator
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 13
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 14 to break down)
+
+### Phase 15: Automated Literature Review Pipeline
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 14
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 15 to break down)
+
+### Phase 16: Research Digest
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 15
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 16 to break down)

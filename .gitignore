@@ -28,4 +28,5 @@ node_modules/
 data/
 ideas/
 # GSD planning docs (local-only)
-.planning/
+# .planning/
+.understand-anything
