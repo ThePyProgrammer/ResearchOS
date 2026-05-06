@@ -452,6 +452,23 @@ def seed_data() -> None:
                 # collections table has no paper_count column
                 if table == "collections":
                     rows = [{k: v for k, v in r.items() if k != "paper_count"} for r in rows]
+                if table == "proposals":
+                    paper_ids = {
+                        row["id"]
+                        for row in db.table("papers").select("id").execute().data
+                    }
+                    run_ids = {
+                        row["id"]
+                        for row in db.table("runs").select("id").execute().data
+                    }
+                    rows = [
+                        row
+                        for row in rows
+                        if row["paper_id"] in paper_ids and row["run_id"] in run_ids
+                    ]
+                    if not rows:
+                        logger.info("Skipped table %s seed; no rows match existing papers and runs", table)
+                        continue
                 db.table(table).insert(rows).execute()
                 logger.info("Seeded table %s (%d rows)", table, len(rows))
         except Exception:
