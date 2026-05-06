@@ -27,5 +27,6 @@ def make_models(payloads: Iterable[dict]) -> list[DummyModel]:
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(app_module, "seed_data", lambda: None)
+    monkeypatch.setattr(app_module, "_check_migrations", lambda: None)
     with TestClient(app_module.app, raise_server_exceptions=False) as test_client:
         yield test_client
