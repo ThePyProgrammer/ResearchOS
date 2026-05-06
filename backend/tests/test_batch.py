@@ -169,6 +169,94 @@ class TestExtractKeywordsForItems:
         assert result["total"] == 1
         mock_update.assert_called_once()
 
+    def test_discards_empty_duplicate_and_overlong_model_tags(self, mocker):
+        """extract_keywords_for_items only writes normalized bounded tags."""
+        paper = _FakePaper("p_tags", abstract="A paper about robust tagging")
+        mocker.patch(
+            "services.keyword_extraction_service.paper_service.get_paper",
+            return_value=paper,
+        )
+        mocker.patch(
+            "services.keyword_extraction_service.website_service.get_website",
+            return_value=None,
+        )
+        mocker.patch(
+            "services.keyword_extraction_service.github_repo_service.get_github_repo",
+            return_value=None,
+        )
+        mock_update = mocker.patch(
+            "services.keyword_extraction_service.paper_service.update_paper",
+        )
+        fake_client = MagicMock()
+        fake_client.chat.completions.create.return_value = self._make_openai_response(
+            {
+                "p_tags": [
+                    "  Machine Learning  ",
+                    "machine learning",
+                    "   ",
+                    "x" * 65,
+                    "NLP",
+                    "Statistics",
+                    "Vision",
+                    "Robotics",
+                    "Extra",
+                ]
+            }
+        )
+        mocker.patch(
+            "services.keyword_extraction_service._get_openai_client",
+            return_value=fake_client,
+        )
+        mocker.patch("services.keyword_extraction_service.record_openai_usage")
+
+        from services.keyword_extraction_service import extract_keywords_for_items
+        result = extract_keywords_for_items(["p_tags"])
+
+        assert result["updated"] == 1
+        update_payload = mock_update.call_args.args[1]
+        assert update_payload.tags == [
+            "machine learning",
+            "nlp",
+            "statistics",
+            "vision",
+            "robotics",
+        ]
+
+    def test_skips_update_when_model_tags_clean_to_empty(self, mocker):
+        """extract_keywords_for_items skips candidates whose model tags all clean away."""
+        paper = _FakePaper("p_empty_tags", abstract="A paper about bad model output")
+        mocker.patch(
+            "services.keyword_extraction_service.paper_service.get_paper",
+            return_value=paper,
+        )
+        mocker.patch(
+            "services.keyword_extraction_service.website_service.get_website",
+            return_value=None,
+        )
+        mocker.patch(
+            "services.keyword_extraction_service.github_repo_service.get_github_repo",
+            return_value=None,
+        )
+        mock_update = mocker.patch(
+            "services.keyword_extraction_service.paper_service.update_paper",
+        )
+        fake_client = MagicMock()
+        fake_client.chat.completions.create.return_value = self._make_openai_response(
+            {"p_empty_tags": ["   ", "" ]}
+        )
+        mocker.patch(
+            "services.keyword_extraction_service._get_openai_client",
+            return_value=fake_client,
+        )
+        mocker.patch("services.keyword_extraction_service.record_openai_usage")
+
+        from services.keyword_extraction_service import extract_keywords_for_items
+        result = extract_keywords_for_items(["p_empty_tags"])
+
+        assert result["updated"] == 0
+        assert result["skipped"] == 1
+        mock_update.assert_not_called()
+
     def test_skips_items_already_tagged(self, mocker):
         """extract_keywords_for_items skips items that already have tags."""
         paper = _FakePaper("p2", abstract="An abstract", tags=["existing-tag"])
@@ -410,6 +498,37 @@ class TestBatchRoutes:
         body = response.json()
         assert body["skip_ids"] == ["p1"]
         assert body["process_ids"] == ["p2", "p3"]
+
+    def test_rejects_empty_batch_item_list(self, client):
+        """POST /api/batch/tags rejects empty item lists before calling AI services."""
+        response = client.post("/api/batch/tags", json={"item_ids": []})
+        assert response.status_code == 422
+
+    def test_rejects_oversized_batch_item_list(self, client):
+        """POST /api/batch/tags rejects item lists over the server-side batch limit."""
+        response = client.post(
+            "/api/batch/tags",
+            json={"item_ids": [f"p{i}" for i in range(101)]},
+        )
+        assert response.status_code == 422
+
+    def test_rejects_duplicate_batch_item_ids(self, client):
+        """POST /api/batch/tags rejects duplicate item IDs."""
+        response = client.post("/api/batch/tags", json={"item_ids": ["p1", "p1"]})
+        assert response.status_code == 422
+
+    def test_batch_route_errors_do_not_expose_exception_details(self, client, mocker):
+        """POST /api/batch/tags returns a stable error without leaking internals."""
+        mocker.patch(
+            "routers.batch.extract_keywords_for_items",
+            side_effect=RuntimeError("supabase secret detail"),
+        )
+        response = client.post("/api/batch/tags", json={"item_ids": ["p1"]})
+
+        assert response.status_code == 500
+        body = response.json()
+        assert body == {"detail": "Batch operation failed"}
+        assert "supabase secret detail" not in response.text
 
     def test_post_tags_with_library_id(self, client, mocker):
         """POST /api/batch/tags passes library_id to extract_keywords_for_items."""

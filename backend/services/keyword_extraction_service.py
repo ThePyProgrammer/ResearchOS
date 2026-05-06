@@ -42,6 +42,22 @@ _SYSTEM_PROMPT = (
     "Bad examples: 'multi-head attention mechanism', 'byte-pair encoding tokenization', "
     "'residual connections in transformers', 'BERT fine-tuning strategies'."
 )
+_MAX_TAGS = 5
+_MAX_TAG_LENGTH = 64
+
+
+def _clean_keyword_tags(keywords: list) -> list[str]:
+    clean_tags = []
+    seen = set()
+    for raw in keywords:
+        tag = str(raw).lower().strip()
+        if not tag or len(tag) > _MAX_TAG_LENGTH or tag in seen:
+            continue
+        seen.add(tag)
+        clean_tags.append(tag)
+        if len(clean_tags) >= _MAX_TAGS:
+            break
+    return clean_tags
 
 
 @lru_cache(maxsize=1)
@@ -153,7 +169,11 @@ def extract_keywords_for_project(project_id: str) -> dict:
             continue
 
         # Normalise: ensure all entries are lowercase strings
-        clean_tags = [str(k).lower().strip() for k in keywords if k]
+        clean_tags = _clean_keyword_tags(keywords)
+
+        if not clean_tags:
+            skipped_count += 1
+            continue
 
         paper_service.update_paper(paper.id, PaperUpdate(tags=clean_tags))
         updated_count += 1
@@ -290,7 +310,10 @@ def extract_keywords_for_items(
             skipped_count += 1
             continue
 
-        clean_tags = [str(k).lower().strip() for k in keywords if k]
+        clean_tags = _clean_keyword_tags(keywords)
+        if not clean_tags:
+            skipped_count += 1
+            continue
 
         if item_type == "website":
             website_service.update_website(item.id, WebsiteUpdate(tags=clean_tags))
