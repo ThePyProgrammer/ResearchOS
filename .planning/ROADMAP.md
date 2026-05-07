@@ -91,6 +91,8 @@ Plans:
 | 9. Task Database | 4/5 | In Progress|  | - |
 | 10. LaTeX Export | 3/3 | Complete    | 2026-03-21 | - |
 | 11. AI Experiment Gap Analysis | 1/3 | Complete    | 2026-03-21 | - |
+| 12. Literature Review Dashboard | v1.1 | 4/4 | Complete | - |
+| 13. Bulk Paper Processing | v1.1 | 3/3 | Complete | 2026-05-07 |
 
 ### Phase 12: Literature Review Dashboard
 **Goal**: Visual overview of a project's literature — citation network graph between linked papers, publication timeline, coverage heatmap by topic/method with AI keyword extraction. Helps spot literature gaps without AI analysis.
@@ -115,18 +117,19 @@ Plans:
 **Goal:** Researchers can run batch operations on library items (papers, websites, GitHub repos) from the Library multi-select bulk action bar with progress tracking, pause/resume, cancellation, and retry
 **Requirements**: BULK-01, BULK-02, BULK-03, BULK-04, BULK-05, BULK-06, BULK-07, BULK-08, BULK-09
 **Depends on:** Phase 12
+**Status:** Complete — completed 2026-05-07; UI-only browser UAT accepted by user for phase completion
 **Success Criteria** (what must be TRUE):
   1. User can select items and run bulk AI note generation, auto-tagging, PDF fetch, or embedding generation from the Library bulk action bar
   2. Each operation shows a confirmation dialog with item count, skip count, cost estimate, and concurrency toggle before starting
   3. Progress modal shows per-item status with overall progress bar, and user can pause/resume/cancel mid-batch
   4. Failed items are tracked and retriable with a single click after batch completion
   5. Auto-tagging works on papers, websites, and GitHub repos at the library level (not just project-scoped)
-**Plans:** 1/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 13-01-PLAN.md — Backend batch services (extend keyword extraction for all item types) + batch router + tests
-- [ ] 13-02-PLAN.md — Frontend batch infrastructure: useBatchProcessor hook, BulkProgressModal, ConfirmBulkModal, batch API client
-- [ ] 13-03-PLAN.md — Library.jsx integration: wire all four operations into bulk action bar with confirm + progress modals
+- [x] 13-01-PLAN.md — Backend batch services (extend keyword extraction for all item types) + batch router + tests
+- [x] 13-02-PLAN.md — Frontend batch infrastructure: useBatchProcessor hook, BulkProgressModal, ConfirmBulkModal, batch API client
+- [x] 13-03-PLAN.md — Library.jsx integration: wire all four operations into bulk action bar with confirm + progress modals
 
 ### Phase 14: Literature Review Draft Generator
 
