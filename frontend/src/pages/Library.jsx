@@ -1607,7 +1607,15 @@ export default function Library() {
 
   const computeSkipCount = async (selected, operation) => {
     if (operation === 'tags') {
-      const skipIds = new Set(selected.filter(i => i.tags && i.tags.length > 0).map(i => i.id))
+      const skipIds = new Set(selected.filter(i => {
+        const hasTags = i.tags && i.tags.length > 0
+        const text = i.itemType === 'website'
+          ? i.description
+          : i.itemType === 'github_repo'
+            ? (i.abstract || i.description)
+            : i.abstract
+        return hasTags || !text?.trim()
+      }).map(i => i.id))
       setBulkSkipIds(skipIds)
       return skipIds.size
     }
@@ -1649,7 +1657,7 @@ export default function Library() {
   }
 
   const getBulkProcessFn = (operation) => {
-    const libraryId = activeLibrary?.id
+    const libraryId = activeLibraryId
     switch (operation) {
       case 'notes':
         return async (item) => {
@@ -1690,52 +1698,53 @@ export default function Library() {
       for (const item of operationItems) {
         initialStatuses[item.id] = bulkSkipIds.has(item.id) ? 'skipped' : 'processing'
       }
-      batch.setStatuses(initialStatuses)
-      try {
-        const itemIds = operationItems.filter(i => !bulkSkipIds.has(i.id)).map(i => i.id)
-        if (itemIds.length > 0) {
-          await batchApi.tags(itemIds, activeLibrary?.id)
-        }
-        batch.setStatuses(prev => {
-          const next = { ...prev }
-          for (const id of itemIds) next[id] = 'done'
-          return next
-        })
-        // Refresh items to show updated tags
-        setRefreshKey(k => k + 1)
-      } catch (err) {
-        batch.setStatuses(prev => {
-          const next = { ...prev }
-          for (const [id, s] of Object.entries(next)) {
-            if (s === 'processing') next[id] = err.message || 'Failed'
+      await batch.runManaged(operationItems, initialStatuses, async () => {
+        try {
+          const itemIds = operationItems.filter(i => !bulkSkipIds.has(i.id)).map(i => i.id)
+          if (itemIds.length > 0) {
+            await batchApi.tags(itemIds, activeLibraryId)
           }
-          return next
-        })
-      }
+          batch.setStatuses(prev => {
+            const next = { ...prev }
+            for (const id of itemIds) next[id] = 'done'
+            return next
+          })
+          setRefreshKey(k => k + 1)
+        } catch (err) {
+          batch.setStatuses(prev => {
+            const next = { ...prev }
+            for (const [id, s] of Object.entries(next)) {
+              if (s === 'processing') next[id] = err.message || 'Failed'
+            }
+            return next
+          })
+        }
+      })
       return
     }
 
     if (operation === 'embeddings') {
       const initialStatuses = {}
       for (const item of operationItems) initialStatuses[item.id] = 'processing'
-      batch.setStatuses(initialStatuses)
-      try {
-        const itemIds = operationItems.map(i => i.id)
-        await batchApi.embeddings(itemIds)
-        batch.setStatuses(prev => {
-          const next = { ...prev }
-          for (const id of itemIds) next[id] = 'done'
-          return next
-        })
-      } catch (err) {
-        batch.setStatuses(prev => {
-          const next = { ...prev }
-          for (const [id, s] of Object.entries(next)) {
-            if (s === 'processing') next[id] = err.message || 'Failed'
-          }
-          return next
-        })
-      }
+      await batch.runManaged(operationItems, initialStatuses, async () => {
+        try {
+          const itemIds = operationItems.map(i => i.id)
+          await batchApi.embeddings(itemIds)
+          batch.setStatuses(prev => {
+            const next = { ...prev }
+            for (const id of itemIds) next[id] = 'done'
+            return next
+          })
+        } catch (err) {
+          batch.setStatuses(prev => {
+            const next = { ...prev }
+            for (const [id, s] of Object.entries(next)) {
+              if (s === 'processing') next[id] = err.message || 'Failed'
+            }
+            return next
+          })
+        }
+      })
       return
     }
 
@@ -2570,6 +2579,7 @@ export default function Library() {
           onCancel={batch.cancel}
           onRetryFailed={handleRetryFailed}
           failedCount={batch.getFailedItems().length}
+          allowControls={bulkOperation !== 'tags' && bulkOperation !== 'embeddings'}
         />
       )}
 

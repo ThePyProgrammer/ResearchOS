@@ -28,6 +28,7 @@ export default function BulkProgressModal({
   isRunning, isPaused,
   onPause, onResume, onCancel, onRetryFailed,
   failedCount = 0,
+  allowControls = true,
 }) {
   if (!open) return null
 
@@ -92,7 +93,7 @@ export default function BulkProgressModal({
 
         {/* Footer buttons */}
         <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-          {isRunning && !isPaused && (
+          {allowControls && isRunning && !isPaused && (
             <>
               <button
                 onClick={onPause}
@@ -108,7 +109,7 @@ export default function BulkProgressModal({
               </button>
             </>
           )}
-          {isRunning && isPaused && (
+          {allowControls && isRunning && isPaused && (
             <>
               <button
                 onClick={onResume}

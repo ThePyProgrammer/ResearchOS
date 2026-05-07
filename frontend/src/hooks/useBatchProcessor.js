@@ -19,8 +19,17 @@ export function useBatchProcessor() {
   const isCancelledRef = useRef(false)
   const [isPaused, setIsPaused] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
-  const [statuses, setStatuses] = useState({})
+  const [statuses, setStatusesState] = useState({})
+  const statusesRef = useRef({})
   const itemsRef = useRef([])
+
+  const setStatuses = (updater) => {
+    setStatusesState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      statusesRef.current = next
+      return next
+    })
+  }
 
   const pause = () => {
     isPausedRef.current = true
@@ -72,6 +81,10 @@ export function useBatchProcessor() {
         setStatuses(prev => ({ ...prev, [item.id]: 'processing' }))
         try {
           const result = await processFn(item)
+          if (isCancelledRef.current) {
+            setStatuses(prev => ({ ...prev, [item.id]: 'cancelled' }))
+            break
+          }
           const finalStatus = result === 'skipped' ? 'skipped' : 'done'
           setStatuses(prev => ({ ...prev, [item.id]: finalStatus }))
         } catch (err) {
@@ -104,9 +117,23 @@ export function useBatchProcessor() {
   const getFailedItems = () => {
     const standard = new Set(['pending', 'processing', 'done', 'skipped', 'cancelled'])
     return itemsRef.current.filter(item => {
-      const s = statuses[item.id]
+      const s = statusesRef.current[item.id]
       return s != null && !standard.has(s)
     })
+  }
+
+  const runManaged = async (items, initialStatuses, work) => {
+    isCancelledRef.current = false
+    isPausedRef.current = false
+    setIsPaused(false)
+    itemsRef.current = items
+    setStatuses(initialStatuses)
+    setIsRunning(true)
+    try {
+      await work()
+    } finally {
+      setIsRunning(false)
+    }
   }
 
   const retryFailed = async (concurrency, processFn) => {
@@ -117,6 +144,7 @@ export function useBatchProcessor() {
 
   return {
     run,
+    runManaged,
     pause,
     resume,
     cancel,

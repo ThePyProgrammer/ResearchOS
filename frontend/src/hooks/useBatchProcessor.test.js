@@ -219,7 +219,7 @@ describe('useBatchProcessor', () => {
   })
 
   // Test 7: cancel() stops the batch and marks remaining items as 'cancelled'
-  it('cancel marks remaining pending items as cancelled', async () => {
+  it('cancel marks in-flight and remaining pending items as cancelled', async () => {
     const items = makeItems(5)
     let resolvers = {}
     const processFn = vi.fn(async (item) => {
@@ -233,24 +233,39 @@ describe('useBatchProcessor', () => {
       runPromise = result.current.run(items, 1, processFn)
     })
 
-    // item-0 starts processing
     await act(async () => { await Promise.resolve() })
-
-    // Cancel the batch
     act(() => { result.current.cancel() })
-
-    // Finish the in-flight item-0
     act(() => { resolvers['item-0']?.() })
 
     await act(async () => { await runPromise })
 
-    // item-0 finished — should be done (was in-flight when cancel was called)
-    expect(result.current.statuses['item-0']).toBe('done')
-    // Remaining items should be cancelled
+    expect(result.current.statuses['item-0']).toBe('cancelled')
     expect(result.current.statuses['item-1']).toBe('cancelled')
     expect(result.current.statuses['item-2']).toBe('cancelled')
     expect(result.current.statuses['item-3']).toBe('cancelled')
     expect(result.current.statuses['item-4']).toBe('cancelled')
+    expect(result.current.isRunning).toBe(false)
+  })
+
+  it('runManaged exposes running state for externally managed batch work', async () => {
+    let resolveWork
+    const items = makeItems(2)
+    const initialStatuses = { 'item-0': 'processing', 'item-1': 'processing' }
+    const { result } = renderHook(() => useBatchProcessor())
+
+    let runPromise
+    act(() => {
+      runPromise = result.current.runManaged(items, initialStatuses, async () => {
+        await new Promise(r => { resolveWork = r })
+      })
+    })
+
+    expect(result.current.isRunning).toBe(true)
+    expect(result.current.statuses).toEqual(initialStatuses)
+
+    act(() => { resolveWork() })
+    await act(async () => { await runPromise })
+
     expect(result.current.isRunning).toBe(false)
   })
 })
