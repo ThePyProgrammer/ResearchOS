@@ -1,0 +1,335 @@
+{
+  "screenshots": [
+    "/tmp/researchos-uat-phase13/01-library-loaded.png",
+    "/tmp/researchos-uat-phase13/02-three-selected-bulk-bar.png",
+    "/tmp/researchos-uat-phase13/03-generate-notes-modal.png",
+    "/tmp/researchos-uat-phase13/04-auto-tag-modal.png",
+    "/tmp/researchos-uat-phase13/05-fetch-pdfs-modal.png",
+    "/tmp/researchos-uat-phase13/06-generate-embeddings-modal.png"
+  ],
+  "initial": {
+    "url": "http://localhost:5173/library",
+    "libraryActive": true,
+    "showingAll": true,
+    "rowsVisible": true,
+    "checkboxCount": 263
+  },
+  "selection": {
+    "threeSelectedVisible": true,
+    "actionsVisible": [
+      "Add to Collection",
+      "Set Status",
+      "Generate Notes",
+      "Auto-Tag",
+      "Fetch PDFs",
+      "Generate Embeddings",
+      "Export BibTeX",
+      "Delete All"
+    ]
+  },
+  "modals": [
+    {
+      "operation": "Generate Notes",
+      "opened": true,
+      "blocked": false,
+      "buttonCount": 1,
+      "text": "hub\nResearchOS\nchevron_left\nlibrary_books\nAI Dump\nexpand_more\nsettings\ndashboard\nDashboard\nedit_note\nNotes\nscatter_plot\nLibrary Map\n\nQUICK ACCESS\n\ncollections_bookmark\nAll Papers\n249\ninbox\nInbox\n249\nfolder_off\nUnfiled\n23\ncontent_copy\nDuplicates\n2\n\nCOLLECTIONS\n\nadd\nfolder\nRepresentation Learning\n10\nfolder\nReasoning\n5\nfolder\nFine-Tuning\n3\nfolder\nSafety\n3\nfolder\nScaling Laws\n3\nchevron_right\nfolder\nTransformer Alternatives\n7\nchevron_right\nfolder\nAnalysis\n5\nchevron_right\nfolder\nComputer Vision\n4\nfolder\nQuantization\n1\nchevron_right\nfolder\nAgentic AI\n7\nfolder\nWorld Models\n1\nfolder\nRL\n3\n\nPROJECTS\n\nadd\nhome\nHome\nchevron_right\nfolder_open\nAttention Methods Comparison Study\nchevron_right\nfolder_open\nBaseline Study 2\ngroups\nAuthors\n\nAGENT WORKFLOWS\n\nsmart_toy\nWorkflow Catalog\nrate_review\nAgent Proposals\n0\nsensors\nDaily arXiv Scanner\nDR\n\nDr. Researcher\n\nLab Alpha\n\nsettings\nsearch\n⌘K\nnotifications\nadd\nQuick Add\nSTATUS\nAll\n262\nInbox\n262\nTo Read\n0\nRead\n0\nSOURCE\nAll\n262\nHuman\n262\nAgent\n0\nPDF\nAll\n262\nHas PDF\n107\nNo PDF\n155\nTITLE\nsearch\nVENUE\nlocation_on\nYEAR\n-\nexpand_more\nTAGS\nAND\nNormalization (2)\ncontext-engineering (2)\nspec-driven-development (2)\nGANs (1)\ncot (1)\nscaled-dot-product attention (1)\noptimal transport (1)\ngradient optimization (1)\ninformation geometry (1)\npolicy gradient (1)\nlinear attention (1)\nstate space models (1)\ncontinuous-time dynamics (1)\nerror-free attention (1)\nlanguage modeling (1)\ntransformer architectures (1)\nattention mechanisms (1)\nlong-context retrieval (1)\npreconditioned representations (1)\nbabilong (1)\ndifferential attention (1)\nbounded-memory (1)\nlong-range context (1)\nsemantic matching (1)\nneural databases (1)\nkey-value cache (1)\ncontext compaction (1)\nattention matching (1)\nlatent space (1)\nperformance optimization (1)\nai (1)\nengineering (1)\nplanning (1)\nprd (1)\nsdd (1)\nsdlc (1)\nspec (1)\nspecification (1)\nclaude-code (1)\nmeta-prompting (1)\n3 items selected\nlibrary_add\nAdd to Collection...\nlabel\nSet Status\narrow_drop_down\nauto_awesome\nGenerate Notes\nlabel\nAuto-Tag\ncloud_download\nFetch PDFs\nmemory\nGenerate Embeddings\ndownload\nExport BibTeX\ndelete\nDelete All\nclose\n\t\nSTATUS\n\t\nTITLE\n\t\nAUTHORS\n\t\nDATE\narrow_upward\n\tVENUE\tSOURCE\n\tInbox\t\nAn algorithm for the machine calculation of complex Fourier series\npicture_as_pdf\nNo PDF\n\t\nCooley & Tukey\n\t1965\t\nMathematics of computation\n\t\nperson\ncontent_copy\n\n\tInbox\t\nDevelopment of NASA-TLX (Task Load Index): Results of empirical and theoretical research\npicture_as_pdf\nNo PDF\n\t\nHart & Staveland\n\t1988\t\nAdvance",
+      "visibleButtons": [
+        {
+          "text": "expand_more\nTAGS",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "auto_awesome\nGenerate Notes",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "label\nAuto-Tag",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "cloud_download\nFetch PDFs",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "memory\nGenerate Embeddings",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "close",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "close",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "Cancel",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "Start",
+          "disabled": false,
+          "visible": true
+        }
+      ],
+      "newRequests": [
+        {
+          "method": "POST",
+          "url": "http://localhost:5173/api/batch/notes/preview"
+        }
+      ]
+    },
+    {
+      "operation": "Auto-Tag",
+      "opened": true,
+      "blocked": false,
+      "buttonCount": 1,
+      "text": "hub\nResearchOS\nchevron_left\nlibrary_books\nAI Dump\nexpand_more\nsettings\ndashboard\nDashboard\nedit_note\nNotes\nscatter_plot\nLibrary Map\n\nQUICK ACCESS\n\ncollections_bookmark\nAll Papers\n249\ninbox\nInbox\n249\nfolder_off\nUnfiled\n23\ncontent_copy\nDuplicates\n2\n\nCOLLECTIONS\n\nadd\nfolder\nRepresentation Learning\n10\nfolder\nReasoning\n5\nfolder\nFine-Tuning\n3\nfolder\nSafety\n3\nfolder\nScaling Laws\n3\nchevron_right\nfolder\nTransformer Alternatives\n7\nchevron_right\nfolder\nAnalysis\n5\nchevron_right\nfolder\nComputer Vision\n4\nfolder\nQuantization\n1\nchevron_right\nfolder\nAgentic AI\n7\nfolder\nWorld Models\n1\nfolder\nRL\n3\n\nPROJECTS\n\nadd\nhome\nHome\nchevron_right\nfolder_open\nAttention Methods Comparison Study\nchevron_right\nfolder_open\nBaseline Study 2\ngroups\nAuthors\n\nAGENT WORKFLOWS\n\nsmart_toy\nWorkflow Catalog\nrate_review\nAgent Proposals\n0\nsensors\nDaily arXiv Scanner\nDR\n\nDr. Researcher\n\nLab Alpha\n\nsettings\nsearch\n⌘K\nnotifications\nadd\nQuick Add\nSTATUS\nAll\n262\nInbox\n262\nTo Read\n0\nRead\n0\nSOURCE\nAll\n262\nHuman\n262\nAgent\n0\nPDF\nAll\n262\nHas PDF\n107\nNo PDF\n155\nTITLE\nsearch\nVENUE\nlocation_on\nYEAR\n-\nexpand_more\nTAGS\nAND\nNormalization (2)\ncontext-engineering (2)\nspec-driven-development (2)\nGANs (1)\ncot (1)\nscaled-dot-product attention (1)\noptimal transport (1)\ngradient optimization (1)\ninformation geometry (1)\npolicy gradient (1)\nlinear attention (1)\nstate space models (1)\ncontinuous-time dynamics (1)\nerror-free attention (1)\nlanguage modeling (1)\ntransformer architectures (1)\nattention mechanisms (1)\nlong-context retrieval (1)\npreconditioned representations (1)\nbabilong (1)\ndifferential attention (1)\nbounded-memory (1)\nlong-range context (1)\nsemantic matching (1)\nneural databases (1)\nkey-value cache (1)\ncontext compaction (1)\nattention matching (1)\nlatent space (1)\nperformance optimization (1)\nai (1)\nengineering (1)\nplanning (1)\nprd (1)\nsdd (1)\nsdlc (1)\nspec (1)\nspecification (1)\nclaude-code (1)\nmeta-prompting (1)\n3 items selected\nlibrary_add\nAdd to Collection...\nlabel\nSet Status\narrow_drop_down\nauto_awesome\nGenerate Notes\nlabel\nAuto-Tag\ncloud_download\nFetch PDFs\nmemory\nGenerate Embeddings\ndownload\nExport BibTeX\ndelete\nDelete All\nclose\n\t\nSTATUS\n\t\nTITLE\n\t\nAUTHORS\n\t\nDATE\narrow_upward\n\tVENUE\tSOURCE\n\tInbox\t\nAn algorithm for the machine calculation of complex Fourier series\npicture_as_pdf\nNo PDF\n\t\nCooley & Tukey\n\t1965\t\nMathematics of computation\n\t\nperson\ncontent_copy\n\n\tInbox\t\nDevelopment of NASA-TLX (Task Load Index): Results of empirical and theoretical research\npicture_as_pdf\nNo PDF\n\t\nHart & Staveland\n\t1988\t\nAdvance",
+      "visibleButtons": [
+        {
+          "text": "expand_more\nTAGS",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "auto_awesome\nGenerate Notes",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "label\nAuto-Tag",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "cloud_download\nFetch PDFs",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "memory\nGenerate Embeddings",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "close",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "close",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "Cancel",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "Start",
+          "disabled": false,
+          "visible": true
+        }
+      ],
+      "newRequests": []
+    },
+    {
+      "operation": "Fetch PDFs",
+      "opened": true,
+      "blocked": false,
+      "buttonCount": 1,
+      "text": "hub\nResearchOS\nchevron_left\nlibrary_books\nAI Dump\nexpand_more\nsettings\ndashboard\nDashboard\nedit_note\nNotes\nscatter_plot\nLibrary Map\n\nQUICK ACCESS\n\ncollections_bookmark\nAll Papers\n249\ninbox\nInbox\n249\nfolder_off\nUnfiled\n23\ncontent_copy\nDuplicates\n2\n\nCOLLECTIONS\n\nadd\nfolder\nRepresentation Learning\n10\nfolder\nReasoning\n5\nfolder\nFine-Tuning\n3\nfolder\nSafety\n3\nfolder\nScaling Laws\n3\nchevron_right\nfolder\nTransformer Alternatives\n7\nchevron_right\nfolder\nAnalysis\n5\nchevron_right\nfolder\nComputer Vision\n4\nfolder\nQuantization\n1\nchevron_right\nfolder\nAgentic AI\n7\nfolder\nWorld Models\n1\nfolder\nRL\n3\n\nPROJECTS\n\nadd\nhome\nHome\nchevron_right\nfolder_open\nAttention Methods Comparison Study\nchevron_right\nfolder_open\nBaseline Study 2\ngroups\nAuthors\n\nAGENT WORKFLOWS\n\nsmart_toy\nWorkflow Catalog\nrate_review\nAgent Proposals\n0\nsensors\nDaily arXiv Scanner\nDR\n\nDr. Researcher\n\nLab Alpha\n\nsettings\nsearch\n⌘K\nnotifications\nadd\nQuick Add\nSTATUS\nAll\n262\nInbox\n262\nTo Read\n0\nRead\n0\nSOURCE\nAll\n262\nHuman\n262\nAgent\n0\nPDF\nAll\n262\nHas PDF\n107\nNo PDF\n155\nTITLE\nsearch\nVENUE\nlocation_on\nYEAR\n-\nexpand_more\nTAGS\nAND\nNormalization (2)\ncontext-engineering (2)\nspec-driven-development (2)\nGANs (1)\ncot (1)\nscaled-dot-product attention (1)\noptimal transport (1)\ngradient optimization (1)\ninformation geometry (1)\npolicy gradient (1)\nlinear attention (1)\nstate space models (1)\ncontinuous-time dynamics (1)\nerror-free attention (1)\nlanguage modeling (1)\ntransformer architectures (1)\nattention mechanisms (1)\nlong-context retrieval (1)\npreconditioned representations (1)\nbabilong (1)\ndifferential attention (1)\nbounded-memory (1)\nlong-range context (1)\nsemantic matching (1)\nneural databases (1)\nkey-value cache (1)\ncontext compaction (1)\nattention matching (1)\nlatent space (1)\nperformance optimization (1)\nai (1)\nengineering (1)\nplanning (1)\nprd (1)\nsdd (1)\nsdlc (1)\nspec (1)\nspecification (1)\nclaude-code (1)\nmeta-prompting (1)\n3 items selected\nlibrary_add\nAdd to Collection...\nlabel\nSet Status\narrow_drop_down\nauto_awesome\nGenerate Notes\nlabel\nAuto-Tag\ncloud_download\nFetch PDFs\nmemory\nGenerate Embeddings\ndownload\nExport BibTeX\ndelete\nDelete All\nclose\n\t\nSTATUS\n\t\nTITLE\n\t\nAUTHORS\n\t\nDATE\narrow_upward\n\tVENUE\tSOURCE\n\tInbox\t\nAn algorithm for the machine calculation of complex Fourier series\npicture_as_pdf\nNo PDF\n\t\nCooley & Tukey\n\t1965\t\nMathematics of computation\n\t\nperson\ncontent_copy\n\n\tInbox\t\nDevelopment of NASA-TLX (Task Load Index): Results of empirical and theoretical research\npicture_as_pdf\nNo PDF\n\t\nHart & Staveland\n\t1988\t\nAdvance",
+      "visibleButtons": [
+        {
+          "text": "expand_more\nTAGS",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "auto_awesome\nGenerate Notes",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "label\nAuto-Tag",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "cloud_download\nFetch PDFs",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "memory\nGenerate Embeddings",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "close",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "close",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "Cancel",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "Start",
+          "disabled": false,
+          "visible": true
+        }
+      ],
+      "newRequests": []
+    },
+    {
+      "operation": "Generate Embeddings",
+      "opened": true,
+      "blocked": false,
+      "buttonCount": 1,
+      "text": "hub\nResearchOS\nchevron_left\nlibrary_books\nAI Dump\nexpand_more\nsettings\ndashboard\nDashboard\nedit_note\nNotes\nscatter_plot\nLibrary Map\n\nQUICK ACCESS\n\ncollections_bookmark\nAll Papers\n249\ninbox\nInbox\n249\nfolder_off\nUnfiled\n23\ncontent_copy\nDuplicates\n2\n\nCOLLECTIONS\n\nadd\nfolder\nRepresentation Learning\n10\nfolder\nReasoning\n5\nfolder\nFine-Tuning\n3\nfolder\nSafety\n3\nfolder\nScaling Laws\n3\nchevron_right\nfolder\nTransformer Alternatives\n7\nchevron_right\nfolder\nAnalysis\n5\nchevron_right\nfolder\nComputer Vision\n4\nfolder\nQuantization\n1\nchevron_right\nfolder\nAgentic AI\n7\nfolder\nWorld Models\n1\nfolder\nRL\n3\n\nPROJECTS\n\nadd\nhome\nHome\nchevron_right\nfolder_open\nAttention Methods Comparison Study\nchevron_right\nfolder_open\nBaseline Study 2\ngroups\nAuthors\n\nAGENT WORKFLOWS\n\nsmart_toy\nWorkflow Catalog\nrate_review\nAgent Proposals\n0\nsensors\nDaily arXiv Scanner\nDR\n\nDr. Researcher\n\nLab Alpha\n\nsettings\nsearch\n⌘K\nnotifications\nadd\nQuick Add\nSTATUS\nAll\n262\nInbox\n262\nTo Read\n0\nRead\n0\nSOURCE\nAll\n262\nHuman\n262\nAgent\n0\nPDF\nAll\n262\nHas PDF\n107\nNo PDF\n155\nTITLE\nsearch\nVENUE\nlocation_on\nYEAR\n-\nexpand_more\nTAGS\nAND\nNormalization (2)\ncontext-engineering (2)\nspec-driven-development (2)\nGANs (1)\ncot (1)\nscaled-dot-product attention (1)\noptimal transport (1)\ngradient optimization (1)\ninformation geometry (1)\npolicy gradient (1)\nlinear attention (1)\nstate space models (1)\ncontinuous-time dynamics (1)\nerror-free attention (1)\nlanguage modeling (1)\ntransformer architectures (1)\nattention mechanisms (1)\nlong-context retrieval (1)\npreconditioned representations (1)\nbabilong (1)\ndifferential attention (1)\nbounded-memory (1)\nlong-range context (1)\nsemantic matching (1)\nneural databases (1)\nkey-value cache (1)\ncontext compaction (1)\nattention matching (1)\nlatent space (1)\nperformance optimization (1)\nai (1)\nengineering (1)\nplanning (1)\nprd (1)\nsdd (1)\nsdlc (1)\nspec (1)\nspecification (1)\nclaude-code (1)\nmeta-prompting (1)\n3 items selected\nlibrary_add\nAdd to Collection...\nlabel\nSet Status\narrow_drop_down\nauto_awesome\nGenerate Notes\nlabel\nAuto-Tag\ncloud_download\nFetch PDFs\nmemory\nGenerate Embeddings\ndownload\nExport BibTeX\ndelete\nDelete All\nclose\n\t\nSTATUS\n\t\nTITLE\n\t\nAUTHORS\n\t\nDATE\narrow_upward\n\tVENUE\tSOURCE\n\tInbox\t\nAn algorithm for the machine calculation of complex Fourier series\npicture_as_pdf\nNo PDF\n\t\nCooley & Tukey\n\t1965\t\nMathematics of computation\n\t\nperson\ncontent_copy\n\n\tInbox\t\nDevelopment of NASA-TLX (Task Load Index): Results of empirical and theoretical research\npicture_as_pdf\nNo PDF\n\t\nHart & Staveland\n\t1988\t\nAdvance",
+      "visibleButtons": [
+        {
+          "text": "expand_more\nTAGS",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "auto_awesome\nGenerate Notes",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "label\nAuto-Tag",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "cloud_download\nFetch PDFs",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "memory\nGenerate Embeddings",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "close",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "close",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "Cancel",
+          "disabled": false,
+          "visible": true
+        },
+        {
+          "text": "Start",
+          "disabled": false,
+          "visible": true
+        }
+      ],
+      "newRequests": []
+    }
+  ],
+  "allRequests": [
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/papers"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/proposals"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/papers"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/websites"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/github-repos"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/libraries"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/papers"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/proposals"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/papers"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/websites"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/github-repos"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/libraries"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/papers?library_id=lib_default"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/projects?library_id=lib_default"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/papers?library_id=lib_default"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/websites?library_id=lib_default"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/github-repos?library_id=lib_default"
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/collections?library_id=lib_default"
+    },
+    {
+      "method": "POST",
+      "url": "http://localhost:5173/api/batch/notes/preview"
+    }
+  ]
+}

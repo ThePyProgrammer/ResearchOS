@@ -1,0 +1,120 @@
+{
+  "config": {
+    "configFile": "/home/prannayag/personal/ResearchOS/.planning/phases/13-bulk-paper-processing/uat-evidence/playwright.uat.config.js",
+    "rootDir": "/home/prannayag/personal/ResearchOS/.planning/phases/13-bulk-paper-processing/uat-evidence",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/prannayag/personal/ResearchOS/backend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/prannayag/personal/ResearchOS/.planning/phases/13-bulk-paper-processing/uat-evidence",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "bulk-uat-live.spec.js",
+      "file": "bulk-uat-live.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Phase 13 bulk paper processing live browser UAT",
+          "file": "bulk-uat-live.spec.js",
+          "line": 7,
+          "column": 6,
+          "specs": [
+            {
+              "title": "inspect library bulk processing UI without starting costly operations",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3412,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "UAT_FINDINGS {\n  \"url\": \"http://localhost:5174/library\",\n  \"loaded\": true,\n  \"visibleFatalErrors\": [],\n  \"rowCheckboxes\": 0,\n  \"selectedRows\": 0,\n  \"actionBarVisible\": false,\n  \"actionButtons\": {\n    \"Generate Notes\": false,\n    \"Auto-Tag\": false,\n    \"Fetch PDFs\": false,\n    \"Generate Embeddings\": false,\n    \"Add to Collection\": false,\n    \"Export BibTeX\": false,\n    \"Delete All\": false\n  },\n  \"modals\": {\n    \"Generate Notes\": {\n      \"opened\": false,\n      \"reason\": \"button not visible\"\n    },\n    \"Auto-Tag\": {\n      \"opened\": false,\n      \"reason\": \"button not visible\"\n    },\n    \"Fetch PDFs\": {\n      \"opened\": false,\n      \"reason\": \"button not visible\"\n    },\n    \"Generate Embeddings\": {\n      \"opened\": false,\n      \"reason\": \"button not visible\"\n    }\n  },\n  \"aggregateControls\": {},\n  \"perItemControls\": {},\n  \"notes\": [\n    \"No selectable checkboxes found on library page.\"\n  ]\n}\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-06T11:28:57.006Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d41353ae8d4a8236e55b-63cb18a9d31ca7f4189d",
+              "file": "bulk-uat-live.spec.js",
+              "line": 8,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-05-06T11:28:55.616Z",
+    "duration": 5778.374,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}
