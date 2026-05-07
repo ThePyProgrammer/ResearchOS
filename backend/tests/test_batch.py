@@ -444,6 +444,33 @@ class TestBatchNotesPreview:
         assert result["skip_ids"] == []
         assert set(result["process_ids"]) == {"p1", "p2"}
 
+    def test_item_type_collisions_do_not_skip_unrelated_items(self, mocker):
+        """batch_notes_preview keeps paper/website/repo IDs distinct when raw IDs collide."""
+        mock_execute = MagicMock()
+        mock_execute.data = [
+            {"paper_id": None, "website_id": "shared_id", "github_repo_id": None},
+        ]
+        mock_query = MagicMock()
+        mock_query.execute.return_value = mock_execute
+        mock_query.eq.return_value = mock_query
+
+        mock_table = MagicMock()
+        mock_table.select.return_value = mock_query
+
+        mock_client = MagicMock()
+        mock_client.table.return_value = mock_table
+
+        mocker.patch(
+            "services.batch_service.get_client",
+            return_value=mock_client,
+        )
+
+        from services.batch_service import batch_notes_preview
+        result = batch_notes_preview(["shared_id"])
+
+        assert result["skip_ids"] == []
+        assert result["process_ids"] == ["shared_id"]
+
 
 # ---------------------------------------------------------------------------
 # Route-level tests

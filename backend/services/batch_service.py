@@ -96,21 +96,22 @@ def batch_notes_preview(item_ids: list[str]) -> dict:
         .execute()
     )
 
-    # Build a set of item IDs that already have AI Notes folders
-    has_ai_notes: set[str] = set()
+    # Build a set of typed item IDs that already have AI Notes folders
+    has_ai_notes: set[tuple[str, str]] = set()
     for row in result.data:
         if row.get("paper_id"):
-            has_ai_notes.add(row["paper_id"])
+            has_ai_notes.add(("paper", row["paper_id"]))
         if row.get("website_id"):
-            has_ai_notes.add(row["website_id"])
+            has_ai_notes.add(("website", row["website_id"]))
         if row.get("github_repo_id"):
-            has_ai_notes.add(row["github_repo_id"])
+            has_ai_notes.add(("github_repo", row["github_repo_id"]))
 
     skip_ids = []
     process_ids = []
 
     for item_id in item_ids:
-        if item_id in has_ai_notes:
+        item_type = "website" if item_id.startswith("w_") else "github_repo" if item_id.startswith("gh_") else "paper"
+        if (item_type, item_id) in has_ai_notes:
             skip_ids.append(item_id)
         else:
             process_ids.append(item_id)
