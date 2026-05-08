@@ -1,5 +1,9 @@
 export function normalizeDate(raw) {
   if (!raw) return null
+  if (raw instanceof Date) {
+    return Number.isNaN(raw.getTime()) ? null : raw
+  }
+
   const normalized = String(raw).replace(/(\.\d{3})\d+/, '$1')
   const date = new Date(normalized)
   return Number.isNaN(date.getTime()) ? null : date
@@ -9,6 +13,7 @@ export function formatLibraryDate(raw) {
   const date = normalizeDate(raw)
   if (!date) return '—'
   return date.toLocaleDateString(undefined, {
+    timeZone: 'UTC',
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -18,12 +23,13 @@ export function formatLibraryDate(raw) {
 function dayKey(raw) {
   const date = normalizeDate(raw)
   if (!date) return null
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
 }
 
 function labelForDay(key) {
   const [year, month, day] = key.split('-')
-  return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString(undefined, {
+  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))).toLocaleDateString(undefined, {
+    timeZone: 'UTC',
     month: 'short',
     day: 'numeric',
   })
@@ -72,7 +78,7 @@ export function buildLibrarySummary(library, { papers = [], websites = [], repos
     },
     empty: allItems.length === 0,
     createdLabel: formatLibraryDate(library.createdAt || library.created_at),
-    updatedLabel: formatLibraryDate(updatedDate?.toISOString()),
+    updatedLabel: formatLibraryDate(updatedDate),
     sparkline: buildCumulativeSeries(allItems),
   }
 }

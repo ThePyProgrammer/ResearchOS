@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   buildLibrarySummary,
@@ -18,6 +18,34 @@ describe('librarySummaries', () => {
   it('returns null for invalid dates', () => {
     expect(normalizeDate(null)).toBeNull()
     expect(normalizeDate('not-a-date')).toBeNull()
+  })
+
+  it('formats and buckets API timestamps by UTC calendar date', async () => {
+    const originalTz = process.env.TZ
+    process.env.TZ = 'America/Los_Angeles'
+
+    try {
+      vi.resetModules()
+      const mod = await import(/* @vite-ignore */ `./librarySummaries.js?tz=${Date.now()}`)
+
+      expect(mod.formatLibraryDate('2026-03-01T00:00:00Z')).toMatch(/Mar 1, 2026|1 Mar 2026/)
+
+      const summary = mod.buildLibrarySummary(
+        { id: 'lib_tz', name: 'TZ', createdAt: '2026-03-01T00:00:00Z' },
+        {
+          papers: [{ id: 'p_1', createdAt: '2026-03-01T00:30:00Z' }],
+          websites: [],
+          repos: [],
+        }
+      )
+
+      expect(summary.createdLabel).toMatch(/Mar 1, 2026|1 Mar 2026/)
+      expect(summary.updatedLabel).toMatch(/Mar 1, 2026|1 Mar 2026/)
+      expect(summary.sparkline).toEqual([{ label: expect.stringMatching(/Mar 1|1 Mar/), value: 1 }])
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ
+      else process.env.TZ = originalTz
+    }
   })
 
   it('formats valid dates and falls back for missing values', () => {
@@ -69,11 +97,15 @@ describe('librarySummaries', () => {
   })
 
   it('maps cumulative sparkline points into SVG coordinates', () => {
-    const points = buildSparklinePoints([
-      { label: 'Mar 1', value: 1 },
-      { label: 'Mar 2', value: 3 },
-      { label: 'Mar 3', value: 6 },
-    ], 120, 36)
+    const points = buildSparklinePoints(
+      [
+        { label: 'Mar 1', value: 1 },
+        { label: 'Mar 2', value: 3 },
+        { label: 'Mar 3', value: 6 },
+      ],
+      120,
+      36
+    )
 
     expect(points).toBe('0,36 60,21.6 120,0')
   })
