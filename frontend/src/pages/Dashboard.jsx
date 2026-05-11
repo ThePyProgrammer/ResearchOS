@@ -421,8 +421,8 @@ export default function Dashboard() {
                     stroke={cfg.stroke}
                     strokeWidth={2}
                     fill="url(#chartGradient)"
-                    dot={{ r: 3, fill: cfg.stroke, strokeWidth: 0 }}
-                    activeDot={{ r: 5 }}
+                    dot={false}
+                    activeDot={{ r: 4 }}
                   />
                 )}
               </AreaChart>
