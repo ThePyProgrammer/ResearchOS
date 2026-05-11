@@ -100,6 +100,64 @@ function ActivityItem({ item }) {
   )
 }
 
+function dashboardDayKey(raw) {
+  if (!raw) return null
+  const normalized = String(raw).replace(/(\.\d{3})\d+/, '$1')
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) return null
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function nextDashboardDayKey(key) {
+  const [year, month, day] = key.split('-').map(Number)
+  const date = new Date(year, month - 1, day + 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function dashboardDayRange(startKey, endKey) {
+  const days = []
+  for (let key = startKey; key <= endKey; key = nextDashboardDayKey(key)) {
+    days.push(key)
+  }
+  return days
+}
+
+function dashboardDayLabel(key) {
+  const [year, month, day] = key.split('-')
+  return new Date(Number(year), Number(month) - 1, Number(day))
+    .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+export function buildItemsOverTimeChartData({ papers = [], githubRepos = [], websites = [] }) {
+  const allItems = [
+    ...papers.map(p => ({ createdAt: p.createdAt, _type: 'papers' })),
+    ...githubRepos.map(r => ({ createdAt: r.createdAt, _type: 'repos' })),
+    ...websites.map(w => ({ createdAt: w.createdAt, _type: 'websites' })),
+  ]
+  const counts = {}
+  for (const item of allItems) {
+    const key = dashboardDayKey(item.createdAt)
+    if (!key) continue
+    if (!counts[key]) counts[key] = { papers: 0, repos: 0, websites: 0 }
+    counts[key][item._type]++
+  }
+
+  const sorted = Object.keys(counts).sort()
+  if (!sorted.length) return []
+
+  let cPapers = 0, cRepos = 0, cWebsites = 0
+  return dashboardDayRange(sorted[0], sorted[sorted.length - 1]).map(key => {
+    const { papers: p = 0, repos: r = 0, websites: w = 0 } = counts[key] || {}
+    cPapers += p; cRepos += r; cWebsites += w
+    return {
+      label: dashboardDayLabel(key),
+      papers: p, repos: r, websites: w, added: p + r + w,
+      papersTotal: cPapers, reposTotal: cRepos, websitesTotal: cWebsites,
+      total: cPapers + cRepos + cWebsites,
+    }
+  })
+}
+
 function LoadingSkeleton() {
   return (
     <div className="animate-pulse space-y-4 px-5 py-4">
@@ -184,39 +242,10 @@ export default function Dashboard() {
     activityPage * ACTIVITY_PAGE_SIZE,
   )
 
-  // Build "items added over time" chart data grouped by day across all item types
-  const chartData = useMemo(() => {
-    const allItems = [
-      ...papers.map(p => ({ createdAt: p.createdAt, _type: 'papers' })),
-      ...githubRepos.map(r => ({ createdAt: r.createdAt, _type: 'repos' })),
-      ...websites.map(w => ({ createdAt: w.createdAt, _type: 'websites' })),
-    ]
-    if (!allItems.length) return []
-    const counts = {}
-    for (const item of allItems) {
-      const normalized = (item.createdAt || '').replace(/(\.\d{3})\d+/, '$1')
-      const d = new Date(normalized)
-      if (isNaN(d)) continue
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      if (!counts[key]) counts[key] = { papers: 0, repos: 0, websites: 0 }
-      counts[key][item._type]++
-    }
-    const sorted = Object.keys(counts).sort()
-    let cPapers = 0, cRepos = 0, cWebsites = 0
-    return sorted.map(key => {
-      const { papers: p = 0, repos: r = 0, websites: w = 0 } = counts[key]
-      cPapers += p; cRepos += r; cWebsites += w
-      const [year, month, day] = key.split('-')
-      const label = new Date(Number(year), Number(month) - 1, Number(day))
-        .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-      return {
-        label,
-        papers: p, repos: r, websites: w, added: p + r + w,
-        papersTotal: cPapers, reposTotal: cRepos, websitesTotal: cWebsites,
-        total: cPapers + cRepos + cWebsites,
-      }
-    })
-  }, [papers, githubRepos, websites])
+  const chartData = useMemo(
+    () => buildItemsOverTimeChartData({ papers, githubRepos, websites }),
+    [papers, githubRepos, websites]
+  )
 
   return (
     <div className="p-6 max-w-4xl mx-auto">

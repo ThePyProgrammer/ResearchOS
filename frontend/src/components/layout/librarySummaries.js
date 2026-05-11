@@ -46,6 +46,20 @@ function newestDate(...groups) {
   return latest
 }
 
+function nextDayKey(key) {
+  const [year, month, day] = key.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day + 1))
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
+}
+
+function dayRange(startKey, endKey) {
+  const days = []
+  for (let key = startKey; key <= endKey; key = nextDayKey(key)) {
+    days.push(key)
+  }
+  return days
+}
+
 function buildCumulativeSeries(items) {
   const counts = new Map()
   for (const item of items) {
@@ -54,9 +68,12 @@ function buildCumulativeSeries(items) {
     counts.set(key, (counts.get(key) || 0) + 1)
   }
 
+  const sorted = [...counts.keys()].sort()
+  if (!sorted.length) return []
+
   let total = 0
-  return [...counts.keys()].sort().map(key => {
-    total += counts.get(key)
+  return dayRange(sorted[0], sorted[sorted.length - 1]).map(key => {
+    total += counts.get(key) || 0
     return { label: labelForDay(key), value: total }
   })
 }
