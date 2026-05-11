@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 const minimizedDockIds = []
 const dockSubscribers = new Set()
@@ -104,7 +105,7 @@ export default function WindowModal({
   const dockWidth = 300
   const dockGap = 10
 
-  return (
+  return createPortal(
     <>
       {!minimized && showBackdrop && (
         <div
@@ -216,6 +217,7 @@ export default function WindowModal({
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body
   )
 }
