@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildLibrarySummary,
@@ -8,6 +8,15 @@ import {
 } from './librarySummaries'
 
 describe('librarySummaries', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-06T12:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('normalizes ISO strings with extra microseconds', () => {
     const date = normalizeDate('2026-03-09T10:11:12.123456+00:00')
 
@@ -41,7 +50,14 @@ describe('librarySummaries', () => {
 
       expect(summary.createdLabel).toMatch(/Mar 1, 2026|1 Mar 2026/)
       expect(summary.updatedLabel).toMatch(/Mar 1, 2026|1 Mar 2026/)
-      expect(summary.sparkline).toEqual([{ label: expect.stringMatching(/Mar 1|1 Mar/), value: 1 }])
+      expect(summary.sparkline).toEqual([
+        { label: expect.stringMatching(/Mar 1|1 Mar/), value: 1 },
+        { label: expect.stringMatching(/Mar 2|2 Mar/), value: 0 },
+        { label: expect.stringMatching(/Mar 3|3 Mar/), value: 0 },
+        { label: expect.stringMatching(/Mar 4|4 Mar/), value: 0 },
+        { label: expect.stringMatching(/Mar 5|5 Mar/), value: 0 },
+        { label: expect.stringMatching(/Mar 6|6 Mar/), value: 0 },
+      ])
     } finally {
       if (originalTz === undefined) delete process.env.TZ
       else process.env.TZ = originalTz
@@ -77,10 +93,12 @@ describe('librarySummaries', () => {
     expect(summary.createdLabel).toMatch(/Mar 1, 2026|1 Mar 2026/)
     expect(summary.updatedLabel).toMatch(/Mar 5, 2026|5 Mar 2026/)
     expect(summary.sparkline).toEqual([
+      { label: expect.stringMatching(/Mar 1|1 Mar/), value: 0 },
       { label: expect.stringMatching(/Mar 2|2 Mar/), value: 1 },
       { label: expect.stringMatching(/Mar 3|3 Mar/), value: 1 },
       { label: expect.stringMatching(/Mar 4|4 Mar/), value: 1 },
       { label: expect.stringMatching(/Mar 5|5 Mar/), value: 1 },
+      { label: expect.stringMatching(/Mar 6|6 Mar/), value: 0 },
     ])
   })
 
@@ -99,6 +117,8 @@ describe('librarySummaries', () => {
       { label: expect.stringMatching(/Mar 2|2 Mar/), value: 0 },
       { label: expect.stringMatching(/Mar 3|3 Mar/), value: 0 },
       { label: expect.stringMatching(/Mar 4|4 Mar/), value: 1 },
+      { label: expect.stringMatching(/Mar 5|5 Mar/), value: 0 },
+      { label: expect.stringMatching(/Mar 6|6 Mar/), value: 0 },
     ])
   })
 

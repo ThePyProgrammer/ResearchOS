@@ -60,7 +60,11 @@ function dayRange(startKey, endKey) {
   return days
 }
 
-function buildDailySeries(items) {
+function todayKey() {
+  return dayKey(new Date())
+}
+
+function buildDailySeries(items, startKey = null, endKey = todayKey()) {
   const counts = new Map()
   for (const item of items) {
     const key = dayKey(item.createdAt || item.created_at)
@@ -69,9 +73,10 @@ function buildDailySeries(items) {
   }
 
   const sorted = [...counts.keys()].sort()
-  if (!sorted.length) return []
+  const firstKey = startKey || sorted[0]
+  if (!firstKey || !endKey) return []
 
-  return dayRange(sorted[0], sorted[sorted.length - 1]).map(key => ({
+  return dayRange(firstKey, endKey).map(key => ({
     label: labelForDay(key),
     value: counts.get(key) || 0,
   }))
@@ -95,7 +100,7 @@ export function buildLibrarySummary(library, { papers = [], websites = [], repos
     empty: allItems.length === 0,
     createdLabel: formatLibraryDate(library.createdAt || library.created_at),
     updatedLabel: formatLibraryDate(updatedDate),
-    sparkline: buildDailySeries(allItems),
+    sparkline: buildDailySeries(allItems, dayKey(createdDate)),
   }
 }
 

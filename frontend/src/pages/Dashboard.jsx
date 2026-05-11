@@ -128,7 +128,7 @@ function dashboardDayLabel(key) {
     .toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-export function buildItemsOverTimeChartData({ papers = [], githubRepos = [], websites = [] }) {
+export function buildItemsOverTimeChartData({ createdAt = null, papers = [], githubRepos = [], websites = [] }) {
   const allItems = [
     ...papers.map(p => ({ createdAt: p.createdAt, _type: 'papers' })),
     ...githubRepos.map(r => ({ createdAt: r.createdAt, _type: 'repos' })),
@@ -143,10 +143,12 @@ export function buildItemsOverTimeChartData({ papers = [], githubRepos = [], web
   }
 
   const sorted = Object.keys(counts).sort()
-  if (!sorted.length) return []
+  const startKey = dashboardDayKey(createdAt) || sorted[0]
+  const endKey = dashboardDayKey(new Date())
+  if (!startKey || !endKey) return []
 
   let cPapers = 0, cRepos = 0, cWebsites = 0
-  return dashboardDayRange(sorted[0], sorted[sorted.length - 1]).map(key => {
+  return dashboardDayRange(startKey, endKey).map(key => {
     const { papers: p = 0, repos: r = 0, websites: w = 0 } = counts[key] || {}
     cPapers += p; cRepos += r; cWebsites += w
     return {
@@ -243,8 +245,8 @@ export default function Dashboard() {
   )
 
   const chartData = useMemo(
-    () => buildItemsOverTimeChartData({ papers, githubRepos, websites }),
-    [papers, githubRepos, websites]
+    () => buildItemsOverTimeChartData({ createdAt: activeLibrary?.createdAt || activeLibrary?.created_at, papers, githubRepos, websites }),
+    [activeLibrary?.createdAt, activeLibrary?.created_at, papers, githubRepos, websites]
   )
 
   return (
