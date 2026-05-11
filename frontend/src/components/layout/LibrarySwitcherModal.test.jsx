@@ -118,6 +118,23 @@ describe('LibrarySwitcherModal', () => {
     expect(screen.getByRole('button', { name: /Robotics Survey/i })).toBeInTheDocument()
   })
 
+  it('omits the description line when no manual description is set', async () => {
+    const librariesWithoutDescriptions = [
+      {
+        id: 'lib_empty',
+        name: 'No Description Library',
+        createdAt: '2026-05-01T00:00:00Z',
+      },
+    ]
+    renderModal({ libraries: librariesWithoutDescriptions, activeLibrary: librariesWithoutDescriptions[0] })
+
+    const row = screen.getByRole('button', { name: /No Description Library/i })
+    await waitFor(() => expect(within(row).getByText('No items yet')).toBeInTheDocument())
+
+    expect(within(row).queryByText(/Default research library/i)).not.toBeInTheDocument()
+    expect(within(row).queryByText(/^No description$/i)).not.toBeInTheDocument()
+  })
+
   it('selects a library, closes the modal, and navigates to library route', async () => {
     const switchLibrary = vi.fn()
     const onClose = vi.fn()
@@ -131,21 +148,23 @@ describe('LibrarySwitcherModal', () => {
     expect(screen.getByTestId('library-route')).toBeInTheDocument()
   })
 
-  it('creates a new library inline, switches to it, closes the modal, and navigates to library route', async () => {
+  it('creates a new library inline with an optional manual description, switches to it, closes the modal, and navigates to library route', async () => {
     const switchLibrary = vi.fn()
     const onClose = vi.fn()
     const createLibrary = vi.fn().mockResolvedValue({
       id: 'lib_3',
       name: 'New Library',
+      description: 'Human-written scope note',
       createdAt: '2026-05-01T00:00:00Z',
     })
     renderModal({ createLibrary, switchLibrary, onClose })
 
     fireEvent.click(screen.getByRole('button', { name: /new library/i }))
-    fireEvent.change(screen.getByLabelText(/library name/i), { target: { value: 'New Library' } })
+    fireEvent.change(screen.getByLabelText(/^library name$/i), { target: { value: 'New Library' } })
+    fireEvent.change(screen.getByLabelText(/library description/i), { target: { value: 'Human-written scope note' } })
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
-    await waitFor(() => expect(createLibrary).toHaveBeenCalledWith('New Library'))
+    await waitFor(() => expect(createLibrary).toHaveBeenCalledWith('New Library', 'Human-written scope note'))
     expect(switchLibrary).toHaveBeenCalledWith('lib_3')
     expect(onClose).toHaveBeenCalled()
     await waitFor(() => expect(screen.getByTestId('library-route')).toBeInTheDocument())

@@ -87,6 +87,7 @@ function LibrarySummaryDetails({ library, summary }) {
 function NewLibraryForm({ createLibrary, onCreated, primary = false }) {
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef(null)
@@ -98,12 +99,13 @@ function NewLibraryForm({ createLibrary, onCreated, primary = false }) {
   async function submit(event) {
     event.preventDefault()
     const trimmed = name.trim()
+    const trimmedDescription = description.trim()
     if (!trimmed || creating) return
 
     setCreating(true)
     setError('')
     try {
-      const library = await createLibrary(trimmed)
+      const library = await createLibrary(trimmed, trimmedDescription || null)
       onCreated(library)
     } catch (err) {
       setError('Could not create library')
@@ -126,23 +128,34 @@ function NewLibraryForm({ createLibrary, onCreated, primary = false }) {
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-      <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
-        Library name
-        <input
-          ref={inputRef}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-        />
-      </label>
-      <button
-        type="submit"
-        disabled={creating || !name.trim()}
-        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {creating ? 'Creating…' : 'Create'}
-      </button>
+    <form onSubmit={submit} className="flex flex-col gap-2">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+          Library name
+          <input
+            ref={inputRef}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+          Library description <span className="font-normal text-slate-400">(optional)</span>
+          <input
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="What belongs here?"
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={creating || !name.trim()}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {creating ? 'Creating…' : 'Create'}
+        </button>
+      </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </form>
   )
