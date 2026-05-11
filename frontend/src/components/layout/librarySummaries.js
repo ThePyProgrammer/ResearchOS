@@ -60,7 +60,7 @@ function dayRange(startKey, endKey) {
   return days
 }
 
-function buildCumulativeSeries(items) {
+function buildDailySeries(items) {
   const counts = new Map()
   for (const item of items) {
     const key = dayKey(item.createdAt || item.created_at)
@@ -71,11 +71,10 @@ function buildCumulativeSeries(items) {
   const sorted = [...counts.keys()].sort()
   if (!sorted.length) return []
 
-  let total = 0
-  return dayRange(sorted[0], sorted[sorted.length - 1]).map(key => {
-    total += counts.get(key) || 0
-    return { label: labelForDay(key), value: total }
-  })
+  return dayRange(sorted[0], sorted[sorted.length - 1]).map(key => ({
+    label: labelForDay(key),
+    value: counts.get(key) || 0,
+  }))
 }
 
 export function buildLibrarySummary(library, { papers = [], websites = [], repos = [] } = {}) {
@@ -96,7 +95,7 @@ export function buildLibrarySummary(library, { papers = [], websites = [], repos
     empty: allItems.length === 0,
     createdLabel: formatLibraryDate(library.createdAt || library.created_at),
     updatedLabel: formatLibraryDate(updatedDate),
-    sparkline: buildCumulativeSeries(allItems),
+    sparkline: buildDailySeries(allItems),
   }
 }
 

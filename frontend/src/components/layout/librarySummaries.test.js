@@ -78,13 +78,13 @@ describe('librarySummaries', () => {
     expect(summary.updatedLabel).toMatch(/Mar 5, 2026|5 Mar 2026/)
     expect(summary.sparkline).toEqual([
       { label: expect.stringMatching(/Mar 2|2 Mar/), value: 1 },
-      { label: expect.stringMatching(/Mar 3|3 Mar/), value: 2 },
-      { label: expect.stringMatching(/Mar 4|4 Mar/), value: 3 },
-      { label: expect.stringMatching(/Mar 5|5 Mar/), value: 4 },
+      { label: expect.stringMatching(/Mar 3|3 Mar/), value: 1 },
+      { label: expect.stringMatching(/Mar 4|4 Mar/), value: 1 },
+      { label: expect.stringMatching(/Mar 5|5 Mar/), value: 1 },
     ])
   })
 
-  it('fills cumulative sparkline gaps with zero-addition dates', () => {
+  it('fills daily sparkline gaps with zero-addition dates', () => {
     const summary = buildLibrarySummary(
       { id: 'lib_gaps', name: 'Gaps', createdAt: '2026-03-01T00:00:00Z' },
       {
@@ -96,9 +96,9 @@ describe('librarySummaries', () => {
 
     expect(summary.sparkline).toEqual([
       { label: expect.stringMatching(/Mar 1|1 Mar/), value: 1 },
-      { label: expect.stringMatching(/Mar 2|2 Mar/), value: 1 },
-      { label: expect.stringMatching(/Mar 3|3 Mar/), value: 1 },
-      { label: expect.stringMatching(/Mar 4|4 Mar/), value: 2 },
+      { label: expect.stringMatching(/Mar 2|2 Mar/), value: 0 },
+      { label: expect.stringMatching(/Mar 3|3 Mar/), value: 0 },
+      { label: expect.stringMatching(/Mar 4|4 Mar/), value: 1 },
     ])
   })
 
