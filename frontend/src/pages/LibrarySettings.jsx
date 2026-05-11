@@ -51,6 +51,7 @@ export default function LibrarySettings() {
   const { activeLibrary, updateLibrary, deleteLibrary } = useLibrary()
 
   const [name, setName] = useState(activeLibrary?.name ?? '')
+  const [description, setDescription] = useState(activeLibrary?.description ?? '')
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
@@ -93,14 +94,20 @@ export default function LibrarySettings() {
     )
   }
 
-  async function handleSaveName(e) {
+  async function handleSaveGeneral(e) {
     e.preventDefault()
-    const trimmed = name.trim()
-    if (!trimmed || trimmed === activeLibrary.name || saving) return
+    const trimmedName = name.trim()
+    const trimmedDescription = description.trim()
+    const currentDescription = (activeLibrary.description ?? '').trim()
+    const unchanged = trimmedName === activeLibrary.name && trimmedDescription === currentDescription
+    if (!trimmedName || unchanged || saving) return
     setSaving(true)
     setSaveSuccess(false)
     try {
-      await updateLibrary(activeLibrary.id, { name: trimmed })
+      await updateLibrary(activeLibrary.id, {
+        name: trimmedName,
+        description: trimmedDescription || null,
+      })
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2500)
     } finally {
@@ -194,7 +201,7 @@ export default function LibrarySettings() {
           title="General"
           description="Basic information about this library."
         >
-          <form onSubmit={handleSaveName} className="space-y-4">
+          <form onSubmit={handleSaveGeneral} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1.5">Library name</label>
               <input
@@ -205,10 +212,30 @@ export default function LibrarySettings() {
                 placeholder="My Research Library"
               />
             </div>
+            <div>
+              <label htmlFor="library-description" className="block text-xs font-medium text-slate-600 mb-1.5">
+                Library description <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <textarea
+                id="library-description"
+                rows={3}
+                value={description}
+                onChange={e => { setDescription(e.target.value); setSaveSuccess(false) }}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 placeholder:text-slate-300"
+                placeholder="Describe what belongs in this library."
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Shown in the library selector when set.
+              </p>
+            </div>
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={!name.trim() || name.trim() === activeLibrary.name || saving}
+                disabled={
+                  !name.trim() ||
+                  saving ||
+                  (name.trim() === activeLibrary.name && description.trim() === (activeLibrary.description ?? '').trim())
+                }
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
               >
                 {saving ? 'Saving...' : 'Save changes'}
