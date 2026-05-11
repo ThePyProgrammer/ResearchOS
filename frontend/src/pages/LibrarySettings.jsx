@@ -86,6 +86,12 @@ export default function LibrarySettings() {
 
   useEffect(() => { loadModels() }, [])
 
+  useEffect(() => {
+    setName(activeLibrary?.name ?? '')
+    setDescription(activeLibrary?.description ?? '')
+    setSaveSuccess(false)
+  }, [activeLibrary?.id, activeLibrary?.name, activeLibrary?.description])
+
   if (!activeLibrary) {
     return (
       <div className="flex items-center justify-center h-full text-slate-400 text-sm">
