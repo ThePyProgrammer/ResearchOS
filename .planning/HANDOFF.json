@@ -1,69 +1,79 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-07T00:00:00Z",
-  "phase": "13",
-  "phase_name": "bulk-paper-processing",
-  "phase_dir": ".planning/phases/13-bulk-paper-processing",
-  "plan": null,
-  "task": null,
-  "total_tasks": null,
-  "status": "complete",
+  "timestamp": "2026-05-09T06:52:47.611Z",
+  "phase": null,
+  "phase_name": "library-selector-modal",
+  "phase_dir": null,
+  "plan": "docs/superpowers/plans/2026-05-08-library-selector-modal.md",
+  "task": 2,
+  "total_tasks": 4,
+  "status": "paused",
   "completed_tasks": [
-    {"id": "13-01", "name": "Backend batch service and API endpoints", "status": "done", "commit": "f39dd10"},
-    {"id": "13-02", "name": "Frontend batch processing infrastructure", "status": "done", "commit": "e3f5bcc"},
-    {"id": "13-03", "name": "Library bulk operation wiring", "status": "already_done", "commit": "0c3b2b9"},
-    {"id": "review-backend", "name": "Backend review hardening", "status": "done", "commit": "1d3750b"},
-    {"id": "review-frontend", "name": "Frontend lifecycle and warning fixes", "status": "done", "commit": null},
-    {"id": "review-rerun", "name": "Rerun Phase 13 code review", "status": "done", "commit": null},
-    {"id": "security", "name": "Run Phase 13 security gate", "status": "done", "commit": null},
-    {"id": "verify-automated", "name": "Run automated verification gates", "status": "done", "commit": null},
-    {"id": "uat-ui-only", "name": "Run UI-only browser UAT for Phase 13 bulk flows", "status": "done", "commit": null}
+    {
+      "id": "design",
+      "name": "Design library selector modal",
+      "status": "done",
+      "commit": "50d8f28"
+    },
+    {
+      "id": "plan",
+      "name": "Plan library selector modal implementation",
+      "status": "done",
+      "commit": "06e01e5"
+    },
+    {
+      "id": 1,
+      "name": "Add pure library summary helpers",
+      "status": "done",
+      "commit": "aa61535+a92feca"
+    }
   ],
   "remaining_tasks": [
-    {"id": "phase-14-planning", "name": "Plan Phase 14 Literature Review Draft Generator", "status": "not_started", "progress": "Phase 13 was marked complete on 2026-05-07 after user accepted UI-only UAT as sufficient."}
+    {
+      "id": 2,
+      "name": "Build and test the modal component",
+      "status": "not_started"
+    },
+    {
+      "id": 3,
+      "name": "Wire the modal into the sidebar launcher",
+      "status": "not_started"
+    },
+    {
+      "id": 4,
+      "name": "Final verification and UI validation",
+      "status": "not_started"
+    }
   ],
-  "blockers": [
-    {"description": "Potential library-scope UI concern observed during UI-only UAT: active library AI Dump rendered Showing 262 of 262 items while backend library-scoped probes for lib_default returned fewer items", "type": "investigation", "workaround": "Investigate library-scoped rendering/counts before relying on library-specific UAT assertions"},
-    {"description": "Executor worktrees may remain locked by completed Claude agent process", "type": "technical", "workaround": "Cleanup later only if safe"}
-  ],
+  "blockers": [],
   "human_actions_pending": [],
   "decisions": [
-    {"decision": "Fixed verified backend review findings immediately", "rationale": "CR-01/CR-02/WR-04 were security or boundary defects with small TDD-backed fixes", "phase": "13"},
-    {"decision": "Fixed frontend lifecycle critical finding instead of deferring", "rationale": "Aggregate tag/embedding flows bypassed hook running state, making progress modal misleading during active work", "phase": "13"},
-    {"decision": "Hide Pause/Cancel controls for aggregate tag and embedding operations", "rationale": "Those operations are single backend calls and cannot currently be cancelled safely; notes/PDF per-item operations retain controls", "phase": "13"},
-    {"decision": "Run UI-only browser UAT on 2026-05-07", "rationale": "User chose UI-only scope to avoid mutating data or triggering AI/PDF/indexing side effects", "phase": "13"},
-    {"decision": "Mark Phase 13 complete after UI-only UAT acceptance", "rationale": "User explicitly accepted UI-only browser UAT as sufficient for phase completion and requested committing the work", "phase": "13"}
+    {
+      "decision": "Build a GitHub repositories-style library selector modal rather than a collection selector",
+      "rationale": "User clarified they meant library selection and selected the repository-list modal direction based on the GitHub repositories tab.",
+      "phase": null
+    },
+    {
+      "decision": "Treat Last Updated on as latest library activity or item addition",
+      "rationale": "User chose latest activity semantics over library-settings metadata.",
+      "phase": null
+    },
+    {
+      "decision": "Use compact per-library sparklines and frontend summary computation for the first version",
+      "rationale": "User chose compact sparkline; the approved spec avoids a backend summary endpoint unless frontend fetching proves too slow.",
+      "phase": null
+    },
+    {
+      "decision": "Use UTC calendar semantics for library summary dates",
+      "rationale": "Task 1 quality review found local timezone bucketing could shift API timestamps near midnight; fixed with regression coverage in commit a92feca.",
+      "phase": null
+    }
   ],
   "uncommitted_files": [
-    ".planning/ROADMAP.md",
     ".planning/STATE.md",
     ".planning/HANDOFF.json",
-    ".planning/phases/13-bulk-paper-processing/.continue-here.md",
-    ".planning/phases/13-bulk-paper-processing/13-UAT.md",
-    ".planning/phases/13-bulk-paper-processing/13-REVIEW.md",
-    ".planning/phases/13-bulk-paper-processing/13-SECURITY.md",
-    ".planning/phases/13-bulk-paper-processing/13-VERIFICATION.md",
-    ".planning/phases/13-bulk-paper-processing/uat-evidence/",
-    "backend/services/batch_service.py",
-    "backend/tests/test_batch.py",
-    "frontend/src/components/BulkProgressModal.jsx",
-    "frontend/src/hooks/useBatchProcessor.js",
-    "frontend/src/hooks/useBatchProcessor.test.js",
-    "frontend/src/pages/Library.jsx",
-    "frontend/src/pages/Library.smoke.test.jsx",
-    ".planning/forensics/"
+    ".planning/.continue-here.md"
   ],
-  "test_evidence": [
-    {"command": "uv run pytest tests/ -q", "result": "94 passed, 2 FastAPI deprecation warnings"},
-    {"command": "npm exec --prefix ../frontend -- vitest --root /home/prannayag/personal/ResearchOS/frontend run", "result": "263 passed with existing React Router/Tailwind warnings"},
-    {"command": "gsd-sdk query verify.schema-drift 13", "result": "drift_detected false"},
-    {"command": "gsd-sdk query verify.codebase-drift", "result": "skipped: no-structure-md, non-blocking"},
-    {"artifact": "13-REVIEW.md", "result": "passed, 0 findings"},
-    {"artifact": "13-SECURITY.md", "result": "passed, threats_open 0"},
-    {"artifact": "13-VERIFICATION.md", "result": "accepted, 18/18 automated must-haves verified; UI-only UAT accepted for completion"},
-    {"artifact": "13-UAT.md", "result": "2 passed, 4 partial, 2 blocked after UI-only UAT at http://localhost:5173/library"},
-    {"artifact": "uat-evidence/2026-05-07-ui-only-*", "result": "Screenshots and JSON evidence copied into Phase 13 UAT evidence folder"}
-  ],
-  "next_action": "Plan Phase 14 Literature Review Draft Generator.",
-  "context_notes": "Phase 13 plans are executed and merged. Backend hardening commit 1d3750b passed backend tests. Uncommitted frontend/backend review fixes include runManaged lifecycle, status ref, cancel semantics, typed notes-preview keys, tag source-text skip parity, activeLibraryId usage, and allowControls gating for aggregate tag/embedding jobs. Automated gates pass: backend 94, frontend 263, schema drift false, codebase drift skipped no-structure-md, code review passed zero findings, security passed threats_open 0. On 2026-05-07, user corrected the live frontend target to http://localhost:5173/library and chose UI-only UAT. UI-only UAT verified ResearchOS loads, selectable rows exist after library context loads, selecting 3 rows exposes expected bulk actions, and confirmation modals open for all four Phase 13 operations without clicking Start/Proceed. User accepted UI-only UAT as sufficient for Phase 13 completion."
+  "next_action": "Resume Task 2 from docs/superpowers/plans/2026-05-08-library-selector-modal.md using superpowers:subagent-driven-development and superpowers:test-driven-development; dispatch a fresh implementer for LibrarySwitcherModal tests/component.",
+  "context_notes": "Working in git worktree /home/prannayag/personal/ResearchOS/.claude/worktrees/library-selector-modal on branch worktree-library-selector-modal. The design spec and implementation plan are committed. Task 1 was implemented by subagent with TDD, spec-reviewed, quality-reviewed, then fixed after a timezone quality finding. Focused helper tests passed after the UTC fix. Remaining tasks are modal component, sidebar integration, and full/manual verification. Continue with subagent-driven development; do not skip spec and quality review gates."
 }
