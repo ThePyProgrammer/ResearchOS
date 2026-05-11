@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Optional
 
-import httpx
+from services import arxiv_client
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,6 @@ _ARXIV_NS = {
     "arxiv": "http://arxiv.org/schemas/atom",
     "opensearch": "http://a9.com/-/spec/opensearch/1.1/",
 }
-_ARXIV_BASE = "http://export.arxiv.org/api/query"
-
 
 # ---------------------------------------------------------------------------
 # Run logging helpers
@@ -97,16 +95,11 @@ async def search_arxiv(query: str, max_results: int = 50) -> list[dict]:
         return []
 
     formatted = _format_arxiv_query(terms)
-    url = f"{_ARXIV_BASE}?search_query={formatted}&start=0&max_results={max_results}"
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            xml_data = response.content
-    except httpx.HTTPError as exc:
-        logger.error("arXiv HTTP error for query '%s': %s", query, exc)
-        return []
+        xml_data = await arxiv_client.fetch_arxiv_xml(
+            {"search_query": formatted, "start": 0, "max_results": max_results}, timeout=30.0
+        )
     except Exception as exc:
         logger.error("arXiv request failed for query '%s': %s", query, exc)
         return []
