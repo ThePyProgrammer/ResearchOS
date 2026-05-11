@@ -6,6 +6,7 @@ import { useLibrary } from '../../context/LibraryContext'
 import WindowModal from '../WindowModal'
 import BibtexExportModal from '../BibtexExportModal'
 import CreateProjectModal from '../CreateProjectModal'
+import LibrarySwitcherModal from './LibrarySwitcherModal'
 
 const user = { name: 'Dr. Researcher', org: 'Lab Alpha', initials: 'DR' }
 
@@ -47,132 +48,61 @@ function LibrarySwitcher({ collapsed }) {
   const { libraries, activeLibrary, createLibrary, switchLibrary } = useLibrary()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [newName, setNewName] = useState('')
-  const ref = useRef(null)
 
-  function handleSwitch(id) {
-    setOpen(false)
-    switchLibrary(id)
-    navigate('/library')
-  }
-
-  useEffect(() => {
-    if (!open) return
-    function onClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [open])
-
-  async function handleCreate(e) {
-    e.preventDefault()
-    if (!newName.trim()) return
-    const lib = await createLibrary(newName.trim())
-    setNewName('')
-    setCreating(false)
-    handleSwitch(lib.id)
-  }
+  const modal = (
+    <LibrarySwitcherModal
+      open={open}
+      libraries={libraries}
+      activeLibrary={activeLibrary}
+      switchLibrary={switchLibrary}
+      createLibrary={createLibrary}
+      onClose={() => setOpen(false)}
+    />
+  )
 
   if (collapsed) {
     return (
-      <div className="px-1 py-2 border-b border-white/10">
-        <button
-          title={activeLibrary?.name ?? 'No library'}
-          onClick={() => setOpen(o => !o)}
-          className="w-full flex justify-center py-1.5 rounded-lg hover:bg-white/5 transition-colors text-slate-400"
-        >
-          <Icon name="library_books" className="text-[18px] text-slate-400" />
-        </button>
-      </div>
+      <>
+        <div className="px-1 py-2 border-b border-white/10">
+          <button
+            title={activeLibrary?.name ?? 'No library'}
+            onClick={() => setOpen(true)}
+            className="w-full flex justify-center py-1.5 rounded-lg hover:bg-white/5 transition-colors text-slate-400"
+          >
+            <Icon name="library_books" className="text-[18px] text-slate-400" />
+          </button>
+        </div>
+        {modal}
+      </>
     )
   }
 
   return (
     <>
-    <div className="px-3 py-2 border-b border-white/10 relative" ref={ref}>
-      <div className="flex items-center gap-1">
-        <button
-          onClick={() => setOpen(o => !o)}
-          className="flex-1 flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors group min-w-0"
-        >
-          <Icon name="library_books" className="text-[18px] text-slate-400 flex-shrink-0" />
-          <span className="flex-1 text-[13px] font-medium text-slate-200 truncate">
-            {activeLibrary?.name ?? 'No library'}
-          </span>
-          <Icon name={open ? 'expand_less' : 'expand_more'} className="text-[18px] text-slate-500 group-hover:text-slate-300 flex-shrink-0" />
-        </button>
-        {activeLibrary && (
+      <div className="px-3 py-2 border-b border-white/10 relative">
+        <div className="flex items-center gap-1">
           <button
-            onClick={() => { setOpen(false); navigate('/library/settings') }}
-            title="Library settings"
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors flex-shrink-0"
+            onClick={() => setOpen(true)}
+            className="flex-1 flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors group min-w-0"
           >
-            <Icon name="settings" className="text-[16px]" />
+            <Icon name="library_books" className="text-[18px] text-slate-400 flex-shrink-0" />
+            <span className="flex-1 text-[13px] font-medium text-slate-200 truncate">
+              {activeLibrary?.name ?? 'No library'}
+            </span>
+            <Icon name="expand_more" className="text-[18px] text-slate-500 group-hover:text-slate-300 flex-shrink-0" />
           </button>
-        )}
-      </div>
-
-      {open && (
-        <div className="absolute left-3 right-3 top-full mt-1 z-50 bg-slate-900 border border-white/10 rounded-xl shadow-xl overflow-hidden">
-          <div className="max-h-48 overflow-y-auto">
-            {libraries.map(lib => (
-              <button
-                key={lib.id}
-                onClick={() => handleSwitch(lib.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${
-                  lib.id === activeLibrary?.id
-                    ? 'bg-blue-600/20 text-blue-300'
-                    : 'text-slate-300 hover:bg-white/5'
-                }`}
-              >
-                <Icon name="library_books" className="text-[16px] flex-shrink-0" />
-                <span className="flex-1 truncate text-[13px]">{lib.name}</span>
-                {lib.id === activeLibrary?.id && (
-                  <Icon name="check" className="text-[16px] text-blue-400" />
-                )}
-              </button>
-            ))}
-          </div>
-          <div className="border-t border-white/10">
-            {creating ? (
-              <form onSubmit={handleCreate} className="flex items-center gap-1.5 px-3 py-2">
-                <input
-                  autoFocus
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  placeholder="Library name…"
-                  className="flex-1 bg-slate-800 text-slate-200 text-xs px-2 py-1 rounded border border-white/10 focus:outline-none focus:border-blue-500"
-                />
-                <button
-                  type="submit"
-                  disabled={!newName.trim()}
-                  className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
-                >
-                  Create
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setCreating(false); setNewName('') }}
-                  className="text-xs px-2 py-1 text-slate-400 hover:text-slate-200"
-                >
-                  Cancel
-                </button>
-              </form>
-            ) : (
-              <button
-                onClick={() => setCreating(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
-              >
-                <Icon name="add" className="text-[18px]" />
-                <span className="text-[13px]">New library</span>
-              </button>
-            )}
-          </div>
+          {activeLibrary && (
+            <button
+              onClick={() => { setOpen(false); navigate('/library/settings') }}
+              title="Library settings"
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors flex-shrink-0"
+            >
+              <Icon name="settings" className="text-[16px]" />
+            </button>
+          )}
         </div>
-      )}
-    </div>
+      </div>
+      {modal}
     </>
   )
 }
