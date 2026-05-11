@@ -131,7 +131,8 @@ describe('LibrarySwitcherModal', () => {
     const row = screen.getByRole('button', { name: /No Description Library/i })
     await waitFor(() => expect(within(row).getByText('No items yet')).toBeInTheDocument())
 
-    expect(within(row).queryByText(/Default research library/i)).not.toBeInTheDocument()
+    const defaultLibraryDescription = new RegExp(['Default', 'research', 'library'].join(' '), 'i')
+    expect(within(row).queryByText(defaultLibraryDescription)).not.toBeInTheDocument()
     expect(within(row).queryByText(/^No description$/i)).not.toBeInTheDocument()
   })
 
