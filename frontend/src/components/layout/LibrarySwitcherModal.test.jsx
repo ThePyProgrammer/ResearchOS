@@ -89,7 +89,12 @@ describe('LibrarySwitcherModal', () => {
     expect(within(activeRow).getByText('1 website')).toBeInTheDocument()
     expect(within(activeRow).getByText(/Created on/i)).toBeInTheDocument()
     expect(within(activeRow).getByText(/Last Updated on/i)).toBeInTheDocument()
-    expect(within(activeRow).getByLabelText(/items added over time for AI Papers/i)).toBeInTheDocument()
+
+    const sparkline = within(activeRow).getByLabelText(/items added over time for AI Papers/i)
+    expect(sparkline).toHaveClass('w-20')
+    expect(sparkline.parentElement).toHaveClass('self-stretch', 'justify-end')
+    expect(sparkline.querySelector('polygon')).toBeInTheDocument()
+    expect(sparkline.querySelector('polyline')).toBeInTheDocument()
   })
 
   it('shows an empty summary and no-activity sparkline for a library with no items', async () => {

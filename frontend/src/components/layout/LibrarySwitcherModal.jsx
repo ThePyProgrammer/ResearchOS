@@ -36,13 +36,16 @@ function Sparkline({ library, summary }) {
   }
 
   const points = buildSparklinePoints(summary.sparkline)
+  const areaPoints = `0,36 ${points} 120,36`
+
   return (
     <svg
       role="img"
       aria-label={`Items added over time for ${library.name}`}
       viewBox="0 0 120 36"
-      className="h-9 w-28 text-blue-500"
+      className="h-9 w-20 text-blue-500"
     >
+      <polygon points={areaPoints} fill="currentColor" className="opacity-15" />
       <polyline
         points={points}
         fill="none"
@@ -275,9 +278,9 @@ export default function LibrarySwitcherModal({
                       {library.description && <p className="text-sm text-slate-600">{library.description}</p>}
                       <LibrarySummaryDetails library={library} summary={summary} />
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
+                    <div className="flex self-stretch shrink-0 flex-col items-end justify-end gap-2">
                       {summary.status === 'loading' ? (
-                        <span className="h-9 w-28 rounded bg-slate-100" />
+                        <span className="h-9 w-20 rounded bg-slate-100" />
                       ) : (
                         <Sparkline library={library} summary={summary} />
                       )}
