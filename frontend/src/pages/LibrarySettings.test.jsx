@@ -98,6 +98,31 @@ describe('LibrarySettings', () => {
     }))
   })
 
+  it('keeps the saved indicator visible when a successful save refreshes the active library', async () => {
+    const { updateLibrary, rerenderWithLibrary } = renderSettings()
+
+    fireEvent.change(screen.getByLabelText(/library description/i), {
+      target: { value: 'Foundation model papers and related systems.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^save changes$/i }))
+
+    await waitFor(() => expect(updateLibrary).toHaveBeenCalledWith('lib_1', {
+      name: 'AI Papers',
+      description: 'Foundation model papers and related systems.',
+    }))
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument())
+
+    rerenderWithLibrary({
+      id: 'lib_1',
+      name: 'AI Papers',
+      description: 'Foundation model papers and related systems.',
+      autoNoteEnabled: false,
+      autoNotePrompt: '',
+    })
+
+    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument())
+  })
+
   it('resets editable fields when the active library changes while mounted', async () => {
     const { updateLibrary, rerenderWithLibrary } = renderSettings({
       id: 'lib_1',

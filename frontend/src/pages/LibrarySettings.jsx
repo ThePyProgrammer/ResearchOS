@@ -89,8 +89,11 @@ export default function LibrarySettings() {
   useEffect(() => {
     setName(activeLibrary?.name ?? '')
     setDescription(activeLibrary?.description ?? '')
-    setSaveSuccess(false)
   }, [activeLibrary?.id, activeLibrary?.name, activeLibrary?.description])
+
+  useEffect(() => {
+    setSaveSuccess(false)
+  }, [activeLibrary?.id])
 
   if (!activeLibrary) {
     return (
