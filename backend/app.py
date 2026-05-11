@@ -100,7 +100,6 @@ SEED: dict[str, list] = {
         {
             "id": "lib_default",
             "name": "My Library",
-            "description": "Default research library",
             "created_at": "2024-01-01T00:00:00Z",
         },
     ],
