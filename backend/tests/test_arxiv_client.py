@@ -68,3 +68,17 @@ async def test_fetch_arxiv_xml_reports_rate_limit_clearly(monkeypatch):
 
     with pytest.raises(arxiv_client.ArxivRateLimitError, match="arXiv is rate-limiting"):
         await arxiv_client.fetch_arxiv_xml({"id_list": "2501.18837"})
+
+
+@pytest.mark.anyio
+async def test_fetch_arxiv_xml_reports_timeout_clearly(monkeypatch):
+    async def fake_request(params, timeout):
+        raise httpx.ReadTimeout("timed out")
+
+    monkeypatch.setattr(arxiv_client, "_request_arxiv_api", fake_request)
+
+    with pytest.raises(Exception) as exc_info:
+        await arxiv_client.fetch_arxiv_xml({"id_list": "2501.18837"})
+
+    assert exc_info.type.__name__ == "ArxivRequestError"
+    assert "arXiv did not respond" in str(exc_info.value)

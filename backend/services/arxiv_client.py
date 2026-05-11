@@ -18,7 +18,11 @@ _last_request_started_at: float | None = None
 _sleep = asyncio.sleep
 
 
-class ArxivRateLimitError(RuntimeError):
+class ArxivRequestError(RuntimeError):
+    pass
+
+
+class ArxivRateLimitError(ArxivRequestError):
     pass
 
 
@@ -60,10 +64,17 @@ async def fetch_arxiv_xml(params: Mapping[str, object], timeout: float = 30.0) -
                 now = _monotonic()
 
         _last_request_started_at = now
-        response = await _request_arxiv_api(params, timeout)
-        if response.status_code == 429:
-            raise ArxivRateLimitError(_rate_limit_message(response))
-        response.raise_for_status()
+        try:
+            response = await _request_arxiv_api(params, timeout)
+            if response.status_code == 429:
+                raise ArxivRateLimitError(_rate_limit_message(response))
+            response.raise_for_status()
+        except ArxivRateLimitError:
+            raise
+        except httpx.TimeoutException as exc:
+            raise ArxivRequestError("arXiv did not respond before the lookup timed out. Wait and retry.") from exc
+        except httpx.HTTPError as exc:
+            raise ArxivRequestError(f"arXiv lookup failed: {exc}") from exc
         content = response.content
         _cache[key] = (now, content)
         return content

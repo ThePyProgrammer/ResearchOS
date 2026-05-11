@@ -9,7 +9,7 @@ from models.paper import PaperCreate, PaperUpdate
 from services import paper_service
 from services import activity_service
 from services import related_paper_service
-from services.arxiv_client import ArxivRateLimitError
+from services.arxiv_client import ArxivRateLimitError, ArxivRequestError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/papers", tags=["papers"])
@@ -206,6 +206,8 @@ async def import_paper(data: ImportRequest, background_tasks: BackgroundTasks):
         meta = await resolve_identifier(identifier)
     except ArxivRateLimitError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except ArxivRequestError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:

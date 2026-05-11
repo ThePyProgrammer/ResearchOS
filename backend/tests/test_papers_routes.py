@@ -98,6 +98,23 @@ def test_import_paper_reports_arxiv_rate_limit(client, mocker):
     }
 
 
+def test_import_paper_reports_arxiv_timeout_without_exception_log(client, mocker, caplog):
+    from services.arxiv_client import ArxivRequestError
+
+    mocker.patch(
+        "services.import_service.resolve_identifier",
+        side_effect=ArxivRequestError("arXiv did not respond before the lookup timed out. Wait and retry."),
+    )
+
+    response = client.post("/api/papers/import", json={"identifier": "2501.18837"})
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "arXiv did not respond before the lookup timed out. Wait and retry."
+    }
+    assert "Unexpected error resolving identifier" not in caplog.text
+
+
 def test_fetch_pdf_validation_errors(client, mocker):
     mocker.patch("app.papers.paper_service.get_paper", return_value=mocker.Mock(pdf_url=None))
     response = client.post("/api/papers/p_1/pdf/fetch")
