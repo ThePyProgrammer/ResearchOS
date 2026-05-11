@@ -82,6 +82,22 @@ def test_import_paper_returns_existing_with_duplicates(client, mocker):
     assert payload["id"] == "p_1"
 
 
+def test_import_paper_reports_arxiv_rate_limit(client, mocker):
+    from services.arxiv_client import ArxivRateLimitError
+
+    mocker.patch(
+        "services.import_service.resolve_identifier",
+        side_effect=ArxivRateLimitError("arXiv is rate-limiting this connection. Wait before retrying."),
+    )
+
+    response = client.post("/api/papers/import", json={"identifier": "2501.18837"})
+
+    assert response.status_code == 429
+    assert response.json() == {
+        "detail": "arXiv is rate-limiting this connection. Wait before retrying."
+    }
+
+
 def test_fetch_pdf_validation_errors(client, mocker):
     mocker.patch("app.papers.paper_service.get_paper", return_value=mocker.Mock(pdf_url=None))
     response = client.post("/api/papers/p_1/pdf/fetch")
