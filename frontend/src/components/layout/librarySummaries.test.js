@@ -84,6 +84,24 @@ describe('librarySummaries', () => {
     ])
   })
 
+  it('fills cumulative sparkline gaps with zero-addition dates', () => {
+    const summary = buildLibrarySummary(
+      { id: 'lib_gaps', name: 'Gaps', createdAt: '2026-03-01T00:00:00Z' },
+      {
+        papers: [{ id: 'p_1', createdAt: '2026-03-01T00:00:00Z' }],
+        websites: [{ id: 'w_1', createdAt: '2026-03-04T00:00:00Z' }],
+        repos: [],
+      }
+    )
+
+    expect(summary.sparkline).toEqual([
+      { label: expect.stringMatching(/Mar 1|1 Mar/), value: 1 },
+      { label: expect.stringMatching(/Mar 2|2 Mar/), value: 1 },
+      { label: expect.stringMatching(/Mar 3|3 Mar/), value: 1 },
+      { label: expect.stringMatching(/Mar 4|4 Mar/), value: 2 },
+    ])
+  })
+
   it('uses created date as latest activity when a library has no items', () => {
     const summary = buildLibrarySummary(
       { id: 'lib_empty', name: 'Empty', createdAt: '2026-04-01T00:00:00Z' },
