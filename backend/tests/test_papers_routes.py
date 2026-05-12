@@ -98,19 +98,19 @@ def test_import_paper_reports_arxiv_rate_limit(client, mocker):
     }
 
 
-def test_import_paper_reports_arxiv_timeout_without_exception_log(client, mocker, caplog):
-    from services.arxiv_client import ArxivRequestError
+def test_import_paper_reports_arxiv_timeout_as_rate_limit(client, mocker, caplog):
+    from services.arxiv_client import ArxivRateLimitError
 
     mocker.patch(
         "services.import_service.resolve_identifier",
-        side_effect=ArxivRequestError("arXiv did not respond before the lookup timed out. Wait and retry."),
+        side_effect=ArxivRateLimitError("arXiv is rate-limiting or not responding. Wait before retrying."),
     )
 
     response = client.post("/api/papers/import", json={"identifier": "2501.18837"})
 
-    assert response.status_code == 502
+    assert response.status_code == 429
     assert response.json() == {
-        "detail": "arXiv did not respond before the lookup timed out. Wait and retry."
+        "detail": "arXiv is rate-limiting or not responding. Wait before retrying."
     }
     assert "Unexpected error resolving identifier" not in caplog.text
 

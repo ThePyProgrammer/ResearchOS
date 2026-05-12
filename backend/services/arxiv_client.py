@@ -72,7 +72,7 @@ async def fetch_arxiv_xml(params: Mapping[str, object], timeout: float = 30.0) -
         except ArxivRateLimitError:
             raise
         except httpx.TimeoutException as exc:
-            raise ArxivRequestError("arXiv did not respond before the lookup timed out. Wait and retry.") from exc
+            raise ArxivRateLimitError("arXiv is rate-limiting or not responding. Wait before retrying.") from exc
         except httpx.HTTPError as exc:
             raise ArxivRequestError(f"arXiv lookup failed: {exc}") from exc
         content = response.content
