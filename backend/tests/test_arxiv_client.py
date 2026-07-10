@@ -9,6 +9,7 @@ from services import arxiv_client
 @pytest.fixture(autouse=True)
 def reset_arxiv_client_state():
     arxiv_client._cache.clear()
+    arxiv_client._error_cache.clear()
     arxiv_client._last_request_started_at = None
 
 
@@ -68,6 +69,26 @@ async def test_fetch_arxiv_xml_reports_rate_limit_clearly(monkeypatch):
 
     with pytest.raises(arxiv_client.ArxivRateLimitError, match="arXiv is rate-limiting"):
         await arxiv_client.fetch_arxiv_xml({"id_list": "2501.18837"})
+
+
+@pytest.mark.anyio
+async def test_fetch_arxiv_xml_reuses_recent_rate_limit_without_retrying(monkeypatch):
+    calls = 0
+
+    async def fake_request(params, timeout):
+        nonlocal calls
+        calls += 1
+        request = httpx.Request("GET", "https://export.arxiv.org/api/query")
+        return httpx.Response(429, headers={"Retry-After": "45"}, content=b"Rate exceeded.", request=request)
+
+    monkeypatch.setattr(arxiv_client, "_request_arxiv_api", fake_request)
+
+    with pytest.raises(arxiv_client.ArxivRateLimitError, match="Try again after 45 seconds"):
+        await arxiv_client.fetch_arxiv_xml({"id_list": "2501.18837"})
+    with pytest.raises(arxiv_client.ArxivRateLimitError, match="Try again after 45 seconds"):
+        await arxiv_client.fetch_arxiv_xml({"id_list": "2501.18837"})
+
+    assert calls == 1
 
 
 @pytest.mark.anyio
