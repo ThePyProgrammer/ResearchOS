@@ -1337,6 +1337,7 @@ export default function Library() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [sourceFilter, setSourceFilter] = useState('all')
   const [pdfFilter, setPdfFilter] = useState('all') // 'all' | 'has_pdf' | 'no_pdf'
   const [refreshKey, setRefreshKey] = useState(0)
@@ -1792,7 +1793,8 @@ export default function Library() {
   }
 
   const allTags = useMemo(() => [...new Set(items.flatMap(p => p.tags || []))].sort(), [items])
-  const activeFilterCount = (sourceFilter !== 'all' ? 1 : 0)
+  const activeFilterCount = (filterTab !== 'all' && !urlQuery ? 1 : 0)
+    + (sourceFilter !== 'all' ? 1 : 0)
     + (pdfFilter !== 'all' ? 1 : 0)
     + (yearFrom || yearTo ? 1 : 0)
     + (titleFilter ? 1 : 0)
@@ -1893,6 +1895,7 @@ export default function Library() {
   }
 
   function clearFilters() {
+    if (filterTab !== 'all') setSearchParams(navParams({ status: 'all' }))
     setSourceFilter('all')
     setPdfFilter('all')
     setYearFrom('')
@@ -1915,7 +1918,7 @@ export default function Library() {
     <div className="flex h-full" ref={containerRef}>
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white">
+        {urlQuery && <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-slate-200 bg-white">
           {urlQuery && (
             <div className="flex items-center gap-2">
               <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-medium border ${
@@ -1941,16 +1944,36 @@ export default function Library() {
               <span className="text-xs text-slate-400">{items.length} result{items.length !== 1 ? 's' : ''}</span>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Filter panel */}
-        <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-1.5 shrink-0">
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            aria-controls="library-filters"
+            onClick={() => setFiltersOpen(open => !open)}
+            className="flex items-center gap-1.5 rounded px-1 py-1 text-[11px] font-medium text-slate-600 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <span aria-hidden="true"><Icon name="filter_list" className="text-[16px]" /></span>
+            Filters
+            {activeFilterCount > 0 && <span className="rounded-full bg-blue-100 px-1.5 text-[10px] text-blue-700">{activeFilterCount} active</span>}
+            <span aria-hidden="true"><Icon name={filtersOpen ? 'expand_less' : 'expand_more'} className="text-[16px]" /></span>
+          </button>
+          {activeFilterCount > 0 && (
+            <button onClick={clearFilters} className="ml-auto rounded px-1 py-1 text-[11px] text-slate-500 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+              Clear all filters
+            </button>
+          )}
+        </div>
+        <div id="library-filters" hidden={!filtersOpen} className="shrink-0 max-h-[45vh] overflow-y-auto">
+        <div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-x-4 gap-y-2">
 
               {/* Status */}
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Status</span>
-                <div className="flex flex-wrap gap-1.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-12 flex-shrink-0">Status</span>
+                <div className="flex flex-wrap gap-1">
                   {[
                     { id: 'all', label: 'All', count: items.length },
                     { id: 'inbox', label: 'Inbox', count: items.filter(p => p.status === 'inbox').length },
@@ -1960,7 +1983,7 @@ export default function Library() {
                     <button
                       key={opt.id}
                       onClick={() => setSearchParams(navParams({ status: opt.id }))}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
                         filterTab === opt.id
                           ? 'bg-blue-600 text-white'
                           : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
@@ -1976,9 +1999,9 @@ export default function Library() {
               </div>
 
               {/* Source */}
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Source</span>
-                <div className="flex gap-1.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-12 flex-shrink-0">Source</span>
+                <div className="flex flex-wrap gap-1">
                   {[
                     { id: 'all', label: 'All', count: items.length },
                     { id: 'human', label: 'Human', count: items.filter(p => p.source === 'human').length },
@@ -1987,7 +2010,7 @@ export default function Library() {
                     <button
                       key={opt.id}
                       onClick={() => setSourceFilter(opt.id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
                         sourceFilter === opt.id
                           ? 'bg-blue-600 text-white'
                           : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
@@ -2003,9 +2026,9 @@ export default function Library() {
               </div>
 
               {/* PDF */}
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">PDF</span>
-                <div className="flex gap-1.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-12 flex-shrink-0">PDF</span>
+                <div className="flex flex-wrap gap-1">
                   {[
                     { id: 'all', label: 'All', count: items.length },
                     { id: 'has_pdf', label: 'Has PDF', count: items.filter(p => p.pdfUrl?.includes('/storage/v1/object/public/pdfs/')).length },
@@ -2014,7 +2037,7 @@ export default function Library() {
                     <button
                       key={opt.id}
                       onClick={() => setPdfFilter(opt.id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
                         pdfFilter === opt.id
                           ? 'bg-blue-600 text-white'
                           : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
@@ -2030,16 +2053,16 @@ export default function Library() {
               </div>
 
               {/* Title */}
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Title</span>
-                <div className="relative flex-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-12 flex-shrink-0">Title</span>
+                <div className="relative min-w-0 flex-1">
                   <Icon name="search" className="absolute left-2 top-1/2 -translate-y-1/2 text-[14px] text-slate-400 pointer-events-none" />
                   <input
                     type="text"
                     value={titleFilter}
                     onChange={e => setTitleFilter(e.target.value)}
                     placeholder="Filter by title..."
-                    className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    className="w-full pl-7 pr-2 py-1 text-[11px] border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                   />
                   {titleFilter && (
                     <button onClick={() => setTitleFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
@@ -2050,16 +2073,16 @@ export default function Library() {
               </div>
 
               {/* Venue */}
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Venue</span>
-                <div className="relative flex-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-12 flex-shrink-0">Venue</span>
+                <div className="relative min-w-0 flex-1">
                   <Icon name="location_on" className="absolute left-2 top-1/2 -translate-y-1/2 text-[14px] text-slate-400 pointer-events-none" />
                   <input
                     type="text"
                     value={venueFilter}
                     onChange={e => setVenueFilter(e.target.value)}
                     placeholder="e.g. NeurIPS, arXiv..."
-                    className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    className="w-full pl-7 pr-2 py-1 text-[11px] border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                   />
                   {venueFilter && (
                     <button onClick={() => setVenueFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
@@ -2070,8 +2093,8 @@ export default function Library() {
               </div>
 
               {/* Year range */}
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider w-14 flex-shrink-0">Year</span>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-12 flex-shrink-0">Year</span>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -2079,7 +2102,7 @@ export default function Library() {
                     onChange={e => setYearFrom(e.target.value)}
                     placeholder="From"
                     min="1900" max="2100"
-                    className="w-20 px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    className="w-16 min-w-0 px-1.5 py-1 text-[11px] border border-slate-200 rounded-lg bg-white text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                   />
                   <span className="text-slate-300 text-sm">-</span>
                   <input
@@ -2088,18 +2111,13 @@ export default function Library() {
                     onChange={e => setYearTo(e.target.value)}
                     placeholder="To"
                     min="1900" max="2100"
-                    className="w-20 px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    className="w-16 min-w-0 px-1.5 py-1 text-[11px] border border-slate-200 rounded-lg bg-white text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                   />
                 </div>
               </div>
 
             </div>
 
-            {activeFilterCount > 0 && (
-              <button onClick={clearFilters} className="mt-3 text-xs text-slate-400 hover:text-red-500 transition-colors">
-                Clear all filters
-              </button>
-            )}
           </div>
 
         {/* Tags bar */}
@@ -2129,12 +2147,12 @@ export default function Library() {
               )}
             </div>
             {tagsOpen && (
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
+              <div className="flex flex-wrap gap-1 mt-1.5">
                 {visibleTagCounts.map(([tag, count]) => (
                   <button
                     key={tag}
                     onClick={() => toggleTag(tag)}
-                    className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
+                    className={`max-w-full break-words text-[10px] px-2 py-0.5 rounded-full transition-colors ${
                       tagFilters.has(tag)
                         ? 'bg-blue-600 text-white'
                         : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
@@ -2166,12 +2184,12 @@ export default function Library() {
               )}
             </div>
             {topAuthorsOpen && (
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
+              <div className="flex flex-wrap gap-1 mt-1.5">
                 {topAuthors.map((ta, i) => (
                   <button
                     key={i}
                     onClick={() => setAuthorFilter(authorFilter === ta.name ? null : ta.name)}
-                    className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
+                    className={`max-w-full break-words text-[10px] px-2 py-0.5 rounded-full transition-colors ${
                       authorFilter === ta.name
                         ? 'bg-blue-600 text-white'
                         : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700'
@@ -2184,6 +2202,8 @@ export default function Library() {
             )}
           </div>
         )}
+
+        </div>
 
         {error && (
           <div className="px-4 py-2 text-sm text-red-600 bg-red-50 border-b border-red-100">

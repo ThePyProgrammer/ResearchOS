@@ -182,3 +182,30 @@ test('quick add imports a paper from header modal', async ({ page }) => {
   await expect(page.getByText(/Paper added to library/i)).toBeVisible()
   await expect(page.getByText('Imported Paper')).toBeVisible()
 })
+
+
+test('library filters collapse, preserve selections, and fit narrow widths', async ({ page }) => {
+  await page.goto('/library')
+  await expect(page.getByText('Paper Alpha')).toBeVisible()
+  const toggle = page.getByRole('button', { name: /^Filters/ })
+  const panel = page.locator('#library-filters')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(panel).toBeHidden()
+  await toggle.click()
+  await page.getByPlaceholder('Filter by title...').fill('Alpha')
+  await expect(page.getByText('Website Beta')).toBeHidden()
+  await toggle.click()
+  await expect(toggle).toContainText('1 active')
+  await expect(page.getByText('Website Beta')).toBeHidden()
+  await toggle.click()
+  await expect(page.getByPlaceholder('Filter by title...')).toHaveValue('Alpha')
+  for (const width of [1280, 640]) {
+    await page.setViewportSize({ width, height: 800 })
+    await expect(panel).toBeVisible()
+    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+  }
+  await toggle.click()
+  await page.getByRole('button', { name: 'Clear all filters' }).click()
+  await expect(page.getByText('Website Beta')).toBeVisible()
+  await expect(panel).toBeHidden()
+})
