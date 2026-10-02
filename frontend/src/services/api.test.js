@@ -1,11 +1,52 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { chatApi, librariesApi, papersApi } from './api'
+import { batchApi, chatApi, librariesApi, papersApi } from './api'
 
 
 describe('api service wrapper', () => {
   beforeEach(() => {
     global.fetch = vi.fn()
+  })
+
+  it('chunks large mutations and preserves successes when a chunk fails', async () => {
+    const items = Array.from({ length: 450 }, (_, i) => ({ id: `p_${i}` }))
+    global.fetch.mockImplementation(async (_url, options) => {
+      const body = JSON.parse(options.body)
+      expect(body.items.length).toBeLessThanOrEqual(100)
+      if (body.items[0].id === 'p_100') throw new Error('Connection lost')
+      return { ok: true, status: 200, json: async () => ({ succeededIds: body.items.map(i => i.id), failed: [] }) }
+    })
+    const onResult = vi.fn()
+    const result = await batchApi.mutateItems(items, { action: 'status', status: 'read' }, onResult)
+    expect(global.fetch).toHaveBeenCalledTimes(5)
+    expect(onResult).toHaveBeenCalledTimes(5)
+    expect(result.succeededIds).toHaveLength(350)
+    expect(result.failed).toHaveLength(100)
+    expect(new Set([...result.succeededIds, ...result.failed.map(i => i.id)]).size).toBe(450)
+  })
+
+  it('limits simultaneous mutation requests to three', async () => {
+    const pending = []
+    global.fetch.mockImplementation((_url, options) => new Promise(resolve => {
+      const body = JSON.parse(options.body)
+      pending.push(() => resolve({ ok: true, status: 200, json: async () => ({ succeededIds: body.items.map(i => i.id), failed: [] }) }))
+    }))
+    const promise = batchApi.mutateItems(Array.from({ length: 301 }, (_, i) => ({ id: `p_${i}` })), { action: 'delete' })
+    expect(global.fetch).toHaveBeenCalledTimes(3)
+    pending.splice(0).forEach(resolve => resolve())
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4))
+    pending.splice(0).forEach(resolve => resolve())
+    expect((await promise).succeededIds).toHaveLength(301)
+  })
+
+  it('splits notes previews at the server limit', async () => {
+    global.fetch.mockImplementation(async (_url, options) => ({
+      ok: true, status: 200,
+      json: async () => ({ skip_ids: [], process_ids: JSON.parse(options.body).item_ids }),
+    }))
+    const ids = Array.from({ length: 205 }, (_, i) => `p_${i}`)
+    expect((await batchApi.notesPreview(ids)).process_ids).toEqual(ids)
+    expect(global.fetch).toHaveBeenCalledTimes(3)
   })
 
   it('returns parsed JSON on success', async () => {

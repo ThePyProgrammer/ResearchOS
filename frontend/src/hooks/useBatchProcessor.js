@@ -24,11 +24,9 @@ export function useBatchProcessor() {
   const itemsRef = useRef([])
 
   const setStatuses = (updater) => {
-    setStatusesState(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater
-      statusesRef.current = next
-      return next
-    })
+    const next = typeof updater === 'function' ? updater(statusesRef.current) : updater
+    statusesRef.current = next
+    setStatusesState(next)
   }
 
   const pause = () => {
@@ -48,16 +46,16 @@ export function useBatchProcessor() {
     setIsPaused(false)
   }
 
-  const run = async (items, concurrency, processFn) => {
+  const run = async (items, concurrency, processFn, preserve = false) => {
     // Reset cancellation/pause state
     isCancelledRef.current = false
     isPausedRef.current = false
     setIsPaused(false)
 
-    itemsRef.current = items
+    if (!preserve) itemsRef.current = items
 
     // Initialise all statuses to 'pending'
-    const initial = {}
+    const initial = preserve ? { ...statusesRef.current } : {}
     for (const item of items) initial[item.id] = 'pending'
     setStatuses(initial)
     setIsRunning(true)
@@ -81,10 +79,6 @@ export function useBatchProcessor() {
         setStatuses(prev => ({ ...prev, [item.id]: 'processing' }))
         try {
           const result = await processFn(item)
-          if (isCancelledRef.current) {
-            setStatuses(prev => ({ ...prev, [item.id]: 'cancelled' }))
-            break
-          }
           const finalStatus = result === 'skipped' ? 'skipped' : 'done'
           setStatuses(prev => ({ ...prev, [item.id]: finalStatus }))
         } catch (err) {
@@ -122,12 +116,12 @@ export function useBatchProcessor() {
     })
   }
 
-  const runManaged = async (items, initialStatuses, work) => {
+  const runManaged = async (items, initialStatuses, work, preserve = false) => {
     isCancelledRef.current = false
     isPausedRef.current = false
     setIsPaused(false)
-    itemsRef.current = items
-    setStatuses(initialStatuses)
+    if (!preserve) itemsRef.current = items
+    setStatuses(preserve ? { ...statusesRef.current, ...initialStatuses } : initialStatuses)
     setIsRunning(true)
     try {
       await work()
@@ -139,7 +133,7 @@ export function useBatchProcessor() {
   const retryFailed = async (concurrency, processFn) => {
     const failed = getFailedItems()
     if (failed.length === 0) return
-    await run(failed, concurrency, processFn)
+    await run(failed, concurrency, processFn, true)
   }
 
   return {

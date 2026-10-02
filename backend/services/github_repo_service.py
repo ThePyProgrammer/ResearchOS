@@ -62,11 +62,11 @@ def update_github_repo(repo_id: str, data: GitHubRepoUpdate) -> Optional[GitHubR
     updates = data.model_dump(exclude_unset=True)
     if not updates:
         return get_github_repo(repo_id)
-    if get_github_repo(repo_id) is None:
+    result = get_client().table(_TABLE).update(updates).eq("id", repo_id).execute()
+    if not result.data:
         return None
-    get_client().table(_TABLE).update(updates).eq("id", repo_id).execute()
     logger.info("Updated github_repo %s: %s", repo_id, list(updates.keys()))
-    return get_github_repo(repo_id)
+    return GitHubRepo.model_validate(result.data[0])
 
 
 def delete_github_repo(repo_id: str) -> bool:

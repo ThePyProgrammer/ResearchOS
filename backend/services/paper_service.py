@@ -65,11 +65,11 @@ def update_paper(paper_id: str, data: PaperUpdate) -> Optional[Paper]:
     updates = data.model_dump(exclude_unset=True)
     if not updates:
         return get_paper(paper_id)
-    if get_paper(paper_id) is None:
+    result = get_client().table(_TABLE).update(updates).eq("id", paper_id).execute()
+    if not result.data:
         return None
-    get_client().table(_TABLE).update(updates).eq("id", paper_id).execute()
     logger.info("Updated paper %s: %s", paper_id, list(updates.keys()))
-    return get_paper(paper_id)
+    return Paper.model_validate(result.data[0])
 
 
 def set_pdf_url(paper_id: str, pdf_url: Optional[str]) -> None:

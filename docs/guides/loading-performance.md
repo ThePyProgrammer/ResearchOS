@@ -1,5 +1,34 @@
 # Library loading investigation
 
+## Checkbox batch actions
+
+Status changes and deletes now use `POST /api/batch/items`, a typed endpoint
+limited to 100 items per request. The frontend divides larger selections into
+chunks and runs at most three requests concurrently. The service groups items
+by table and uses one set-based write per table. Updating 100 papers' statuses
+therefore takes one database call instead of 300 calls through individual PATCH
+requests. Single-item updates also reuse the database's returned row instead of
+reading before and after the write.
+
+Collection additions read current memberships and group compatible items into
+writes, retaining existing memberships. Writes check the original membership
+value so concurrent changes are reported for retry instead of overwritten.
+This path requires no new database migration or RPC.
+
+Every metadata batch returns confirmed IDs and per-item failures. Successful
+chunks update the UI immediately; failed items remain selected, errors are
+visible, and other chunks continue. These operations are not one transaction
+across the whole selection. A connection loss after a write can leave its result
+unconfirmed; refresh before retrying those items.
+
+Tagging, embeddings, and notes previews split selections at the existing
+100-item limit. Failed AI chunks do not prevent later chunks from running.
+The older AI endpoints return summary counts rather than item identities;
+partial results are displayed as unconfirmed instead of marking every item done.
+Notes/PDF jobs default to three workers. Synchronous note generation runs in
+FastAPI's worker pool. Retries retain earlier results, and cancelling queued work
+does not label a successfully completed in-flight request as cancelled.
+
 ## Changes
 
 - The synchronous Supabase client was called directly from async library CRUD

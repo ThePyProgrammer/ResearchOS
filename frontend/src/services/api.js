@@ -422,11 +422,42 @@ export const gapAnalysisApi = {
 }
 
 export const batchApi = {
+  mutateItems: async (items, options, onResult = () => {}) => {
+    const chunks = []
+    for (let offset = 0; offset < items.length; offset += 100) chunks.push(items.slice(offset, offset + 100))
+    const result = { succeededIds: [], failed: [] }
+    const worker = async () => {
+      while (chunks.length) {
+        const chunk = chunks.shift()
+        let outcome
+        try {
+          outcome = await apiFetch('/batch/items', {
+            method: 'POST',
+            body: { ...options, items: chunk.map(item => ({ id: item.id, itemType: item.itemType || 'paper' })) },
+          })
+        } catch (err) {
+          outcome = { succeededIds: [], failed: chunk.map(item => ({ id: item.id, detail: err.message })) }
+        }
+        result.succeededIds.push(...outcome.succeededIds)
+        result.failed.push(...outcome.failed)
+        onResult(outcome)
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(3, chunks.length) }, worker))
+    return result
+  },
   tags: (itemIds, libraryId) =>
     apiFetch('/batch/tags', { method: 'POST', body: { item_ids: itemIds, library_id: libraryId || null } }),
   embeddings: (itemIds) =>
     apiFetch('/batch/embeddings', { method: 'POST', body: { item_ids: itemIds } }),
-  notesPreview: (itemIds) =>
-    apiFetch('/batch/notes/preview', { method: 'POST', body: { item_ids: itemIds } }),
+  notesPreview: async (itemIds) => {
+    const result = { skip_ids: [], process_ids: [] }
+    for (let offset = 0; offset < itemIds.length; offset += 100) {
+      const chunk = await apiFetch('/batch/notes/preview', { method: 'POST', body: { item_ids: itemIds.slice(offset, offset + 100) } })
+      result.skip_ids.push(...chunk.skip_ids)
+      result.process_ids.push(...chunk.process_ids)
+    }
+    return result
+  },
 }
 

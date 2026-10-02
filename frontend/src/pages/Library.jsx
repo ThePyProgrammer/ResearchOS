@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { papersApi, websitesApi, githubReposApi, searchApi, notesApi, collectionsApi, batchApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
@@ -1357,6 +1357,11 @@ export default function Library() {
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkMoving, setBulkMoving] = useState(false)
   const [bulkStatusChanging, setBulkStatusChanging] = useState(false)
+  const [bulkError, setBulkError] = useState(null)
+  const [bulkProgress, setBulkProgress] = useState(null)
+  const bulkMutationRef = useRef(false)
+  const activeLibraryRef = useRef(activeLibraryId)
+  activeLibraryRef.current = activeLibraryId
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
   const statusDropdownRef = useRef(null)
   const [showExportModal, setShowExportModal] = useState(false)
@@ -1558,55 +1563,50 @@ export default function Library() {
     }
   }
 
-  const handleBulkDelete = async () => {
-    setBulkDeleting(true)
+  const runBulkMutation = async (options) => {
+    if (bulkMutationRef.current || batch.isRunning) return
+    bulkMutationRef.current = true
+    const selected = items.filter(item => selectedIds.has(item.id))
+    const libraryId = activeLibraryId
+    const setBusy = options.action === 'delete' ? setBulkDeleting
+      : options.action === 'status' ? setBulkStatusChanging : setBulkMoving
+    setBusy(true)
+    setBulkError(null)
+    setBulkProgress({ completed: 0, total: selected.length })
     try {
-      const toDelete = items.filter(i => selectedIds.has(i.id))
-      await Promise.all(toDelete.map(i => {
-        const api = i.itemType === 'website' ? websitesApi : i.itemType === 'github_repo' ? githubReposApi : papersApi
-        return api.remove(i.id)
-      }))
-      setItems(prev => prev.filter(i => !selectedIds.has(i.id)))
-      if (selectedItem && selectedIds.has(selectedItem.id)) setSelectedItem(null)
-      setSelectedIds(new Set())
+      const result = await batchApi.mutateItems(selected, { ...options, libraryId }, outcome => {
+        if (activeLibraryRef.current !== libraryId) return
+        const succeeded = new Set(outcome.succeededIds)
+        const update = item => {
+          if (!item || !succeeded.has(item.id)) return item
+          if (options.action === 'delete') return null
+          if (options.action === 'status') return { ...item, status: options.status }
+          return { ...item, collections: [...new Set([...(item.collections || []), options.collectionId])] }
+        }
+        setItems(prev => prev.map(update).filter(Boolean))
+        setSelectedItem(update)
+        setSelectedIds(prev => new Set([...prev].filter(id => !succeeded.has(id))))
+        setBulkProgress(prev => ({ ...prev, completed: prev.completed + succeeded.size + outcome.failed.length }))
+      })
+      if (activeLibraryRef.current !== libraryId) return
+      if (result.failed.length) {
+        setBulkError(`${result.succeededIds.length} succeeded; ${result.failed.length} could not be completed and remain selected. ${result.failed[0].detail}`)
+      }
       setShowDeleteModal(false)
-      refreshCollections()
+      setShowMoveModal(false)
+      setMoveSearch('')
+      if (result.succeededIds.length) refreshCollections()
     } catch (err) {
-      console.error('Bulk delete failed:', err)
+      if (activeLibraryRef.current === libraryId) setBulkError(err.message)
     } finally {
-      setBulkDeleting(false)
+      bulkMutationRef.current = false
+      setBusy(false)
+      setBulkProgress(null)
     }
   }
 
-  const handleBulkMove = async (collectionId) => {
-    setBulkMoving(true)
-    try {
-      const toMove = items.filter(i => selectedIds.has(i.id))
-      const updated = await Promise.all(toMove.map(i => {
-        const api = i.itemType === 'website' ? websitesApi : i.itemType === 'github_repo' ? githubReposApi : papersApi
-        const newCollections = i.collections.includes(collectionId)
-          ? i.collections
-          : [...i.collections, collectionId]
-        return api.update(i.id, { collections: newCollections })
-      }))
-      setItems(prev => prev.map(i => {
-        const u = updated.find(x => x.id === i.id)
-        return u || i
-      }))
-      if (selectedItem && selectedIds.has(selectedItem.id)) {
-        const u = updated.find(x => x.id === selectedItem.id)
-        if (u) setSelectedItem(u)
-      }
-      setSelectedIds(new Set())
-      setShowMoveModal(false)
-      setMoveSearch('')
-      refreshCollections()
-    } catch (err) {
-      console.error('Bulk move failed:', err)
-    } finally {
-      setBulkMoving(false)
-    }
-  }
+  const handleBulkDelete = () => runBulkMutation({ action: 'delete' })
+  const handleBulkMove = (collectionId) => runBulkMutation({ action: 'add_to_collection', collectionId })
 
   const computeSkipCount = async (selected, operation) => {
     if (operation === 'tags') {
@@ -1630,16 +1630,11 @@ export default function Library() {
       return skipIds.size
     }
     if (operation === 'notes') {
-      try {
-        const itemIds = selected.map(i => i.id)
-        const preview = await batchApi.notesPreview(itemIds)
-        const skipIds = new Set(preview.skip_ids || [])
-        setBulkSkipIds(skipIds)
-        return skipIds.size
-      } catch {
-        setBulkSkipIds(new Set())
-        return 0
-      }
+      const itemIds = selected.map(i => i.id)
+      const preview = await batchApi.notesPreview(itemIds)
+      const skipIds = new Set(preview.skip_ids || [])
+      setBulkSkipIds(skipIds)
+      return skipIds.size
     }
     // embeddings: no client-side skip detection
     setBulkSkipIds(new Set())
@@ -1647,16 +1642,22 @@ export default function Library() {
   }
 
   const startBulkOperation = async (operation) => {
+    if (bulkMutationRef.current || batch.isRunning) return
     const selected = items.filter(i => selectedIds.has(i.id))
     const operationItems = operation === 'pdfs'
       ? selected.filter(i => i.itemType !== 'website' && i.itemType !== 'github_repo')
       : selected
     setBulkOperation(operation)
     setBulkItems(operationItems)
-    setBulkConcurrency(1)
-    const skipCount = await computeSkipCount(operationItems, operation)
-    setBulkSkipCount(skipCount)
-    setShowConfirmBulk(true)
+    setBulkConcurrency(3)
+    setBulkError(null)
+    try {
+      const skipCount = await computeSkipCount(operationItems, operation)
+      setBulkSkipCount(skipCount)
+      setShowConfirmBulk(true)
+    } catch (err) {
+      setBulkError(`Could not prepare batch: ${err.message}`)
+    }
   }
 
   const getBulkProcessFn = (operation) => {
@@ -1689,6 +1690,37 @@ export default function Library() {
     }
   }
 
+  const runManagedBatches = async (operationItems, operation, preserve = false) => {
+    const initial = Object.fromEntries(operationItems.map(item => [item.id,
+      operation === 'tags' && bulkSkipIds.has(item.id) ? 'skipped' : 'pending']))
+    await batch.runManaged(operationItems, initial, async () => {
+      const ids = operationItems.filter(item => initial[item.id] !== 'skipped').map(item => item.id)
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const chunk = ids.slice(offset, offset + 100)
+        const setChunkStatus = status => batch.setStatuses(prev => ({
+          ...prev, ...Object.fromEntries(chunk.map(id => [id, status])),
+        }))
+        setChunkStatus('processing')
+        try {
+          const result = operation === 'tags'
+            ? await batchApi.tags(chunk, activeLibraryId)
+            : await batchApi.embeddings(chunk)
+          const completed = operation === 'tags' ? result.updated : result.processed
+          // Older endpoints return counts, not identities. Do not claim that
+          // every item succeeded when the server only confirms a subset.
+          if (completed !== chunk.length) {
+            setChunkStatus(`${completed || 0} of ${chunk.length} confirmed; refresh to review skipped or missing items`)
+          } else {
+            setChunkStatus('done')
+          }
+        } catch (err) {
+          setChunkStatus(err.message || 'Failed')
+        }
+      }
+      if (operation === 'tags') setRefreshKey(k => k + 1)
+    }, preserve)
+  }
+
   const handleConfirmBulk = async () => {
     setShowConfirmBulk(false)
     setShowBulkProgress(true)
@@ -1696,67 +1728,20 @@ export default function Library() {
     const operationItems = bulkItems
     const concurrency = bulkConcurrency
 
-    if (operation === 'tags') {
-      const initialStatuses = {}
-      for (const item of operationItems) {
-        initialStatuses[item.id] = bulkSkipIds.has(item.id) ? 'skipped' : 'processing'
-      }
-      await batch.runManaged(operationItems, initialStatuses, async () => {
-        try {
-          const itemIds = operationItems.filter(i => !bulkSkipIds.has(i.id)).map(i => i.id)
-          if (itemIds.length > 0) {
-            await batchApi.tags(itemIds, activeLibraryId)
-          }
-          batch.setStatuses(prev => {
-            const next = { ...prev }
-            for (const id of itemIds) next[id] = 'done'
-            return next
-          })
-          setRefreshKey(k => k + 1)
-        } catch (err) {
-          batch.setStatuses(prev => {
-            const next = { ...prev }
-            for (const [id, s] of Object.entries(next)) {
-              if (s === 'processing') next[id] = err.message || 'Failed'
-            }
-            return next
-          })
-        }
-      })
+    if (operation === 'tags' || operation === 'embeddings') {
+      await runManagedBatches(operationItems, operation)
       return
     }
-
-    if (operation === 'embeddings') {
-      const initialStatuses = {}
-      for (const item of operationItems) initialStatuses[item.id] = 'processing'
-      await batch.runManaged(operationItems, initialStatuses, async () => {
-        try {
-          const itemIds = operationItems.map(i => i.id)
-          await batchApi.embeddings(itemIds)
-          batch.setStatuses(prev => {
-            const next = { ...prev }
-            for (const id of itemIds) next[id] = 'done'
-            return next
-          })
-        } catch (err) {
-          batch.setStatuses(prev => {
-            const next = { ...prev }
-            for (const [id, s] of Object.entries(next)) {
-              if (s === 'processing') next[id] = err.message || 'Failed'
-            }
-            return next
-          })
-        }
-      })
-      return
-    }
-
     // Notes and PDFs: per-item processing via concurrency pool
     const processFn = getBulkProcessFn(operation)
     await batch.run(operationItems, concurrency, processFn)
   }
 
   const handleRetryFailed = async () => {
+    if (bulkOperation === 'tags' || bulkOperation === 'embeddings') {
+      await runManagedBatches(batch.getFailedItems(), bulkOperation, true)
+      return
+    }
     const processFn = getBulkProcessFn(bulkOperation)
     if (!processFn) return
     await batch.retryFailed(bulkConcurrency, processFn)
@@ -1768,28 +1753,8 @@ export default function Library() {
   }
 
   const handleBulkStatusChange = async (status) => {
-    setBulkStatusChanging(true)
     setShowStatusDropdown(false)
-    try {
-      const toPatch = items.filter(i => selectedIds.has(i.id))
-      const updated = await Promise.all(toPatch.map(i => {
-        const api = i.itemType === 'website' ? websitesApi : i.itemType === 'github_repo' ? githubReposApi : papersApi
-        return api.update(i.id, { status })
-      }))
-      setItems(prev => prev.map(i => {
-        const u = updated.find(x => x.id === i.id)
-        return u || i
-      }))
-      if (selectedItem && selectedIds.has(selectedItem.id)) {
-        const u = updated.find(x => x.id === selectedItem.id)
-        if (u) setSelectedItem(u)
-      }
-      setSelectedIds(new Set())
-    } catch (err) {
-      console.error('Bulk status change failed:', err)
-    } finally {
-      setBulkStatusChanging(false)
-    }
+    await runBulkMutation({ action: 'status', status })
   }
 
   const allTags = useMemo(() => [...new Set(items.flatMap(p => p.tags || []))].sort(), [items])
@@ -2211,6 +2176,9 @@ export default function Library() {
           </div>
         )}
 
+        {bulkError && <div role="alert" className="px-4 py-2 text-sm text-red-600 bg-red-50">{bulkError}</div>}
+        {bulkProgress && <div role="status" className="px-4 py-2 text-sm text-blue-700">Processed {bulkProgress.completed} of {bulkProgress.total} items...</div>}
+
         {/* Bulk action bar */}
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border-b border-blue-200">
@@ -2220,6 +2188,7 @@ export default function Library() {
             <div className="flex items-center gap-2 ml-auto">
               <button
                 onClick={() => setShowMoveModal(true)}
+                disabled={!!bulkProgress || batch.isRunning}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
               >
                 <Icon name="library_add" className="text-[14px]" />
@@ -2229,7 +2198,7 @@ export default function Library() {
               <div className="relative" ref={statusDropdownRef}>
                 <button
                   onClick={() => setShowStatusDropdown(v => !v)}
-                  disabled={bulkStatusChanging}
+                  disabled={!!bulkProgress || batch.isRunning}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <Icon name="label" className="text-[14px]" />
@@ -2305,6 +2274,7 @@ export default function Library() {
               </button>
               <button
                 onClick={() => setShowDeleteModal(true)}
+                disabled={!!bulkProgress || batch.isRunning}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors"
               >
                 <Icon name="delete" className="text-[14px]" />

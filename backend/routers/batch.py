@@ -9,12 +9,19 @@ from pydantic import BaseModel, Field, field_validator
 
 from services.batch_service import batch_index_embeddings, batch_notes_preview
 from services.keyword_extraction_service import extract_keywords_for_items
+from models.bulk_items import BulkItemsRequest, BulkItemsResult
+from services import bulk_item_service
 
 logger = logging.getLogger(__name__)
 
 _MAX_BATCH_ITEMS = 100
 
 router = APIRouter(prefix="/api/batch", tags=["batch"])
+
+
+@router.post('/items', response_model=BulkItemsResult)
+def post_items(data: BulkItemsRequest) -> BulkItemsResult:
+    return bulk_item_service.mutate_items(data)
 
 
 class BatchItemRequest(BaseModel):

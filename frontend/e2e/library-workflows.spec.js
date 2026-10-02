@@ -183,6 +183,31 @@ test('quick add imports a paper from header modal', async ({ page }) => {
   await expect(page.getByText('Imported Paper')).toBeVisible()
 })
 
+test('bulk status reports partial success and retries only the failed selection', async ({ page }) => {
+  const requests = []
+  await page.route('**/api/batch/items', async route => {
+    const body = route.request().postDataJSON()
+    requests.push(body)
+    if (requests.length === 1) {
+      return route.fulfill({ json: { succeededIds: ['p_1'], failed: [{ id: 'w_1', detail: 'Temporary failure' }] } })
+    }
+    return route.fulfill({ json: { succeededIds: ['w_1'], failed: [] } })
+  })
+  await page.goto('/library')
+  await expect(page.getByText('Paper Alpha')).toBeVisible()
+  await page.locator('thead input[type="checkbox"]').check()
+  await page.getByRole('button', { name: /Set Status/ }).click()
+  await page.getByRole('button', { name: /^check_circle\s*Read$/ }).click()
+  await expect(page.getByRole('alert')).toContainText('1 succeeded; 1 could not be completed')
+  await expect(page.locator('tbody input:checked')).toHaveCount(1)
+  await page.getByRole('button', { name: /Set Status/ }).click()
+  await page.getByRole('button', { name: /^check_circle\s*Read$/ }).click()
+  await expect(page.locator('tbody input:checked')).toHaveCount(0)
+  expect(requests).toHaveLength(2)
+  expect(requests[0].items).toHaveLength(2)
+  expect(requests[1].items).toEqual([{ id: 'w_1', itemType: 'website' }])
+})
+
 
 test('library filters collapse, preserve selections, and fit narrow widths', async ({ page }) => {
   await page.goto('/library')

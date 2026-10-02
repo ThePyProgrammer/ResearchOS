@@ -61,11 +61,11 @@ def update_website(website_id: str, data: WebsiteUpdate) -> Optional[Website]:
     updates = data.model_dump(exclude_unset=True)
     if not updates:
         return get_website(website_id)
-    if get_website(website_id) is None:
+    result = get_client().table(_TABLE).update(updates).eq("id", website_id).execute()
+    if not result.data:
         return None
-    get_client().table(_TABLE).update(updates).eq("id", website_id).execute()
     logger.info("Updated website %s: %s", website_id, list(updates.keys()))
-    return get_website(website_id)
+    return Website.model_validate(result.data[0])
 
 
 def delete_website(website_id: str) -> bool:

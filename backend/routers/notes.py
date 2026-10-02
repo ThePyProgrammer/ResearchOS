@@ -35,7 +35,7 @@ class GenerateNotesRequest(BaseModel):
 
 
 @router.post("/papers/{paper_id}/notes/generate", status_code=201)
-async def generate_paper_notes(paper_id: str, data: GenerateNotesRequest):
+def generate_paper_notes(paper_id: str, data: GenerateNotesRequest):
     """Generate AI notes for a paper as a multi-file structure."""
     try:
         notes = note_service.generate_notes(paper_id, library_id=data.library_id)
@@ -66,7 +66,7 @@ async def create_website_note(website_id: str, data: NoteCreate):
 
 
 @router.post("/websites/{website_id}/notes/generate", status_code=201)
-async def generate_website_notes(website_id: str, data: GenerateNotesRequest):
+def generate_website_notes(website_id: str, data: GenerateNotesRequest):
     """Generate AI notes for a website as a multi-file structure."""
     try:
         notes = note_service.generate_notes_for_website(website_id, library_id=data.library_id)
@@ -97,7 +97,7 @@ async def create_github_repo_note(repo_id: str, data: NoteCreate):
 
 
 @router.post("/github-repos/{repo_id}/notes/generate", status_code=201)
-async def generate_github_repo_notes(repo_id: str, data: GenerateNotesRequest):
+def generate_github_repo_notes(repo_id: str, data: GenerateNotesRequest):
     """Generate AI notes for a GitHub repo as a multi-file structure."""
     try:
         notes = note_service.generate_notes_for_github_repo(repo_id, library_id=data.library_id)

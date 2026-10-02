@@ -27,6 +27,7 @@ vi.mock('../services/api', () => ({
   notesApi: { generate: vi.fn() },
   collectionsApi: { topAuthors: vi.fn() },
   batchApi: {
+    mutateItems: vi.fn(),
     tags: vi.fn(),
     embeddings: vi.fn(),
     notesPreview: vi.fn(),
@@ -73,6 +74,7 @@ describe('Library page smoke', () => {
     githubReposApi.remove.mockReset()
     papersApi.fetchPdf.mockReset()
     batchApi.tags.mockReset()
+    batchApi.mutateItems.mockReset()
     batchApi.embeddings.mockReset()
     batchApi.notesPreview.mockReset()
     githubReposApi.list.mockResolvedValue([])
@@ -154,6 +156,31 @@ describe('Library page smoke', () => {
     expect(openSpy).toHaveBeenCalledWith('/library/paper/p_1', '_blank')
 
     openSpy.mockRestore()
+  })
+
+  it('uses bulk status updates and retains only failed items for retry', async () => {
+    papersApi.list.mockResolvedValue(['p_1', 'p_2'].map(id => ({
+      id, title: id, authors: [], status: 'inbox', source: 'human', collections: [], tags: [],
+    })))
+    websitesApi.list.mockResolvedValue([])
+    batchApi.mutateItems.mockImplementation(async (_items, _options, onResult) => {
+      const result = { succeededIds: ['p_1'], failed: [{ id: 'p_2', detail: 'Please retry.' }] }
+      onResult(result)
+      return result
+    })
+    renderLibrary()
+    await waitFor(() => expect(screen.getByText('p_1')).toBeInTheDocument())
+    fireEvent.click(document.querySelector('thead input[type="checkbox"]'))
+    fireEvent.click(screen.getByRole('button', { name: /Set Status/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^check_circle\s*Read$/ }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('1 succeeded; 1 could not be completed'))
+    expect(batchApi.mutateItems).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 'p_1' }), expect.objectContaining({ id: 'p_2' })]),
+      { action: 'status', status: 'read', libraryId: 'lib_1' }, expect.any(Function),
+    )
+    expect(papersApi.update).not.toHaveBeenCalled()
+    expect(document.querySelectorAll('tbody input:checked')).toHaveLength(1)
+    expect(screen.getByText('1 item selected')).toBeInTheDocument()
   })
 
   it('shows bulk action bar when selecting rows', async () => {
@@ -281,5 +308,24 @@ describe('Library page smoke', () => {
 
     resolveTags({ updated: 1, skipped: 0, total: 1 })
     await waitFor(() => expect(screen.getByText('Complete — 1 succeeded')).toBeInTheDocument())
+  })
+
+  it('continues large AI selections after one chunk fails', async () => {
+    papersApi.list.mockResolvedValue(Array.from({ length: 101 }, (_, i) => ({
+      id: `p_${i}`, title: `Large batch ${i}`, authors: [], status: 'inbox',
+      source: 'human', collections: [], tags: [], abstract: 'Abstract',
+    })))
+    websitesApi.list.mockResolvedValue([])
+    batchApi.tags.mockRejectedValueOnce(new Error('Temporary failure'))
+      .mockResolvedValueOnce({ updated: 1, skipped: 0, total: 1 })
+    renderLibrary()
+    await waitFor(() => expect(screen.getByText('Large batch 0')).toBeInTheDocument())
+    fireEvent.click(document.querySelector('thead input[type="checkbox"]'))
+    fireEvent.click(screen.getByRole('button', { name: /Auto-Tag/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(batchApi.tags).toHaveBeenCalledTimes(2))
+    expect(batchApi.tags.mock.calls.map(call => call[0].length)).toEqual([100, 1])
+    expect(screen.getByRole('button', { name: /Retry 100 Failed/ })).toBeInTheDocument()
   })
 })

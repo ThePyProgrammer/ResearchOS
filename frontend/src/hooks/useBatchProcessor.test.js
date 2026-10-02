@@ -213,13 +213,15 @@ describe('useBatchProcessor', () => {
 
     // item-1 should now be done; item-0 and item-2 should not be re-processed
     expect(result.current.statuses['item-1']).toBe('done')
+    expect(result.current.statuses['item-0']).toBe('done')
+    expect(result.current.statuses['item-2']).toBe('done')
     expect(callCount['item-0']).toBe(1)
     expect(callCount['item-2']).toBe(1)
     expect(callCount['item-1']).toBe(2)
   })
 
   // Test 7: cancel() stops the batch and marks remaining items as 'cancelled'
-  it('cancel marks in-flight and remaining pending items as cancelled', async () => {
+  it('cancel preserves completed in-flight work and cancels pending items', async () => {
     const items = makeItems(5)
     let resolvers = {}
     const processFn = vi.fn(async (item) => {
@@ -239,7 +241,7 @@ describe('useBatchProcessor', () => {
 
     await act(async () => { await runPromise })
 
-    expect(result.current.statuses['item-0']).toBe('cancelled')
+    expect(result.current.statuses['item-0']).toBe('done')
     expect(result.current.statuses['item-1']).toBe('cancelled')
     expect(result.current.statuses['item-2']).toBe('cancelled')
     expect(result.current.statuses['item-3']).toBe('cancelled')
