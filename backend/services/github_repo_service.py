@@ -19,16 +19,16 @@ def list_github_repos(
     query = get_client().table(_TABLE).select("*")
     if library_id:
         query = query.eq("library_id", library_id)
+    if collection_id == "inbox":
+        query = query.eq("status", "inbox")
+    elif collection_id and collection_id != "all":
+        query = query.contains("collections", [collection_id])
+    if status:
+        query = query.eq("status", status)
     query = query.order("published_date", desc=False)
     result = query.execute()
     repos = [GitHubRepo.model_validate(r) for r in result.data]
 
-    if collection_id == "inbox":
-        repos = [r for r in repos if r.status == "inbox"]
-    elif collection_id and collection_id != "all":
-        repos = [r for r in repos if collection_id in r.collections]
-    if status:
-        repos = [r for r in repos if r.status == status]
     return repos
 
 

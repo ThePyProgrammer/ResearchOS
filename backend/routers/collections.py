@@ -15,13 +15,13 @@ NOT_FOUND = {"error": "not_found", "detail": "Collection not found"}
 
 
 @router.get("")
-async def list_collections(library_id: Optional[str] = None):
+def list_collections(library_id: Optional[str] = None):
     collections = collection_service.list_collections(library_id=library_id)
     return JSONResponse([c.model_dump(by_alias=True) for c in collections])
 
 
 @router.post("", status_code=201)
-async def create_collection(data: CollectionCreate):
+def create_collection(data: CollectionCreate):
     col = collection_service.create_collection(data)
     activity_service.log_activity(
         type="human",
@@ -38,7 +38,7 @@ async def create_collection(data: CollectionCreate):
 
 
 @router.get("/{collection_id}")
-async def get_collection(collection_id: str):
+def get_collection(collection_id: str):
     col = collection_service.get_collection(collection_id)
     if col is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -46,7 +46,7 @@ async def get_collection(collection_id: str):
 
 
 @router.patch("/{collection_id}")
-async def update_collection(collection_id: str, data: CollectionUpdate):
+def update_collection(collection_id: str, data: CollectionUpdate):
     col = collection_service.update_collection(collection_id, data)
     if col is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -54,14 +54,14 @@ async def update_collection(collection_id: str, data: CollectionUpdate):
 
 
 @router.delete("/{collection_id}", status_code=204)
-async def delete_collection(collection_id: str):
+def delete_collection(collection_id: str):
     deleted = collection_service.delete_collection(collection_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
 
 
 @router.get("/{collection_id}/top-authors")
-async def get_top_authors(
+def get_top_authors(
     collection_id: str,
     limit: int = 10,
 ):
@@ -69,14 +69,11 @@ async def get_top_authors(
     if col is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
 
-    from services import paper_service, website_service, author_service
+    from services import paper_service, author_service
 
     papers = paper_service.list_papers(collection_id=collection_id)
-    websites = website_service.list_websites(collection_id=collection_id)
-    paper_ids = [p.id for p in papers] + [w.id for w in websites]
-
-    if not paper_ids:
+    if not papers:
         return JSONResponse([])
 
-    top = author_service.get_top_authors_for_papers(paper_ids, limit=limit)
-    return JSONResponse(top)
+    top = author_service.get_top_authors_for_papers(papers, limit=limit)
+    return JSONResponse([author.model_dump(by_alias=True) for author in top])

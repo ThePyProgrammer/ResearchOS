@@ -16,7 +16,7 @@ NOT_FOUND = {"error": "not_found", "detail": "Website not found"}
 
 
 @router.get("")
-async def list_websites(
+def list_websites(
     collection_id: Optional[str] = None,
     status: Optional[str] = None,
     library_id: Optional[str] = None,
@@ -30,7 +30,7 @@ async def list_websites(
 
 
 @router.post("", status_code=201)
-async def create_website(data: WebsiteCreate):
+def create_website(data: WebsiteCreate):
     website = website_service.create_website(data)
     activity_service.log_activity(
         type="human",
@@ -115,7 +115,7 @@ async def import_website(data: WebsiteImportRequest):
 
 
 @router.get("/{website_id}")
-async def get_website(website_id: str):
+def get_website(website_id: str):
     website = website_service.get_website(website_id)
     if website is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -123,7 +123,7 @@ async def get_website(website_id: str):
 
 
 @router.patch("/{website_id}")
-async def update_website(website_id: str, data: WebsiteUpdate):
+def update_website(website_id: str, data: WebsiteUpdate):
     website = website_service.update_website(website_id, data)
     if website is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -131,7 +131,7 @@ async def update_website(website_id: str, data: WebsiteUpdate):
 
 
 @router.delete("/{website_id}", status_code=204)
-async def delete_website(website_id: str):
+def delete_website(website_id: str):
     deleted = website_service.delete_website(website_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=NOT_FOUND)

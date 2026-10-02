@@ -74,7 +74,7 @@ def _auto_generate_notes(paper_id: str, library_id: Optional[str], pdf_url: Opti
 
 
 @router.get("")
-async def list_papers(
+def list_papers(
     collection_id: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
@@ -144,7 +144,7 @@ async def export_bibtex_file(
 
 
 @router.post("", status_code=201)
-async def create_paper(data: PaperCreate, check_duplicates: bool = Query(False)):
+def create_paper(data: PaperCreate, check_duplicates: bool = Query(False)):
     # Optional dedup check — frontend can pass ?check_duplicates=true to get warnings
     if check_duplicates:
         from services.dedup_service import find_duplicates
@@ -492,7 +492,7 @@ async def extract_metadata(file: UploadFile = File(...)):
 
 
 @router.get("/{paper_id}")
-async def get_paper(paper_id: str):
+def get_paper(paper_id: str):
     paper = paper_service.get_paper(paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -519,7 +519,7 @@ async def get_related_papers(
 
 
 @router.patch("/{paper_id}")
-async def update_paper(paper_id: str, data: PaperUpdate):
+def update_paper(paper_id: str, data: PaperUpdate):
     paper = paper_service.update_paper(paper_id, data)
     if paper is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -527,7 +527,7 @@ async def update_paper(paper_id: str, data: PaperUpdate):
 
 
 @router.delete("/{paper_id}", status_code=204)
-async def delete_paper(paper_id: str):
+def delete_paper(paper_id: str):
     deleted = paper_service.delete_paper(paper_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -580,7 +580,7 @@ class LinkAuthorRequest(BaseModel):
 
 
 @router.get("/{paper_id}/authors")
-async def get_paper_authors(paper_id: str):
+def get_paper_authors(paper_id: str):
     paper = paper_service.get_paper(paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)

@@ -11,6 +11,7 @@ from models.author import (
     AuthorSearchResult,
     AuthorUpdate,
     PaperAuthor,
+    TopAuthor,
 )
 from models.paper import Paper
 from services.db import get_client
@@ -397,35 +398,35 @@ def get_author_papers(author_id: str) -> list[Paper]:
 
 
 def get_top_authors_for_papers(
-    paper_ids: list[str],
+    papers: list[Paper],
     limit: int = 10,
-) -> list[dict]:
+) -> list[TopAuthor]:
     """Count author occurrences in papers.authors string arrays, enriched with author records where linked."""
-    from services import paper_service
-
     # Count from string arrays
     name_counts: dict[str, int] = {}
-    for pid in paper_ids:
-        p = paper_service.get_paper(pid)
-        if p:
-            for author_name in p.authors:
-                name_counts[author_name] = name_counts.get(author_name, 0) + 1
+    for paper in papers:
+        for author_name in paper.authors:
+            name_counts[author_name] = name_counts.get(author_name, 0) + 1
 
     # Sort by count descending
     sorted_names = sorted(name_counts.items(), key=lambda x: -x[1])[:limit]
 
-    # Try to find linked author records
-    result = []
-    for name, count in sorted_names:
-        matches = find_matching_authors(name)
-        author = matches[0]["author"] if matches and matches[0]["confidence"] == "exact" else None
-        result.append({
-            "name": name,
-            "count": count,
-            "author": author.model_dump(by_alias=True) if author else None,
-        })
-
-    return result
+    # Only exact matches are displayed here. Fetch those together instead of
+    # scanning the entire authors table once per displayed name.
+    names = list(dict.fromkeys(normalize_author_name(name) for name, _ in sorted_names))
+    names = [name for name in names if name]
+    authors: dict[str, Author] = {}
+    for offset in range(0, len(names), 100):
+        rows = get_client().table(_AUTHORS_TABLE).select("*").in_(
+            "name_normalized", names[offset:offset + 100],
+        ).execute()
+        for row in rows.data:
+            author = Author.model_validate(row)
+            authors.setdefault(author.name_normalized, author)
+    return [
+        TopAuthor(name=name, count=count, author=authors.get(normalize_author_name(name)))
+        for name, count in sorted_names
+    ]
 
 
 def find_potential_papers(author_id: str) -> list[dict]:

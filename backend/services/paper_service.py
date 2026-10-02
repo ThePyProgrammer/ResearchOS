@@ -20,17 +20,17 @@ def list_papers(
     query = get_client().table(_TABLE).select("*")
     if library_id:
         query = query.eq("library_id", library_id)
+    if collection_id == "inbox":
+        query = query.eq("status", "inbox")
+    elif collection_id and collection_id != "all":
+        query = query.contains("collections", [collection_id])
+    if status:
+        query = query.eq("status", status)
     query = query.order("published_date", desc=False)
     result = query.execute()
     papers = [Paper.model_validate(p) for p in result.data]
 
 
-    if collection_id == "inbox":
-        papers = [p for p in papers if p.status == "inbox"]
-    elif collection_id and collection_id != "all":
-        papers = [p for p in papers if collection_id in p.collections]
-    if status:
-        papers = [p for p in papers if p.status == status]
     if search:
         q = search.lower()
         papers = [

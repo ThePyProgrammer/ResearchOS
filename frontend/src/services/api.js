@@ -1,6 +1,23 @@
 const BASE = '/api'
+const pendingReads = new Map()
 
 async function apiFetch(path, opts = {}) {
+  // Share only simultaneous default GETs; settled responses are never cached.
+  const shareRead = Object.keys(opts).length === 0
+  if (shareRead && pendingReads.has(path)) return pendingReads.get(path)
+  const mutation = !['GET', 'HEAD'].includes((opts.method || 'GET').toUpperCase())
+  if (mutation) pendingReads.clear()
+  const request = performFetch(path, opts)
+  if (shareRead) pendingReads.set(path, request)
+  try {
+    return await request
+  } finally {
+    if (mutation) pendingReads.clear()
+    if (pendingReads.get(path) === request) pendingReads.delete(path)
+  }
+}
+
+async function performFetch(path, opts) {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...opts.headers },
     ...opts,

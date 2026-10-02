@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { papersApi, websitesApi, githubReposApi, searchApi, notesApi, collectionsApi, batchApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips, TagChips, formatCitationBibTeX } from '../components/PaperInfoPanel'
@@ -1330,7 +1330,7 @@ function GitHubRepoDetail({ item, onClose, onStatusChange, onUpdate, onDelete, w
 export { PaperDetail, WebsiteDetail, GitHubRepoDetail }
 
 export default function Library() {
-  const { activeLibraryId, collections, refreshCollections } = useLibrary()
+  const { activeLibraryId, collections, refreshCollections, loading: libraryLoading } = useLibrary()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const [selectedItem, setSelectedItem] = useState(null)
@@ -1448,7 +1448,6 @@ export default function Library() {
   const [tagFilterMode, setTagFilterMode] = useState('and') // 'and' | 'or'
   const [sortKey, setSortKey] = useState('date')   // 'title' | 'date' | 'authors' | null
   const [sortDir, setSortDir] = useState('asc')  // 'asc' | 'desc'
-  const location = useLocation()
 
   // Derive active filters from URL - URL is the single source of truth
   const activeCollection = searchParams.get('col') || 'all'
@@ -1469,6 +1468,8 @@ export default function Library() {
 
   // Re-fetch all items whenever search query or active library changes
   useEffect(() => {
+    if (libraryLoading) return
+    let current = true
     setLoading(true)
     setError(null)
 
@@ -1476,22 +1477,23 @@ export default function Library() {
     const listParams = activeLibraryId ? { library_id: activeLibraryId } : {}
 
     if (urlQuery) {
-      searchApi.query(urlQuery, { mode: urlMode, limit: 50 })
-        .then(data => setItems(data))
-        .catch(() => {
-          setSearchParams({})
-          Promise.all([papersApi.list(listParams), websitesApi.list(listParams), githubReposApi.list(listParams)])
-            .then(([papers, websites, repos]) => setItems([...papers, ...websites, ...repos]))
-            .catch(err => setError(err.message))
-        })
-        .finally(() => setLoading(false))
+      searchApi.query(urlQuery, { mode: urlMode, limit: 50, libraryId: activeLibraryId })
+        .then(data => { if (current) setItems(data) })
+        .catch(err => { if (current) setError(err.message) })
+        .finally(() => { if (current) setLoading(false) })
     } else {
       Promise.all([papersApi.list(listParams), websitesApi.list(listParams), githubReposApi.list(listParams)])
-        .then(([papers, websites, repos]) => setItems([...papers, ...websites, ...repos]))
-        .catch(err => setError(err.message))
-        .finally(() => setLoading(false))
+        .then(([papers, websites, repos]) => { if (current) setItems([...papers, ...websites, ...repos]) })
+        .catch(err => { if (current) setError(err.message) })
+        .finally(() => { if (current) setLoading(false) })
     }
-  }, [urlQuery, urlMode, location.key, activeLibraryId, refreshKey])
+    return () => { current = false }
+  }, [urlQuery, urlMode, activeLibraryId, refreshKey, libraryLoading])
+
+  // Local navigation must still clear bulk selection without reloading data.
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [activeCollection, filterTab])
 
   // Load top authors when a collection is active
   useEffect(() => {

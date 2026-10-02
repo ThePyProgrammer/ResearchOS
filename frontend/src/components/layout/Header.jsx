@@ -1215,6 +1215,7 @@ export default function Header() {
           onOpenAnother={openQuickAddWindow}
           onAdded={() => {
             refreshCollections()
+            window.dispatchEvent(new CustomEvent('researchos:items-changed'))
             navigate(activeCollectionId ? `/library?col=${activeCollectionId}` : '/library')
           }}
           collectionId={activeCollectionId}

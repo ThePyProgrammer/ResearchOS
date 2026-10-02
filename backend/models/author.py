@@ -42,6 +42,12 @@ class AuthorCreate(CamelModel):
     affiliations: list[Affiliation] = []
 
 
+class TopAuthor(CamelModel):
+    name: str
+    count: int
+    author: Optional[Author] = None
+
+
 class AuthorUpdate(CamelModel):
     name: Optional[str] = None
     orcid: Optional[str] = None

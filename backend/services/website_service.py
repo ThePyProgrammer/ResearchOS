@@ -19,15 +19,15 @@ def list_websites(
     query = get_client().table(_TABLE).select("*")
     if library_id:
         query = query.eq("library_id", library_id)
+    if collection_id == "inbox":
+        query = query.eq("status", "inbox")
+    elif collection_id and collection_id != "all":
+        query = query.contains("collections", [collection_id])
+    if status:
+        query = query.eq("status", status)
     result = query.execute()
     websites = [Website.model_validate(w) for w in result.data]
 
-    if collection_id == "inbox":
-        websites = [w for w in websites if w.status == "inbox"]
-    elif collection_id and collection_id != "all":
-        websites = [w for w in websites if collection_id in w.collections]
-    if status:
-        websites = [w for w in websites if w.status == status]
     return websites
 
 

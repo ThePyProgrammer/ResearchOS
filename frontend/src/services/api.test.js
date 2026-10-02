@@ -21,6 +21,38 @@ describe('api service wrapper', () => {
     expect(global.fetch).toHaveBeenCalledWith('/api/libraries', expect.any(Object))
   })
 
+  it('shares concurrent reads but fetches again after they settle', async () => {
+    let resolve
+    global.fetch.mockReturnValue(new Promise(done => { resolve = done }))
+    const first = librariesApi.list()
+    const second = librariesApi.list()
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    resolve({ ok: true, status: 200, json: async () => [{ id: 'lib_1' }] })
+    expect(await first).toEqual(await second)
+    await librariesApi.list()
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not reuse a pending read across a mutation', async () => {
+    let resolve
+    global.fetch.mockReturnValueOnce(new Promise(done => { resolve = done }))
+    const oldRead = librariesApi.list()
+    global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => [] })
+    await librariesApi.remove('lib_1')
+    await librariesApi.list()
+    expect(global.fetch).toHaveBeenCalledTimes(3)
+    resolve({ ok: true, status: 200, json: async () => [] })
+    await oldRead
+  })
+
+  it('retries a failed shared read', async () => {
+    global.fetch.mockRejectedValueOnce(new Error('offline'))
+    await expect(Promise.all([librariesApi.list(), librariesApi.list()])).rejects.toThrow('offline')
+    global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => [] })
+    expect(await librariesApi.list()).toEqual([])
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
+
   it('returns null for 204 responses', async () => {
     global.fetch.mockResolvedValue({
       ok: true,

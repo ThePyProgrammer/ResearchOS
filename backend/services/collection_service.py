@@ -11,14 +11,26 @@ _TABLE = "collections"
 _PAPERS_TABLE = "papers"
 
 
-def _compute_paper_counts(collections: list[Collection]) -> list[Collection]:
+def _compute_paper_counts(
+    collections: list[Collection], library_id: Optional[str] = None,
+) -> list[Collection]:
+    if not collections:
+        return []
     db = get_client()
     counts: dict[str, int] = {}
     for table in (_PAPERS_TABLE, "websites"):
-        result = db.table(table).select("collections").execute()
-        for row in result.data:
-            for cid in (row.get("collections") or []):
-                counts[cid] = counts.get(cid, 0) + 1
+        offset = 0
+        while True:
+            query = db.table(table).select("collections").order("id")
+            if library_id:
+                query = query.eq("library_id", library_id)
+            result = query.range(offset, offset + 499).execute()
+            for row in result.data:
+                for cid in (row.get("collections") or []):
+                    counts[cid] = counts.get(cid, 0) + 1
+            if len(result.data) < 500:
+                break
+            offset += len(result.data)
     return [c.model_copy(update={"paper_count": counts.get(c.id, 0)}) for c in collections]
 
 
@@ -28,7 +40,7 @@ def list_collections(library_id: Optional[str] = None) -> list[Collection]:
         query = query.eq("library_id", library_id)
     result = query.execute()
     collections = [Collection.model_validate(c) for c in result.data]
-    return _compute_paper_counts(collections)
+    return _compute_paper_counts(collections, library_id=library_id)
 
 
 def get_collection(collection_id: str) -> Optional[Collection]:
@@ -36,7 +48,7 @@ def get_collection(collection_id: str) -> Optional[Collection]:
     if not result.data:
         return None
     col = Collection.model_validate(result.data[0])
-    [computed] = _compute_paper_counts([col])
+    [computed] = _compute_paper_counts([col], library_id=col.library_id)
     return computed
 
 

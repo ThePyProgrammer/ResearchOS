@@ -16,7 +16,7 @@ NOT_FOUND = {"error": "not_found", "detail": "GitHub repository not found"}
 
 
 @router.get("")
-async def list_github_repos(
+def list_github_repos(
     collection_id: Optional[str] = None,
     status: Optional[str] = None,
     library_id: Optional[str] = None,
@@ -30,7 +30,7 @@ async def list_github_repos(
 
 
 @router.post("", status_code=201)
-async def create_github_repo(data: GitHubRepoCreate):
+def create_github_repo(data: GitHubRepoCreate):
     repo = github_repo_service.create_github_repo(data)
     activity_service.log_activity(
         type="human",
@@ -132,7 +132,7 @@ async def import_github_repo(data: GitHubRepoImportRequest):
 
 
 @router.get("/{repo_id}")
-async def get_github_repo(repo_id: str):
+def get_github_repo(repo_id: str):
     repo = github_repo_service.get_github_repo(repo_id)
     if repo is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -140,7 +140,7 @@ async def get_github_repo(repo_id: str):
 
 
 @router.patch("/{repo_id}")
-async def update_github_repo(repo_id: str, data: GitHubRepoUpdate):
+def update_github_repo(repo_id: str, data: GitHubRepoUpdate):
     repo = github_repo_service.update_github_repo(repo_id, data)
     if repo is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -148,7 +148,7 @@ async def update_github_repo(repo_id: str, data: GitHubRepoUpdate):
 
 
 @router.delete("/{repo_id}", status_code=204)
-async def delete_github_repo(repo_id: str):
+def delete_github_repo(repo_id: str):
     deleted = github_repo_service.delete_github_repo(repo_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=NOT_FOUND)

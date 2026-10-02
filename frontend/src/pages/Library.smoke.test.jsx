@@ -1,8 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Library from './Library'
+
+const libraryState = vi.hoisted(() => ({ activeLibraryId: 'lib_1', loading: false }))
 
 vi.mock('../services/api', () => ({
   papersApi: {
@@ -35,7 +37,7 @@ vi.mock('../context/LibraryContext', () => ({
   useLibrary: () => ({
     collections: [{ id: 'c_1', name: 'Inbox', paperCount: 1 }],
     activeLibrary: { id: 'lib_1', autoNoteEnabled: true },
-    activeLibraryId: 'lib_1',
+    ...libraryState,
     refreshCollections: vi.fn(),
   }),
 }))
@@ -58,6 +60,8 @@ function renderLibrary() {
 
 describe('Library page smoke', () => {
   beforeEach(() => {
+    libraryState.activeLibraryId = 'lib_1'
+    libraryState.loading = false
     papersApi.list.mockReset()
     websitesApi.list.mockReset()
     githubReposApi.list.mockReset()
@@ -72,6 +76,38 @@ describe('Library page smoke', () => {
     batchApi.embeddings.mockReset()
     batchApi.notesPreview.mockReset()
     githubReposApi.list.mockResolvedValue([])
+  })
+
+  it('waits for library initialization and reuses data for status filters', async () => {
+    libraryState.loading = true
+    papersApi.list.mockResolvedValue([])
+    websitesApi.list.mockResolvedValue([])
+    const view = render(<MemoryRouter><Library /></MemoryRouter>)
+    expect(papersApi.list).not.toHaveBeenCalled()
+    libraryState.loading = false
+    view.rerender(<MemoryRouter><Library /></MemoryRouter>)
+    await waitFor(() => expect(papersApi.list).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: /^To Read/ }))
+    expect(papersApi.list).toHaveBeenCalledTimes(1)
+    expect(websitesApi.list).toHaveBeenCalledTimes(1)
+    expect(githubReposApi.list).toHaveBeenCalledTimes(1)
+    act(() => window.dispatchEvent(new CustomEvent('researchos:items-changed')))
+    await waitFor(() => expect(papersApi.list).toHaveBeenCalledTimes(2))
+  })
+
+  it('ignores late results from the previous library', async () => {
+    let resolveOld
+    papersApi.list.mockReturnValueOnce(new Promise(resolve => { resolveOld = resolve }))
+    websitesApi.list.mockResolvedValue([])
+    const view = render(<MemoryRouter><Library /></MemoryRouter>)
+    libraryState.activeLibraryId = 'lib_2'
+    papersApi.list.mockResolvedValue([])
+    view.rerender(<MemoryRouter><Library /></MemoryRouter>)
+    await waitFor(() => expect(papersApi.list).toHaveBeenCalledWith({ library_id: 'lib_2' }))
+    await act(async () => {
+      resolveOld([{ id: 'old', title: 'Stale paper', authors: [], tags: [], collections: [] }])
+    })
+    expect(screen.queryByText('Stale paper')).not.toBeInTheDocument()
   })
 
   it('loads mixed items and supports row double-click navigation', async () => {
