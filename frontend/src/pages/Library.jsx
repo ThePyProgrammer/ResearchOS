@@ -147,16 +147,25 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
               GitHub
             </span>
           )}
-          {!isWebsite && !isGitHubRepo && item.source === 'agent' && (
-            <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
-              Run #{item.agentRun?.runNumber}
-            </span>
-          )}
           {!isWebsite && !isGitHubRepo && (!item.pdfUrl || !item.pdfUrl.includes('/storage/v1/object/public/pdfs/')) && (
             <span className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-medium flex-shrink-0 flex items-center gap-0.5" title="No PDF in storage">
               <Icon name="picture_as_pdf" className="text-[10px]" />
               No PDF
             </span>
+          )}
+          {!isWebsite && !isGitHubRepo && (
+            <button
+              onClick={e => {
+                e.stopPropagation()
+                navigator.clipboard.writeText(formatCitationBibTeX(item)).catch(console.error)
+                setCopied(true)
+                setTimeout(() => setCopied(false), 1500)
+              }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-blue-500"
+              title="Copy BibTeX citation"
+            >
+              <Icon name={copied ? 'check' : 'content_copy'} className="text-[14px]" />
+            </button>
           )}
         </div>
       </td>
@@ -194,33 +203,6 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
       </td>
       <td className="px-2 py-3 text-sm text-slate-500 max-w-[140px]">
         <span className="truncate block">{itemVenue(item)}</span>
-      </td>
-      <td className="px-3 py-3 text-sm text-slate-400">
-        <div className="flex items-center gap-2">
-          {isGitHubRepo ? (
-            <Icon name="code" className="text-[16px] text-violet-400" />
-          ) : isWebsite ? (
-            <Icon name="link" className="text-[16px] text-teal-400" />
-          ) : item.source === 'agent' ? (
-            <Icon name="smart_toy" className="text-[16px] text-purple-400" />
-          ) : (
-            <Icon name="person" className="text-[16px] text-slate-300" />
-          )}
-          {!isWebsite && !isGitHubRepo && (
-            <button
-              onClick={e => {
-                e.stopPropagation()
-                navigator.clipboard.writeText(formatCitationBibTeX(item)).catch(console.error)
-                setCopied(true)
-                setTimeout(() => setCopied(false), 1500)
-              }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-blue-500"
-              title="Copy BibTeX citation"
-            >
-              <Icon name={copied ? 'check' : 'content_copy'} className="text-[14px]" />
-            </button>
-          )}
-        </div>
       </td>
     </tr>
   )
@@ -338,12 +320,6 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete, 
           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${statusCfg.class}`}>
             {statusCfg.label}
           </span>
-          {paper.source === 'agent' && (
-            <span className="text-[11px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-              <Icon name="smart_toy" className="text-[11px]" />
-              Agent
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-0.5">
           <button
@@ -1338,7 +1314,6 @@ export default function Library() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [sourceFilter, setSourceFilter] = useState('all')
   const [pdfFilter, setPdfFilter] = useState('all') // 'all' | 'has_pdf' | 'no_pdf'
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -1759,7 +1734,6 @@ export default function Library() {
 
   const allTags = useMemo(() => [...new Set(items.flatMap(p => p.tags || []))].sort(), [items])
   const activeFilterCount = (filterTab !== 'all' && !urlQuery ? 1 : 0)
-    + (sourceFilter !== 'all' ? 1 : 0)
     + (pdfFilter !== 'all' ? 1 : 0)
     + (yearFrom || yearTo ? 1 : 0)
     + (titleFilter ? 1 : 0)
@@ -1795,7 +1769,6 @@ export default function Library() {
       result = result.filter(i => dupIds.has(i.id))
     }
     else if (activeCollection !== 'all') result = result.filter(p => p.collections.includes(activeCollection))
-    if (sourceFilter !== 'all') result = result.filter(p => p.source === sourceFilter)
     if (pdfFilter === 'has_pdf') result = result.filter(p => p.pdfUrl?.includes('/storage/v1/object/public/pdfs/'))
     if (pdfFilter === 'no_pdf') result = result.filter(p => !p.pdfUrl || !p.pdfUrl.includes('/storage/v1/object/public/pdfs/'))
     if (titleFilter) result = result.filter(p => p.title.toLowerCase().includes(titleFilter.toLowerCase()))
@@ -1804,7 +1777,7 @@ export default function Library() {
     if (yearTo) result = result.filter(p => Number(itemYear(p)) <= Number(yearTo))
     if (authorFilter) result = result.filter(p => (p.authors || []).some(a => a === authorFilter))
     return result
-  }, [items, urlQuery, filterTab, activeCollection, sourceFilter, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, authorFilter])
+  }, [items, urlQuery, filterTab, activeCollection, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, authorFilter])
 
   const filtered = useMemo(() => {
     let result = preTagFiltered
@@ -1861,7 +1834,6 @@ export default function Library() {
 
   function clearFilters() {
     if (filterTab !== 'all') setSearchParams(navParams({ status: 'all' }))
-    setSourceFilter('all')
     setPdfFilter('all')
     setYearFrom('')
     setYearTo('')
@@ -1957,33 +1929,6 @@ export default function Library() {
                       {opt.label}
                       <span className={`text-[10px] font-bold px-1 rounded ${
                         filterTab === opt.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
-                      }`}>{opt.count}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Source */}
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-12 flex-shrink-0">Source</span>
-                <div className="flex flex-wrap gap-1">
-                  {[
-                    { id: 'all', label: 'All', count: items.length },
-                    { id: 'human', label: 'Human', count: items.filter(p => p.source === 'human').length },
-                    { id: 'agent', label: 'Agent', count: items.filter(p => p.source === 'agent').length },
-                  ].map(opt => (
-                    <button
-                      key={opt.id}
-                      onClick={() => setSourceFilter(opt.id)}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
-                        sourceFilter === opt.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      {opt.label}
-                      <span className={`text-[10px] font-bold px-1 rounded ${
-                        sourceFilter === opt.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'
                       }`}>{opt.count}</span>
                     </button>
                   ))}
@@ -2337,7 +2282,6 @@ export default function Library() {
                     </span>
                   </th>
                   <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Venue</th>
-                  <th className="px-3 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Source</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

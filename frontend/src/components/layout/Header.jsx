@@ -1141,11 +1141,6 @@ export default function Header() {
                         GitHub
                       </span>
                     )}
-                    {item.itemType === 'paper' && item.source === 'agent' && item.agentRun && (
-                      <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
-                        Run #{item.agentRun.runNumber}
-                      </span>
-                    )}
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5 truncate">
                     {item.itemType === 'website' && (

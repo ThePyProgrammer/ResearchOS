@@ -1147,29 +1147,9 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate, a
             } catch (err) { console.error('Failed to update tags:', err) }
           }}
           allTags={allTags}
-          chipClassName={paper.source === 'agent' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}
+          chipClassName="bg-slate-100 text-slate-600"
         />
       </div>
-
-      {/* Agent provenance */}
-      {paper.source === 'agent' && paper.agentRun && (
-        <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 space-y-1.5">
-          <div className="flex items-center gap-1.5 text-purple-700 text-[11px] font-semibold uppercase tracking-wide">
-            <Icon name="smart_toy" className="text-[13px]" />
-            Provenance
-          </div>
-          <p className="text-xs text-purple-700">
-            Added by <strong>{paper.agentRun.name}</strong> · Run #{paper.agentRun.runNumber}
-          </p>
-          {paper.agentReasoning && (
-            <p className="text-xs text-purple-600 leading-relaxed">{paper.agentReasoning}</p>
-          )}
-          <button className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1 mt-1">
-            View workflow run
-            <Icon name="arrow_forward" className="text-[11px]" />
-          </button>
-        </div>
-      )}
     </div>
   )
 }
