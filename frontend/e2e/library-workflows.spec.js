@@ -112,8 +112,32 @@ async function mockApi(page) {
 }
 
 
-test.beforeEach(async ({ page }) => {
-  await mockApi(page)
+test.beforeEach(async ({ context }) => {
+  // Install mocks before popup pages issue their first API requests.
+  await mockApi(context)
+})
+
+test('notes load in a batch and can be searched without opening paper folders', async ({ page }) => {
+  let batchCount = 0
+  const individualNoteReads = []
+  page.on('request', request => {
+    if (/\/api\/(papers|websites|github-repos)\/[^/]+\/notes$/.test(new URL(request.url()).pathname)) {
+      individualNoteReads.push(request.url())
+    }
+  })
+  await page.route('**/api/notes/batch', async route => {
+    batchCount++
+    const { items } = route.request().postDataJSON()
+    return route.fulfill({ json: items.map(item => ({ ...item, notes: item.id === 'p_1' ? [{
+      id: 'note_batch', paperId: 'p_1', name: 'Batched summary', type: 'file',
+      content: '<p>Distinctive batched content</p>', createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    }] : [] })) })
+  })
+  await page.goto('/library/notes')
+  await page.getByPlaceholder('Search notes…').fill('Distinctive batched')
+  await expect(page.getByText('Batched summary')).toBeVisible()
+  expect(batchCount).toBe(1)
+  expect(individualNoteReads).toEqual([])
 })
 
 test('library detail action opens paper page', async ({ page, context }) => {

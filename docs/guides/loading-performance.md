@@ -1,5 +1,25 @@
 # Library loading investigation
 
+## Notes page
+
+The library Notes page now uses `POST /api/notes/batch` rather than one notes
+request per paper, website, or repository. Requests contain up to 100 typed
+sources, with at most three concurrent requests. The backend groups sources by
+type and reads notes in 500-row pages with stable ordering. For 100 papers with
+fewer than 500 total notes, this replaces 100 notes queries with one.
+
+The response includes empty source folders and complete note content, preserving
+search, wiki links, and graph data. Initial loading and Copilot refreshes share
+this path. Loading failures are visible and retryable; late responses from a
+previous library cannot replace current notes. Synchronous notes routes run in
+FastAPI's worker pool instead of blocking the event loop.
+
+`backend/migrations/023_note_source_indexes.sql` supplies optional indexes for
+the three note source columns. It is not required by the new endpoint and has
+not been applied to a live database. Live Supabase latency has not been measured.
+The separate project Notes IDE and full note-content payload sizes remain
+potential optimization targets.
+
 ## Checkbox batch actions
 
 Status changes and deletes now use `POST /api/batch/items`, a typed endpoint

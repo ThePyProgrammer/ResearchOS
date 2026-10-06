@@ -1,11 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { batchApi, chatApi, librariesApi, papersApi } from './api'
+import { batchApi, chatApi, librariesApi, notesApi, papersApi } from './api'
 
 
 describe('api service wrapper', () => {
   beforeEach(() => {
     global.fetch = vi.fn()
+  })
+
+  it('loads notes in bounded batches and preserves source order', async () => {
+    const sources = Array.from({ length: 301 }, (_, i) => ({ id: `p${i}`, itemType: 'paper' }))
+    const pending = []
+    global.fetch.mockImplementation((_url, options) => new Promise(resolve => {
+      const { items } = JSON.parse(options.body)
+      expect(items.length).toBeLessThanOrEqual(100)
+      pending.push(() => resolve({ ok: true, status: 200, json: async () => items.map(item => ({ ...item, notes: [] })) }))
+    }))
+    const request = notesApi.listForItems(sources)
+    expect(global.fetch).toHaveBeenCalledTimes(3)
+    pending.splice(0).reverse().forEach(resolve => resolve())
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4))
+    pending.splice(0).forEach(resolve => resolve())
+    expect((await request).map(source => source.id)).toEqual(sources.map(source => source.id))
+  })
+
+  it('surfaces failed note batches instead of treating them as empty folders', async () => {
+    global.fetch.mockRejectedValue(new Error('Notes unavailable'))
+    await expect(notesApi.listForItems([{ id: 'p1' }])).rejects.toThrow('Notes unavailable')
+    expect(await notesApi.listForItems([])).toEqual([])
   })
 
   it('chunks large mutations and preserves successes when a chunk fails', async () => {

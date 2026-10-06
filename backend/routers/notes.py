@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from models.note import NoteCreate, NoteUpdate
+from models.note_batch import ItemNotes, NoteBatchRequest
 from services import note_service
 
 logger = logging.getLogger(__name__)
@@ -14,18 +15,23 @@ router = APIRouter(prefix="/api", tags=["notes"])
 NOT_FOUND = {"error": "not_found", "detail": "Note not found"}
 
 
+@router.post('/notes/batch', response_model=list[ItemNotes])
+def list_item_notes(data: NoteBatchRequest) -> list[ItemNotes]:
+    return note_service.list_item_notes(data)
+
+
 # ---------------------------------------------------------------------------
 # Paper notes
 # ---------------------------------------------------------------------------
 
 @router.get("/papers/{paper_id}/notes")
-async def list_paper_notes(paper_id: str):
+def list_paper_notes(paper_id: str):
     notes = note_service.list_notes(paper_id=paper_id)
     return JSONResponse([n.model_dump(by_alias=True) for n in notes])
 
 
 @router.post("/papers/{paper_id}/notes", status_code=201)
-async def create_paper_note(paper_id: str, data: NoteCreate):
+def create_paper_note(paper_id: str, data: NoteCreate):
     note = note_service.create_note(data, paper_id=paper_id)
     return JSONResponse(note.model_dump(by_alias=True), status_code=201)
 
@@ -54,13 +60,13 @@ def generate_paper_notes(paper_id: str, data: GenerateNotesRequest):
 # ---------------------------------------------------------------------------
 
 @router.get("/websites/{website_id}/notes")
-async def list_website_notes(website_id: str):
+def list_website_notes(website_id: str):
     notes = note_service.list_notes(website_id=website_id)
     return JSONResponse([n.model_dump(by_alias=True) for n in notes])
 
 
 @router.post("/websites/{website_id}/notes", status_code=201)
-async def create_website_note(website_id: str, data: NoteCreate):
+def create_website_note(website_id: str, data: NoteCreate):
     note = note_service.create_note(data, website_id=website_id)
     return JSONResponse(note.model_dump(by_alias=True), status_code=201)
 
@@ -85,13 +91,13 @@ def generate_website_notes(website_id: str, data: GenerateNotesRequest):
 # ---------------------------------------------------------------------------
 
 @router.get("/github-repos/{repo_id}/notes")
-async def list_github_repo_notes(repo_id: str):
+def list_github_repo_notes(repo_id: str):
     notes = note_service.list_notes(github_repo_id=repo_id)
     return JSONResponse([n.model_dump(by_alias=True) for n in notes])
 
 
 @router.post("/github-repos/{repo_id}/notes", status_code=201)
-async def create_github_repo_note(repo_id: str, data: NoteCreate):
+def create_github_repo_note(repo_id: str, data: NoteCreate):
     note = note_service.create_note(data, github_repo_id=repo_id)
     return JSONResponse(note.model_dump(by_alias=True), status_code=201)
 
@@ -116,13 +122,13 @@ def generate_github_repo_notes(repo_id: str, data: GenerateNotesRequest):
 # ---------------------------------------------------------------------------
 
 @router.get("/projects/{project_id}/notes")
-async def list_project_notes(project_id: str):
+def list_project_notes(project_id: str):
     notes = note_service.list_notes(project_id=project_id)
     return JSONResponse([n.model_dump(by_alias=True) for n in notes])
 
 
 @router.post("/projects/{project_id}/notes", status_code=201)
-async def create_project_note(project_id: str, data: NoteCreate):
+def create_project_note(project_id: str, data: NoteCreate):
     note = note_service.create_note(data, project_id=project_id)
     return JSONResponse(note.model_dump(by_alias=True), status_code=201)
 
@@ -132,7 +138,7 @@ async def create_project_note(project_id: str, data: NoteCreate):
 # ---------------------------------------------------------------------------
 
 @router.patch("/notes/{note_id}")
-async def update_note(note_id: str, data: NoteUpdate):
+def update_note(note_id: str, data: NoteUpdate):
     note = note_service.update_note(note_id, data)
     if note is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -140,7 +146,7 @@ async def update_note(note_id: str, data: NoteUpdate):
 
 
 @router.delete("/notes/{note_id}", status_code=204)
-async def delete_note(note_id: str):
+def delete_note(note_id: str):
     deleted = note_service.delete_note(note_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -151,12 +157,12 @@ async def delete_note(note_id: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/libraries/{library_id}/notes")
-async def list_library_notes(library_id: str):
+def list_library_notes(library_id: str):
     notes = note_service.list_notes(library_id=library_id)
     return JSONResponse([n.model_dump(by_alias=True) for n in notes])
 
 
 @router.post("/libraries/{library_id}/notes", status_code=201)
-async def create_library_note(library_id: str, data: NoteCreate):
+def create_library_note(library_id: str, data: NoteCreate):
     note = note_service.create_note(data, library_id=library_id)
     return JSONResponse(note.model_dump(by_alias=True), status_code=201)

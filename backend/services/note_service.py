@@ -10,6 +10,7 @@ from agents.prompts import NOTE_GENERATION
 from services.cost_service import record_openai_usage
 
 from models.note import Note, NoteCreate, NoteUpdate
+from models.note_batch import ItemNotes, NoteBatchRequest
 from services.db import get_client
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,31 @@ _AUTO_FOLDER_NAME = "AI Notes"
 # ---------------------------------------------------------------------------
 # Core CRUD
 # ---------------------------------------------------------------------------
+
+def list_item_notes(data: NoteBatchRequest) -> list[ItemNotes]:
+    """Read up to 100 sources by type, rather than querying once per source."""
+    sources = {(item.item_type, item.id): ItemNotes(**item.model_dump()) for item in data.items}
+    db = get_client()
+    for item_type, field in (
+        ('paper', 'paper_id'), ('website', 'website_id'), ('github_repo', 'github_repo_id'),
+    ):
+        ids = [item.id for item in data.items if item.item_type == item_type]
+        if not ids:
+            continue
+        offset = 0
+        while True:
+            rows = db.table(_TABLE).select('*').in_(field, ids).order('id').range(offset, offset + 499).execute().data
+            for row in rows:
+                note = Note.model_validate(row)
+                sources[(item_type, getattr(note, field))].notes.append(note)
+            if len(rows) < 500:
+                break
+            offset += len(rows)
+    for source in sources.values():
+        source.notes.sort(key=lambda note: (not note.is_pinned, note.type != 'folder', note.name.lower()))
+    logger.info('Loaded %d notes for %d sources in batch', sum(len(s.notes) for s in sources.values()), len(sources))
+    return list(sources.values())
+
 
 def list_notes(
     paper_id: Optional[str] = None,

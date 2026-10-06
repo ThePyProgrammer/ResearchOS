@@ -229,6 +229,28 @@ export const projectsApi = {
 }
 
 export const notesApi = {
+  listForItems: async (items) => {
+    const chunks = []
+    for (let offset = 0; offset < items.length; offset += 100) chunks.push(items.slice(offset, offset + 100))
+    const results = new Array(chunks.length)
+    let next = 0
+    let failed = false
+    const worker = async () => {
+      while (!failed && next < chunks.length) {
+        const index = next++
+        try {
+          results[index] = await apiFetch('/notes/batch', {
+            method: 'POST', body: { items: chunks[index].map(item => ({ id: item.id, itemType: item.itemType || 'paper' })) },
+          })
+        } catch (err) {
+          failed = true
+          throw err
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(3, chunks.length) }, worker))
+    return results.flat()
+  },
   list: (paperId) => apiFetch(`/papers/${paperId}/notes`),
   create: (paperId, data) => apiFetch(`/papers/${paperId}/notes`, { method: 'POST', body: data }),
   update: (noteId, data) => apiFetch(`/notes/${noteId}`, { method: 'PATCH', body: data }),

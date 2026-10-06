@@ -21,6 +21,23 @@ function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
 }
 
+async function loadNotesForSources(papers, websites, repos) {
+  const sources = [
+    ...papers.map(item => ({ id: item.id, itemType: 'paper' })),
+    ...websites.map(item => ({ id: item.id, itemType: 'website' })),
+    ...repos.map(item => ({ id: item.id, itemType: 'github_repo' })),
+  ]
+  const groups = await notesApi.listForItems(sources)
+  const notesMap = {}
+  const loadedMap = {}
+  for (const group of groups) {
+    const key = `${group.itemType === 'github_repo' ? 'github' : group.itemType}:${group.id}`
+    notesMap[key] = group.notes
+    loadedMap[key] = true
+  }
+  return { notesMap, loadedMap }
+}
+
 // ─── Toolbar button ───────────────────────────────────────────────────────────
 function ToolBtn({ icon, label, active, onClick }) {
   return (
@@ -1177,7 +1194,11 @@ function BacklinksPanel({ backlinks, onNoteClick }) {
 
 // ─── Main Notes IDE page ──────────────────────────────────────────────────────
 export default function LibraryNotes() {
-  const { activeLibraryId, collections } = useLibrary()
+  const { activeLibraryId, collections, loading: libraryLoading } = useLibrary()
+  const loadEpochRef = useRef(0)
+  const loadedLibraryRef = useRef(undefined)
+  const refreshRequestRef = useRef(0)
+  const [reloadKey, setReloadKey] = useState(0)
 
   // ── Data ───────────────────────────────────────────────────────────────────
   const [papers, setPapers] = useState([])
@@ -1300,7 +1321,7 @@ export default function LibraryNotes() {
       }
     }
     return result
-  }, [libraryNotes, itemNotes])
+  }, [libraryNotes, itemNotes, papers, websites, githubRepos])
 
   // ── Map each sourceKey → its collection IDs (for the graph options panel) ──
   const sourceKeyCollections = useMemo(() => {
@@ -1331,43 +1352,49 @@ export default function LibraryNotes() {
 
   // ── Load initial data ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!activeLibraryId) return
+    const epoch = ++loadEpochRef.current
+    if (libraryLoading) return
     setLoading(true)
     setError(null)
+    if (loadedLibraryRef.current !== activeLibraryId) {
+      loadedLibraryRef.current = activeLibraryId
+      setItemNotes({})
+      setLoadedItems({})
+      setLibraryNotes([])
+      setPapers([])
+      setWebsites([])
+      setGithubRepos([])
+      setOpenTabs([])
+      setActiveTabId(null)
+      setDirty(false)
+      clearTimeout(saveTimerRef.current)
+    }
+    if (!activeLibraryId) {
+      setLoading(false)
+      return
+    }
     Promise.all([
-      papersApi.list({ library_id: activeLibraryId }).catch(() => []),
-      websitesApi.list({ library_id: activeLibraryId }).catch(() => []),
-      githubReposApi.list({ library_id: activeLibraryId }).catch(() => []),
-      notesApi.listForLibrary(activeLibraryId).catch(() => []),
-    ]).then(([paps, sites, repos, libNotes]) => {
-      setPapers(paps || [])
-      setWebsites(sites || [])
-      setGithubRepos(repos || [])
-      setLibraryNotes(libNotes || [])
-
-      // Eagerly load all item notes in the background so they are available
-      // for wiki-link suggestions and the graph view even before folders are
-      // expanded in the tree.
-      const paperKeys   = (paps   || []).map(p => ({ key: `paper:${p.id}`,   fetch: () => notesApi.list(p.id) }))
-      const websiteKeys = (sites  || []).map(s => ({ key: `website:${s.id}`, fetch: () => notesApi.listForWebsite(s.id) }))
-      const repoKeys    = (repos  || []).map(r => ({ key: `github:${r.id}`,  fetch: () => notesApi.listForGitHubRepo(r.id) }))
-      const allItems    = [...paperKeys, ...websiteKeys, ...repoKeys]
-
-      Promise.allSettled(allItems.map(({ fetch }) => fetch())).then(results => {
-        const notesMap = {}
-        const loadedMap = {}
-        results.forEach((result, i) => {
-          const key = allItems[i].key
-          notesMap[key]  = result.status === 'fulfilled' ? (result.value || []) : []
-          loadedMap[key] = true
-        })
-        setItemNotes(prev => ({ ...prev, ...notesMap }))
-        setLoadedItems(prev => ({ ...prev, ...loadedMap }))
-      })
+      papersApi.list({ library_id: activeLibraryId }),
+      websitesApi.list({ library_id: activeLibraryId }),
+      githubReposApi.list({ library_id: activeLibraryId }),
+      notesApi.listForLibrary(activeLibraryId),
+    ]).then(async ([paps, sites, repos, libNotes]) => {
+      if (loadEpochRef.current !== epoch) return
+      const { notesMap, loadedMap } = await loadNotesForSources(paps, sites, repos)
+      if (loadEpochRef.current !== epoch) return
+      setPapers(paps)
+      setWebsites(sites)
+      setGithubRepos(repos)
+      setLibraryNotes(libNotes)
+      setItemNotes(notesMap)
+      setLoadedItems(loadedMap)
     }).catch(err => {
-      setError(err.message)
-    }).finally(() => setLoading(false))
-  }, [activeLibraryId])
+      if (loadEpochRef.current === epoch) setError(err.message)
+    }).finally(() => {
+      if (loadEpochRef.current === epoch) setLoading(false)
+    })
+    return () => { loadEpochRef.current++ }
+  }, [activeLibraryId, libraryLoading, reloadKey])
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function getSourceNotes(source) {
@@ -1601,17 +1628,18 @@ export default function LibraryNotes() {
   // ── Load item notes lazily ─────────────────────────────────────────────────
   async function loadItemNotes(sourceKey) {
     if (loadedItems[sourceKey]) return
+    const epoch = loadEpochRef.current
     const [type, id] = sourceKey.split(':')
     try {
       let notes = []
       if (type === 'paper') notes = await notesApi.list(id)
       else if (type === 'website') notes = await notesApi.listForWebsite(id)
       else if (type === 'github') notes = await notesApi.listForGitHubRepo(id)
+      if (loadEpochRef.current !== epoch) return
       setItemNotes(prev => ({ ...prev, [sourceKey]: notes || [] }))
-    } catch (err) {
-      console.error('Failed to load notes for', sourceKey, err)
-    } finally {
       setLoadedItems(prev => ({ ...prev, [sourceKey]: true }))
+    } catch (err) {
+      if (loadEpochRef.current === epoch) setError(`Failed to load notes: ${err.message}`)
     }
   }
 
@@ -1739,33 +1767,26 @@ export default function LibraryNotes() {
   }
 
   // ── Copilot notes-changed: refresh the affected source after accept ─────────
-  async function handleCopilotNotesChanged() {    if (!activeLibraryId) return
-    // Re-fetch library notes
+  async function handleCopilotNotesChanged() {
+    if (!activeLibraryId) return
+    const epoch = loadEpochRef.current
+    const request = ++refreshRequestRef.current
     try {
-      const libNotes = await notesApi.listForLibrary(activeLibraryId)
-      setLibraryNotes(libNotes || [])
-    } catch { /* ignore */ }
-    // Re-fetch all item notes
-    const paperKeys   = papers.map(p   => ({ key: `paper:${p.id}`,   fetch: () => notesApi.list(p.id) }))
-    const websiteKeys = websites.map(w => ({ key: `website:${w.id}`, fetch: () => notesApi.listForWebsite(w.id) }))
-    const repoKeys    = githubRepos.map(r => ({ key: `github:${r.id}`, fetch: () => notesApi.listForGitHubRepo(r.id) }))
-    const allItems    = [...paperKeys, ...websiteKeys, ...repoKeys]
-    Promise.allSettled(allItems.map(({ fetch }) => fetch())).then(results => {
-      const notesMap = {}
-      const loadedMap = {}
-      results.forEach((result, i) => {
-        const key = allItems[i].key
-        notesMap[key]  = result.status === 'fulfilled' ? (result.value || []) : []
-        loadedMap[key] = true
-      })
-      setItemNotes(prev => ({ ...prev, ...notesMap }))
-      setLoadedItems(prev => ({ ...prev, ...loadedMap }))
-    })
+      const [libNotes, { notesMap, loadedMap }] = await Promise.all([
+        notesApi.listForLibrary(activeLibraryId),
+        loadNotesForSources(papers, websites, githubRepos),
+      ])
+      if (loadEpochRef.current !== epoch || refreshRequestRef.current !== request) return
+      setLibraryNotes(libNotes)
+      setItemNotes(notesMap)
+      setLoadedItems(loadedMap)
+      setError(null)
+    } catch (err) {
+      if (loadEpochRef.current === epoch && refreshRequestRef.current === request) {
+        setError(`Could not refresh notes: ${err.message}`)
+      }
+    }
   }
-
-  // ── Suggestion tabs (opened by Notes Copilot) ──────────────────────────────
-  // Stores accept / reject handlers keyed by suggestion id so the tab renderer
-  // can call back into NotesCopilotPanel without stale-closure issues on state.
   const suggestionActionsRef = useRef({})
 
   function handleSuggestionStatusChange(suggestionId, status) {
@@ -1937,7 +1958,10 @@ export default function LibraryNotes() {
               <span className="text-[12px]">Loading…</span>
             </div>
           ) : error ? (
-            <p className="px-3 py-4 text-[11px] text-red-500">{error}</p>
+            <div role="alert" className="px-3 py-4 text-[11px] text-red-500">
+              <p>{error}</p>
+              <button onClick={() => setReloadKey(key => key + 1)} className="mt-2 underline">Retry loading notes</button>
+            </div>
           ) : noteSearch.trim().length >= 2 ? (
             /* ── Search results ── */
             noteSearchResults.length === 0 ? (
