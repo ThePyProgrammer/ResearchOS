@@ -107,8 +107,8 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
           onDoubleClick={e => e.stopPropagation()}
         />
       </td>
-      <td className="px-2 py-3">
-        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${status.class}`}>
+      <td className="w-24 min-w-[96px] px-2 py-3">
+        <span className={`inline-flex whitespace-nowrap text-[11px] font-medium px-2 py-0.5 rounded-full ${status.class}`}>
           {status.label}
         </span>
       </td>
@@ -126,11 +126,11 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
                 if (e.key === 'Escape') setEditingTitle(false)
               }}
               onBlur={saveTitle}
-              className="text-sm font-medium text-slate-800 bg-white border border-blue-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 flex-1 min-w-0"
+              className="text-[13px] font-medium text-slate-800 bg-white border border-blue-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 flex-1 min-w-0"
             />
           ) : (
             <span
-              className="text-sm font-medium text-slate-800 line-clamp-1"
+              className="text-[13px] font-medium text-slate-800 line-clamp-1"
               onDoubleClick={e => { e.stopPropagation(); setTitleDraft(item.title); setEditingTitle(true) }}
               title="Double-click to edit"
             >
@@ -169,10 +169,10 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
           )}
         </div>
       </td>
-      <td className="px-2 py-3 text-sm text-slate-500 max-w-[160px]">
+      <td className="px-2 py-3 text-[13px] text-slate-500 max-w-[160px]">
         <span className="truncate block">{formatAuthors(item.authors)}</span>
       </td>
-      <td className="px-2 py-3 text-sm text-slate-500">
+      <td className="px-2 py-3 text-[13px] text-slate-500">
         {editingYear ? (
           <input
             autoFocus
@@ -185,7 +185,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
               if (e.key === 'Escape') setEditingYear(false)
             }}
             onBlur={saveYear}
-            className="w-36 px-1 py-0.5 text-sm border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="w-36 px-1 py-0.5 text-[13px] border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/30"
           />
         ) : (
           <span
@@ -200,9 +200,6 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
             {itemYear(item)}
           </span>
         )}
-      </td>
-      <td className="px-2 py-3 text-sm text-slate-500 max-w-[140px]">
-        <span className="truncate block">{itemVenue(item)}</span>
       </td>
     </tr>
   )
@@ -2257,7 +2254,7 @@ export default function Library() {
                       onChange={toggleSelectAll}
                     />
                   </th>
-                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors" onClick={() => toggleSort('status')}>
+                  <th className="w-24 min-w-[96px] px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 transition-colors" onClick={() => toggleSort('status')}>
                     <span className="flex items-center gap-1">
                       Status
                       {sortKey === 'status' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
@@ -2281,7 +2278,6 @@ export default function Library() {
                       {sortKey === 'date' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
                     </span>
                   </th>
-                  <th className="px-2 py-2.5 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Venue</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
