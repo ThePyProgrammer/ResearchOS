@@ -300,6 +300,9 @@ export const labsApi = {
   addMember: (id, authorId) => apiFetch(`/labs/${encodeURIComponent(id)}/members/${encodeURIComponent(authorId)}`, { method: 'PUT' }),
   removeMember: (id, authorId) => apiFetch(`/labs/${encodeURIComponent(id)}/members/${encodeURIComponent(authorId)}`, { method: 'DELETE' }),
   papers: (id, params = {}) => apiFetch(`/labs/${encodeURIComponent(id)}/papers?${new URLSearchParams(params)}`),
+  paperOptions: (id, params = {}) => apiFetch(`/labs/${encodeURIComponent(id)}/paper-options?${new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, value]) => value != null)))}`),
+  addPapers: (id, paperIds, authorId = null) => apiFetch(`/labs/${encodeURIComponent(id)}/papers`, { method: 'POST', body: { paperIds, authorId } }),
+  removePaper: (id, paperId) => apiFetch(`/labs/${encodeURIComponent(id)}/papers/${encodeURIComponent(paperId)}`, { method: 'DELETE' }),
 }
 
 export const authorsApi = {

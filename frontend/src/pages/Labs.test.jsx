@@ -7,6 +7,7 @@ import { labsApi } from '../services/api'
 vi.mock('../services/api', () => ({ labsApi: {
   list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(),
   members: vi.fn(), memberOptions: vi.fn(), addMember: vi.fn(), removeMember: vi.fn(), papers: vi.fn(),
+  paperOptions: vi.fn(), addPapers: vi.fn(), removePaper: vi.fn(),
 } }))
 
 const lab = { id: 'lab_1', name: 'Language Lab', description: 'Language research', createdAt: '2026-10-07' }
@@ -24,6 +25,9 @@ beforeEach(() => {
   labsApi.memberOptions.mockResolvedValue([{ authorId: 'a_2', name: 'John Smith' }])
   labsApi.addMember.mockResolvedValue({ authorId: 'a_2', name: 'John Smith' })
   labsApi.removeMember.mockResolvedValue(null)
+  labsApi.paperOptions.mockResolvedValue(page([{ ...paper, id: 'p_2', title: 'Available paper' }]))
+  labsApi.addPapers.mockResolvedValue({ addedCount: 1 })
+  labsApi.removePaper.mockResolvedValue(null)
 })
 
 describe('Labs', () => {
@@ -71,14 +75,22 @@ describe('Labs', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Add John Smith' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not add author')
     fireEvent.click(screen.getByRole('button', { name: 'Add John Smith' }))
-    await screen.findByText('John Smith added.')
+    await screen.findByText('John Smith added as a member.')
+    const checkbox = await screen.findByRole('checkbox', { name: 'Select Available paper' })
+    expect(checkbox).not.toBeChecked()
+    expect(labsApi.addPapers).not.toHaveBeenCalled()
+    expect(labsApi.papers).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(labsApi.members).toHaveBeenCalledTimes(2))
+    expect(labsApi.paperOptions).toHaveBeenCalledWith('lab_1', { search: '', author_id: 'a_2', offset: 0, limit: 25 })
+    fireEvent.click(checkbox)
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected papers (1)' }))
     await waitFor(() => expect(labsApi.papers).toHaveBeenCalledTimes(2))
-    expect(labsApi.members).toHaveBeenCalledTimes(2)
+    expect(labsApi.addPapers).toHaveBeenCalledWith('lab_1', ['p_2'], 'a_2')
     expect(labsApi.get).toHaveBeenCalledTimes(1)
     expect(labsApi.list).toHaveBeenCalledTimes(1)
   })
 
-  it('paginates papers independently and resets to the first page after member removal', async () => {
+  it('keeps the paper page after member removal and resets only after unlinking a paper', async () => {
     labsApi.papers.mockResolvedValueOnce(page([paper], 25, 26)).mockResolvedValueOnce(page([paper], 25, 26, 25)).mockResolvedValue(page([], 25))
     mount()
     await screen.findByRole('link', { name: paper.title })
@@ -86,8 +98,13 @@ describe('Labs', () => {
     await waitFor(() => expect(labsApi.papers).toHaveBeenLastCalledWith('lab_1', { search: '', offset: 25, limit: 25 }))
     await screen.findByText('26–26 of 26')
     fireEvent.click(screen.getByRole('button', { name: 'Remove Jane Smith' }))
+    await waitFor(() => expect(labsApi.members).toHaveBeenCalledTimes(2))
+    expect(labsApi.papers).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('26–26 of 26')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: `Remove paper ${paper.title}` }))
     await waitFor(() => expect(labsApi.papers).toHaveBeenLastCalledWith('lab_1', { search: '', offset: 0, limit: 25 }))
     expect(labsApi.removeMember).toHaveBeenCalledWith('lab_1', 'a_1')
+    expect(labsApi.removePaper).toHaveBeenCalledWith('lab_1', 'p_1')
   })
 
   it('keeps edit form values on error and updates metadata without reloading papers', async () => {
@@ -128,8 +145,55 @@ describe('Labs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete lab' }))
     expect(labsApi.remove).not.toHaveBeenCalled()
     expect(screen.getByText(/Author profiles and papers will be kept/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' })))
     await screen.findByText('Select a lab to explore its work')
     expect(labsApi.remove).toHaveBeenCalledWith('lab_1')
+  })
+
+  it('adds an author without any papers when optional selection is skipped', async () => {
+    mount()
+    fireEvent.click(await screen.findByRole('button', { name: 'Add members' }))
+    fireEvent.change(screen.getByLabelText('Search authors'), { target: { value: 'John' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Add John Smith' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Done without adding papers' }))
+    expect(labsApi.addMember).toHaveBeenCalledWith('lab_1', 'a_2')
+    expect(labsApi.addPapers).not.toHaveBeenCalled()
+    expect(labsApi.papers).toHaveBeenCalledTimes(1)
+  })
+
+  it('adds papers without members, retains selection across pages/search, and retries failed saves', async () => {
+    labsApi.members.mockResolvedValue(page([], 50))
+    labsApi.paperOptions.mockImplementation((id, { offset, search }) => Promise.resolve(search
+      ? page([{ ...paper, id: 'p_3', title: 'Another available paper' }])
+      : page([{ ...paper, id: offset ? 'p_3' : 'p_2', title: offset ? 'Another available paper' : 'Available paper' }], 25, 26, offset)))
+    labsApi.addPapers.mockRejectedValueOnce(new Error('Save selection failed')).mockResolvedValue({ addedCount: 2 })
+    mount()
+    fireEvent.click(await screen.findByRole('button', { name: 'Add papers' }))
+    const first = await screen.findByRole('checkbox', { name: 'Select Available paper' })
+    expect(first).not.toBeChecked()
+    fireEvent.click(first)
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Available papers pagination' })).getByRole('button', { name: 'Next' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Another available paper' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search papers to add' }), { target: { value: 'Another' } })
+    await waitFor(() => expect(labsApi.paperOptions).toHaveBeenLastCalledWith('lab_1', { search: 'Another', author_id: undefined, offset: 0, limit: 25 }))
+    expect(await screen.findByRole('checkbox', { name: 'Select Another available paper' })).toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected papers (2)' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Save selection failed')
+    expect(screen.getByRole('button', { name: 'Add selected papers (2)' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected papers (2)' }))
+    await waitFor(() => expect(labsApi.papers).toHaveBeenCalledTimes(2))
+    expect(labsApi.addPapers).toHaveBeenLastCalledWith('lab_1', ['p_2', 'p_3'], null)
+    expect(labsApi.addMember).not.toHaveBeenCalled()
+    expect(labsApi.members).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers paper selection for an existing member without adding the member again', async () => {
+    mount()
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose papers by Jane Smith' }))
+    await screen.findByRole('checkbox', { name: 'Select Available paper' })
+    expect(labsApi.paperOptions).toHaveBeenCalledWith('lab_1', { search: '', author_id: 'a_1', offset: 0, limit: 25 })
+    expect(labsApi.addMember).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(labsApi.addPapers).not.toHaveBeenCalled()
   })
 })

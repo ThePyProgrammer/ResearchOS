@@ -68,3 +68,15 @@ class LabPaperPage(CamelModel):
     total: int
     limit: int
     offset: int
+
+
+RecordId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+
+
+class LabPaperSelection(CamelModel):
+    paper_ids: list[RecordId] = Field(min_length=1, max_length=100)
+    author_id: Optional[RecordId] = None
+
+
+class LabPaperAddResult(CamelModel):
+    added_count: int

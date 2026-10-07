@@ -8,11 +8,16 @@ from postgrest.exceptions import APIError
 
 from models.lab import (
     Lab, LabCreate, LabMember, LabMemberPage, LabPage,
-    LabPaper, LabPaperPage, LabUpdate,
+    LabPaper, LabPaperAddResult, LabPaperPage, LabPaperSelection, LabUpdate,
 )
 from services.db import get_client
 
 logger = logging.getLogger(__name__)
+
+
+def _explicit_migration_required() -> None:
+    logger.warning("Explicit Labs schema unavailable; apply 026_explicit_lab_papers.sql")
+    raise HTTPException(503, detail="Labs needs migration 026_explicit_lab_papers.sql. Apply it in Supabase and retry.")
 
 
 def _contains(value: str) -> str:
@@ -94,55 +99,110 @@ def member_options(lab_id: str, search: str, limit: int = 20) -> Optional[list[L
 
 
 def add_member(lab_id: str, author_id: str) -> Optional[LabMember]:
-    if get_lab(lab_id) is None:
-        return None
-    result = get_client().table("authors").select("id,name,orcid").eq("id", author_id).execute()
-    if not result.data:
-        raise HTTPException(404, detail={"error": "not_found", "detail": "Author not found"})
-    author = result.data[0]
     try:
-        get_client().table("lab_members").upsert(
-            {"lab_id": lab_id, "author_id": author_id},
-            on_conflict="lab_id,author_id", ignore_duplicates=True,
-        ).execute()
+        result = get_client().rpc("add_lab_member_only", {
+            "p_lab_id": lab_id, "p_author_id": author_id,
+        }).execute()
     except APIError as exc:
-        if exc.code != "23503":
-            raise
-        # A lab/author can be deleted between validation and insertion.
-        logger.warning("Membership target disappeared: lab=%s author=%s", lab_id, author_id)
-        raise HTTPException(404, detail={"error": "not_found", "detail": "Lab or author not found"}) from exc
+        if exc.code == "PGRST202":
+            _explicit_migration_required()
+        if exc.code == "P0002":
+            raise HTTPException(404, detail={"error": "not_found", "detail": "Author not found"}) from exc
+        raise
+    if result.data is None:
+        return None
     logger.info("Added author %s to lab %s", author_id, lab_id)
-    return LabMember(author_id=author["id"], name=author["name"], orcid=author.get("orcid"))
+    return LabMember.model_validate(result.data)
 
 
 def remove_member(lab_id: str, author_id: str) -> bool:
-    if get_lab(lab_id) is None:
+    try:
+        result = get_client().rpc("remove_lab_member_only", {
+            "p_lab_id": lab_id, "p_author_id": author_id,
+        }).execute()
+    except APIError as exc:
+        if exc.code == "PGRST202":
+            _explicit_migration_required()
+        raise
+    if not result.data:
         return False
-    get_client().table("lab_members").delete().eq("lab_id", lab_id).eq("author_id", author_id).execute()
     logger.info("Removed author %s from lab %s", author_id, lab_id)
     return True
 
 
 def list_papers(lab_id: str, search: str = "", limit: int = 25, offset: int = 0) -> Optional[LabPaperPage]:
     try:
-        result = get_client().rpc("get_lab_papers_page", {
+        result = get_client().rpc("get_lab_selected_papers_page", {
             "p_lab_id": lab_id, "p_search": search.strip(), "p_limit": limit, "p_offset": offset,
         }).execute()
     except APIError as exc:
         if exc.code != "PGRST202":
             raise
         logger.warning(
-            "get_lab_papers_page unavailable in PostgREST; using paginated view. "
-            "Apply 025_lab_page_functions.sql to restore the single-call RPC."
+            "get_lab_selected_papers_page unavailable in PostgREST; using explicit paper view. "
+            "Apply 026_explicit_lab_papers.sql to restore the single-call RPC."
         )
-        query = (get_client().table("lab_papers")
+        query = (get_client().table("lab_selected_papers")
                  .select("id,title,authors,year,venue,status,library_id,library_name", count="exact")
                  .eq("lab_id", lab_id))
         if search.strip():
             query = query.ilike("title", _contains(search))
-        result = query.order("year", desc=True).order("id").range(offset, offset + limit - 1).execute()
+        try:
+            result = query.order("year", desc=True).order("id").range(offset, offset + limit - 1).execute()
+        except APIError as view_exc:
+            if view_exc.code in ("PGRST205", "42P01"):
+                _explicit_migration_required()
+            raise
         if result.count == 0 and get_lab(lab_id) is None:
             return None
         return LabPaperPage(items=[LabPaper.model_validate(row) for row in result.data],
                             total=result.count, limit=limit, offset=offset)
     return LabPaperPage.model_validate(result.data) if result.data is not None else None
+
+
+def paper_options(lab_id: str, search: str = "", author_id: Optional[str] = None,
+                  limit: int = 25, offset: int = 0) -> Optional[LabPaperPage]:
+    try:
+        result = get_client().rpc("get_lab_paper_options", {
+            "p_lab_id": lab_id, "p_search": search.strip(), "p_author_id": author_id,
+            "p_limit": limit, "p_offset": offset,
+        }).execute()
+    except APIError as exc:
+        if exc.code == "PGRST202":
+            _explicit_migration_required()
+        raise
+    return LabPaperPage.model_validate(result.data) if result.data is not None else None
+
+
+def add_papers(lab_id: str, data: LabPaperSelection) -> Optional[LabPaperAddResult]:
+    try:
+        result = get_client().rpc("add_lab_papers", {
+            "p_lab_id": lab_id, "p_paper_ids": list(dict.fromkeys(data.paper_ids)),
+            "p_author_id": data.author_id,
+        }).execute()
+    except APIError as exc:
+        if exc.code == "PGRST202":
+            _explicit_migration_required()
+        if exc.code == "P0002":
+            raise HTTPException(404, detail={"error": "not_found", "detail": "One or more selected papers no longer exist."}) from exc
+        if exc.code == "22023":
+            raise HTTPException(422, detail="Select up to 100 papers linked to the chosen author, or use Add papers directly.") from exc
+        raise
+    if result.data is None:
+        return None
+    added = LabPaperAddResult.model_validate(result.data)
+    logger.info("Added %s explicit paper links to lab %s", added.added_count, lab_id)
+    return added
+
+
+def remove_paper(lab_id: str, paper_id: str) -> bool:
+    if get_lab(lab_id) is None:
+        return False
+    try:
+        get_client().table("lab_paper_links").delete().eq("lab_id", lab_id).eq("paper_id", paper_id).execute()
+    except APIError as exc:
+        if exc.code in ("PGRST205", "42P01"):
+            _explicit_migration_required()
+        raise
+    logger.info("Removed paper %s from lab %s", paper_id, lab_id)
+    return True

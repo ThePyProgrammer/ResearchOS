@@ -1,14 +1,15 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
-from models.lab import Lab, LabCreate, LabMember, LabMemberPage, LabPage, LabPaperPage, LabUpdate
+from models.lab import Lab, LabCreate, LabMember, LabMemberPage, LabPage, LabPaperAddResult, LabPaperPage, LabPaperSelection, LabUpdate
 from services import lab_service
 
 router = APIRouter(prefix="/api/labs", tags=["labs"])
 NOT_FOUND = {"error": "not_found", "detail": "Lab not found"}
 LabId = Annotated[str, Path(min_length=1, max_length=100)]
 AuthorId = Annotated[str, Path(min_length=1, max_length=100)]
+PaperId = Annotated[str, Path(min_length=1, max_length=100)]
 
 
 @router.get("", response_model=LabPage)
@@ -82,3 +83,27 @@ def list_papers(lab_id: LabId, search: str = Query("", max_length=200),
     if result is None:
         raise HTTPException(404, detail=NOT_FOUND)
     return result
+
+
+@router.get("/{lab_id}/paper-options", response_model=LabPaperPage)
+def paper_options(lab_id: LabId, search: str = Query("", max_length=200),
+                  author_id: Optional[str] = Query(None, min_length=1, max_length=100),
+                  limit: int = Query(25, ge=1, le=100), offset: int = Query(0, ge=0)):
+    result = lab_service.paper_options(lab_id, search=search, author_id=author_id, limit=limit, offset=offset)
+    if result is None:
+        raise HTTPException(404, detail=NOT_FOUND)
+    return result
+
+
+@router.post("/{lab_id}/papers", response_model=LabPaperAddResult)
+def add_papers(lab_id: LabId, data: LabPaperSelection):
+    result = lab_service.add_papers(lab_id, data)
+    if result is None:
+        raise HTTPException(404, detail=NOT_FOUND)
+    return result
+
+
+@router.delete("/{lab_id}/papers/{paper_id}", status_code=204)
+def remove_paper(lab_id: LabId, paper_id: PaperId):
+    if not lab_service.remove_paper(lab_id, paper_id):
+        raise HTTPException(404, detail=NOT_FOUND)

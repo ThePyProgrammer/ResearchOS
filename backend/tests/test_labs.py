@@ -90,7 +90,7 @@ def database(mocker):
 
 
 @pytest.mark.parametrize("function,rpc,model", [
-    ("list_papers", "get_lab_papers_page", LabPaperPage),
+    ("list_papers", "get_lab_selected_papers_page", LabPaperPage),
     ("list_members", "get_lab_members_page", LabMemberPage),
 ])
 def test_page_reads_use_one_round_trip_including_empty_and_missing(database, function, rpc, model):
@@ -136,45 +136,36 @@ def test_writes_do_not_read_back_or_chain_select(database):
     query.select.assert_not_called()
 
 
-def test_add_is_idempotent_and_does_not_load_author_papers(database, mocker):
+def test_add_member_uses_one_rpc_without_reading_or_adding_papers(database):
     db, query = database
-    mocker.patch.object(lab_service, "get_lab", return_value=Lab.model_validate(LAB))
-    query.execute.return_value.data = [{"id": "auth_1", "name": "Jane", "orcid": None}]
+    query.execute.return_value.data = {"author_id": "auth_1", "name": "Jane", "orcid": None}
     member = lab_service.add_member("lab_1", "auth_1")
     assert member.author_id == "auth_1"
-    query.upsert.assert_called_once_with({"lab_id": "lab_1", "author_id": "auth_1"},
-                                         on_conflict="lab_id,author_id", ignore_duplicates=True)
-    assert [call.args[0] for call in db.table.call_args_list] == ["authors", "lab_members"]
+    db.rpc.assert_called_once_with("add_lab_member_only", {"p_lab_id": "lab_1", "p_author_id": "auth_1"})
+    query.execute.assert_called_once()
+    db.table.assert_not_called()
 
 
-def test_unknown_author_and_concurrent_deletion(database, mocker, client):
+def test_unknown_author_error(database, client):
     db, query = database
-    mocker.patch.object(lab_service, "get_lab", return_value=Lab.model_validate(LAB))
-    query.execute.return_value.data = []
+    query.execute.side_effect = APIError({"code": "P0002", "message": "Author not found", "details": None, "hint": None})
     response = client.put("/api/labs/lab_1/members/unknown")
     assert response.status_code == 404
     assert response.json() == {"error": "not_found", "detail": "Author not found"}
-    query.upsert.assert_not_called()
-    query.execute.side_effect = [
-        SimpleNamespace(data=[{"id": "auth_1", "name": "Jane"}]),
-        APIError({"code": "23503", "message": "foreign key", "details": "private", "hint": None}),
-    ]
-    response = client.put("/api/labs/lab_1/members/auth_1")
-    assert response.status_code == 404
-    assert response.json()["error"] == "not_found"
+    db.table.assert_not_called()
 
 
-def test_member_removal_only_deletes_relationship(database, mocker):
+def test_member_removal_uses_one_rpc_without_touching_papers(database):
     db, query = database
-    mocker.patch.object(lab_service, "get_lab", return_value=Lab.model_validate(LAB))
+    query.execute.return_value.data = True
     assert lab_service.remove_member("lab_1", "auth_1")
-    db.table.assert_called_once_with("lab_members")
-    assert [call.args for call in query.eq.call_args_list] == [("lab_id", "lab_1"), ("author_id", "auth_1")]
+    db.rpc.assert_called_once_with("remove_lab_member_only", {"p_lab_id": "lab_1", "p_author_id": "auth_1"})
+    db.table.assert_not_called()
 
 
 @pytest.mark.parametrize("resource,view,rpc,row", [
     ("members", "lab_member_details", "get_lab_members_page", {"author_id": "auth_1", "name": "Jane", "orcid": None}),
-    ("papers", "lab_papers", "get_lab_papers_page", PAPER),
+    ("papers", "lab_selected_papers", "get_lab_selected_papers_page", PAPER),
 ])
 @pytest.mark.parametrize("total,offset,lab_exists", [(1, 0, True), (1105, 1200, True), (0, 0, True), (0, 0, False)])
 def test_missing_rpc_falls_back_through_real_postgrest_client(
@@ -213,7 +204,7 @@ def test_missing_rpc_falls_back_through_real_postgrest_client(
         })
 
     assert len(requests) == (2 if total else 3)
-    assert "025_lab_page_functions.sql" in caplog.text
+    assert ("025_lab_page_functions.sql" if resource == "members" else "026_explicit_lab_papers.sql") in caplog.text
     if not lab_exists:
         assert response.status_code == 404
         assert response.json() == {"error": "not_found", "detail": "Lab not found"}
@@ -236,3 +227,81 @@ def test_rpc_fallback_does_not_hide_other_database_errors(database, function):
         getattr(lab_service, function)("lab_1")
     assert caught.value is error
     db.table.assert_not_called()
+
+
+@pytest.mark.parametrize("payload", [{"paperIds": []}, {"paperIds": ["p"] * 101}, {"paperIds": [""]}, {"paperIds": [None]}, {"paperIds": ["p"], "authorId": ""}])
+def test_invalid_paper_selections_never_reach_database(client, database, payload):
+    db, _ = database
+    assert client.post("/api/labs/lab_1/papers", json=payload).status_code == 422
+    db.rpc.assert_not_called()
+
+
+@pytest.mark.parametrize("author_id", [None, "auth_1"])
+def test_selected_papers_are_added_in_one_atomic_batch(client, database, author_id):
+    db, query = database
+    query.execute.return_value.data = {"added_count": 2}
+    response = client.post("/api/labs/lab_1/papers", json={"paperIds": ["p_1", "p_2", "p_1"], "authorId": author_id})
+    assert response.status_code == 200
+    assert response.json() == {"addedCount": 2}
+    db.rpc.assert_called_once_with("add_lab_papers", {
+        "p_lab_id": "lab_1", "p_paper_ids": ["p_1", "p_2"], "p_author_id": author_id,
+    })
+    query.execute.assert_called_once()
+    db.table.assert_not_called()
+
+
+def test_paper_options_are_scoped_paginated_and_counted_in_one_call(client, database):
+    db, query = database
+    query.execute.return_value.data = {"items": [PAPER], "total": 1105, "limit": 25, "offset": 1000}
+    response = client.get("/api/labs/lab_1/paper-options?author_id=auth_1&search=Shared&offset=1000")
+    assert response.status_code == 200
+    assert response.json()["items"][0]["libraryName"] == "Research"
+    db.rpc.assert_called_once_with("get_lab_paper_options", {
+        "p_lab_id": "lab_1", "p_search": "Shared", "p_author_id": "auth_1", "p_limit": 25, "p_offset": 1000,
+    })
+    query.execute.assert_called_once()
+
+
+@pytest.mark.parametrize("method,path,payload", [
+    ("put", "/api/labs/lab_1/members/auth_1", None),
+    ("delete", "/api/labs/lab_1/members/auth_1", None),
+    ("get", "/api/labs/lab_1/paper-options", None),
+    ("post", "/api/labs/lab_1/papers", {"paperIds": ["p_1"]}),
+])
+def test_unmigrated_mutations_and_picker_fail_with_actionable_error(client, database, method, path, payload):
+    db, query = database
+    query.execute.side_effect = APIError({"code": "PGRST202", "message": "Missing function", "details": None, "hint": None})
+    response = client.request(method, path, json=payload)
+    assert response.status_code == 503
+    assert "026_explicit_lab_papers.sql" in response.json()["detail"]
+    db.table.assert_not_called()
+
+
+def test_unmigrated_paper_reads_never_return_automatically_derived_papers(client, database):
+    db, query = database
+    query.execute.side_effect = [
+        APIError({"code": "PGRST202", "message": "Missing RPC", "details": None, "hint": None}),
+        APIError({"code": "PGRST205", "message": "Missing view", "details": None, "hint": None}),
+    ]
+    response = client.get("/api/labs/lab_1/papers")
+    assert response.status_code == 503
+    assert "026_explicit_lab_papers.sql" in response.json()["detail"]
+    db.table.assert_called_once_with("lab_selected_papers")
+
+
+@pytest.mark.parametrize("code,status", [("P0002", 404), ("22023", 422), ("42501", 500)])
+def test_invalid_batch_errors_are_sanitized(client, database, code, status):
+    _, query = database
+    query.execute.side_effect = APIError({"code": code, "message": "private database details", "details": None, "hint": None})
+    response = client.post("/api/labs/lab_1/papers", json={"paperIds": ["p_1"]})
+    assert response.status_code == status
+    assert "private database details" not in response.text
+
+
+def test_unlinking_paper_preserves_source_and_member_records(client, database, mocker):
+    db, query = database
+    mocker.patch.object(lab_service, "get_lab", return_value=Lab.model_validate(LAB))
+    response = client.delete("/api/labs/lab_1/papers/p_1")
+    assert response.status_code == 204
+    db.table.assert_called_once_with("lab_paper_links")
+    assert [call.args for call in query.eq.call_args_list] == [("lab_id", "lab_1"), ("paper_id", "p_1")]
