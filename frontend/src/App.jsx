@@ -11,6 +11,7 @@ import LibrarySettings from './pages/LibrarySettings'
 import Website from './pages/Website'
 import GitHubRepo from './pages/GitHubRepo'
 import Authors from './pages/Authors'
+import Labs from './pages/Labs'
 import AuthorDetail from './pages/AuthorDetail'
 import Projects from './pages/Projects'
 import ProjectDetail, { ProjectOverview, ProjectLiterature, ProjectExperiments } from './pages/ProjectDetail'
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="library/settings" element={<LibrarySettings />} />
             <Route path="authors" element={<Authors />} />
             <Route path="authors/:id" element={<AuthorDetail />} />
+            <Route path="labs" element={<Labs />} />
             <Route path="agents" element={<Agents />} />
             <Route path="projects" element={<Projects />} />
             <Route path="projects/:id" element={<ProjectDetail />}>

@@ -289,6 +289,19 @@ export const chatApi = {
   clearForGitHubRepo: (repoId) => apiFetch(`/github-repos/${repoId}/chat`, { method: 'DELETE' }),
 }
 
+export const labsApi = {
+  list: (params = {}) => apiFetch(`/labs?${new URLSearchParams(params)}`),
+  get: (id) => apiFetch(`/labs/${encodeURIComponent(id)}`),
+  create: (data) => apiFetch('/labs', { method: 'POST', body: data }),
+  update: (id, data) => apiFetch(`/labs/${encodeURIComponent(id)}`, { method: 'PATCH', body: data }),
+  remove: (id) => apiFetch(`/labs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  members: (id, params = {}) => apiFetch(`/labs/${encodeURIComponent(id)}/members?${new URLSearchParams(params)}`),
+  memberOptions: (id, search) => apiFetch(`/labs/${encodeURIComponent(id)}/member-options?${new URLSearchParams({ search })}`),
+  addMember: (id, authorId) => apiFetch(`/labs/${encodeURIComponent(id)}/members/${encodeURIComponent(authorId)}`, { method: 'PUT' }),
+  removeMember: (id, authorId) => apiFetch(`/labs/${encodeURIComponent(id)}/members/${encodeURIComponent(authorId)}`, { method: 'DELETE' }),
+  papers: (id, params = {}) => apiFetch(`/labs/${encodeURIComponent(id)}/papers?${new URLSearchParams(params)}`),
+}
+
 export const authorsApi = {
   list: (params = {}) => {
     const qs = new URLSearchParams(

@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from routers import papers, collections, workflows, runs, proposals, activity, search, libraries, websites, notes, chat, authors, github_repos, settings, notes_copilot, usage, projects, research_questions, experiments, project_notes_copilot, tasks, gap_analysis, batch
 from services.db import get_client
+from routers import labs
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ app.include_router(search.router)
 app.include_router(notes.router)
 app.include_router(chat.router)
 app.include_router(authors.router)
+app.include_router(labs.router)
 app.include_router(settings.router)
 app.include_router(notes_copilot.router)
 app.include_router(usage.router)
