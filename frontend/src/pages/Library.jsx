@@ -4,6 +4,7 @@ import { papersApi, websitesApi, githubReposApi, searchApi, notesApi, collection
 import { useLibrary } from '../context/LibraryContext'
 import PaperInfoPanel, { statusConfig, NamedLinks, CollectionsPicker, EditableField, EditableTextArea, AuthorChips, TagChips, formatCitationBibTeX } from '../components/PaperInfoPanel'
 import WindowModal from '../components/WindowModal'
+import ItemContextMenu from '../components/ItemContextMenu'
 import BibtexExportModal from '../components/BibtexExportModal'
 import ConfirmBulkModal from '../components/ConfirmBulkModal'
 import BulkProgressModal from '../components/BulkProgressModal'
@@ -46,7 +47,7 @@ function itemVenue(item) {
   return item.venue || ''
 }
 
-function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, onOpen }) {
+function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, onOpen, onContextMenu }) {
   const status = statusConfig[item.status] || statusConfig['inbox']
   const isWebsite = item.itemType === 'website'
   const isGitHubRepo = item.itemType === 'github_repo'
@@ -55,7 +56,6 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
   const [titleDraft, setTitleDraft] = useState('')
   const [editingYear, setEditingYear] = useState(false)
   const [yearDraft, setYearDraft] = useState('')
-  const [copied, setCopied] = useState(false)
 
   const api = isWebsite ? websitesApi : isGitHubRepo ? githubReposApi : papersApi
 
@@ -87,6 +87,14 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
   return (
     <tr
       data-item-id={item.id}
+      tabIndex={0}
+      onContextMenu={e => {
+        if (e.target.closest('input, textarea, [contenteditable="true"]')) return
+        onContextMenu(e, item)
+      }}
+      onKeyDown={e => {
+        if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) onContextMenu(e, item)
+      }}
       draggable
       onDragStart={e => {
         e.dataTransfer.setData('application/researchos-item', JSON.stringify({ id: item.id, itemType: item.itemType || 'paper', collections: item.collections }))
@@ -144,20 +152,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
               No PDF
             </span>
           )}
-          {!isWebsite && !isGitHubRepo && (
-            <button
-              onClick={e => {
-                e.stopPropagation()
-                navigator.clipboard.writeText(formatCitationBibTeX(item)).catch(console.error)
-                setCopied(true)
-                setTimeout(() => setCopied(false), 1500)
-              }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-blue-500"
-              title="Copy BibTeX citation"
-            >
-              <Icon name={copied ? 'check' : 'content_copy'} className="text-[14px]" />
-            </button>
-          )}
+
         </div>
       </td>
       <td className="px-2 py-3 text-[13px] text-slate-500 max-w-[160px]">
@@ -191,6 +186,14 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
             {itemYear(item)}
           </span>
         )}
+      </td>
+      <td className="w-9 pr-3">
+        <button aria-label={`Actions for ${item.title}`} aria-haspopup="menu"
+          onClick={e => { e.stopPropagation(); onContextMenu(e, item) }}
+          onDoubleClick={e => e.stopPropagation()}
+          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:ring-2 focus:ring-blue-500">
+          <Icon name="more_horiz" className="text-[18px]" />
+        </button>
       </td>
     </tr>
   )
@@ -1305,6 +1308,9 @@ export default function Library() {
   const [pdfFilter, setPdfFilter] = useState('all') // 'all' | 'has_pdf' | 'no_pdf'
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [contextMenu, setContextMenu] = useState(null)
+  const [actionMessage, setActionMessage] = useState(null)
+  const closeContextMenu = useCallback(() => setContextMenu(null), [])
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showMoveModal, setShowMoveModal] = useState(false)
   const [moveSearch, setMoveSearch] = useState('')
@@ -1357,6 +1363,7 @@ export default function Library() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Don't hijack keystrokes while typing in any input / editable element
+      if (e.defaultPrevented || e.target.closest('[role="menu"], button')) return
       const tag = e.target.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return
       // Don't interfere with modifier combos (Ctrl+K, etc.)
@@ -1443,6 +1450,7 @@ export default function Library() {
     setError(null)
 
     setSelectedIds(new Set())
+    setContextMenu(null)
     const listParams = activeLibraryId ? { library_id: activeLibraryId } : {}
 
     if (urlQuery) {
@@ -1462,6 +1470,7 @@ export default function Library() {
   // Local navigation must still clear bulk selection without reloading data.
   useEffect(() => {
     setSelectedIds(new Set())
+    setContextMenu(null)
   }, [activeCollection, filterTab])
 
   // Load top authors when a collection is active
@@ -1587,7 +1596,7 @@ export default function Library() {
     }
     if (operation === 'pdfs') {
       const skipIds = new Set(selected.filter(i =>
-        i.itemType !== 'paper' || !i.pdfUrl || i.pdfUrl.includes('/storage/v1/object/public/pdfs/')
+        (i.itemType === 'website' || i.itemType === 'github_repo') || !i.pdfUrl || i.pdfUrl.includes('/storage/v1/object/public/pdfs/')
       ).map(i => i.id))
       setBulkSkipIds(skipIds)
       return skipIds.size
@@ -1720,6 +1729,69 @@ export default function Library() {
     await runBulkMutation({ action: 'status', status })
   }
 
+  const openContextMenu = (event, item) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (showDeleteModal || showMoveModal || showConfirmBulk) return
+    const targetItems = selectedIds.has(item.id) ? items.filter(i => selectedIds.has(i.id)) : [item]
+    setSelectedIds(new Set(targetItems.map(i => i.id)))
+    setShowStatusDropdown(false)
+    setActionMessage(null)
+    const rect = event.currentTarget.getBoundingClientRect()
+    setContextMenu({
+      item, items: targetItems,
+      x: event.clientX || rect.left + 16,
+      y: event.clientY || rect.bottom,
+    })
+  }
+
+  const copyContextText = async (text, label) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setActionMessage(`${label} copied to clipboard.`)
+    } catch (err) {
+      setBulkError(`Could not copy to clipboard: ${err.message || 'Clipboard access is unavailable.'}`)
+    }
+  }
+
+  const contextGroups = () => {
+    const targets = contextMenu.items
+    const item = contextMenu.item
+    const single = targets.length === 1
+    const papers = targets.filter(i => i.itemType !== 'website' && i.itemType !== 'github_repo')
+    const route = i => `/library/${i.itemType === 'website' ? 'website' : i.itemType === 'github_repo' ? 'github-repo' : 'paper'}/${i.id}`
+    const source = item.url || (item.doi ? `https://doi.org/${item.doi}` : item.arxivId ? `https://arxiv.org/abs/${item.arxivId}` : null)
+    const busy = !!bulkProgress || batch.isRunning
+    const action = (label, icon, run, disabled = false) => ({ label, icon, run, disabled })
+    return [
+      { label: 'Open & edit', actions: single ? [
+        action('Open in new tab', 'open_in_new', () => window.open(route(item), '_blank', 'noopener,noreferrer')),
+        action('Edit details, tags & collections', 'edit', () => setSelectedItem(item)),
+        ...(item.pdfUrl ? [action('Open PDF', 'picture_as_pdf', () => window.open(item.pdfUrl, '_blank', 'noopener,noreferrer'))] : []),
+        ...(source ? [action('Open original source', 'link', () => window.open(source, '_blank', 'noopener,noreferrer'))] : []),
+      ] : [] },
+      { label: 'Copy & export', actions: [
+        ...(papers.length ? [action(papers.length === targets.length ? 'Copy BibTeX citation' : 'Copy BibTeX (papers only)', 'content_copy', () => copyContextText(papers.map(formatCitationBibTeX).join('\n\n'), 'BibTeX'))] : []),
+        action(single ? 'Copy title' : 'Copy titles', 'title', () => copyContextText(targets.map(i => i.title).join('\n'), 'Title')),
+        action(single ? 'Copy library link' : 'Copy library links', 'link', () => copyContextText(targets.map(i => new URL(route(i), window.location.origin).href).join('\n'), 'Library link')),
+        ...(single && item.doi ? [action('Copy DOI', 'content_copy', () => copyContextText(item.doi, 'DOI'))] : []),
+        ...(single && source ? [action('Copy source URL', 'content_copy', () => copyContextText(source, 'Source URL'))] : []),
+        action('Export BibTeX?', 'download', () => { setExportIds(targets.map(i => i.id)); setShowExportModal(true) }),
+      ] },
+      { label: 'Organize', actions: [
+        action('Add to collection?', 'library_add', () => setShowMoveModal(true), busy),
+        ...['inbox', 'to-read', 'read'].map(status => action(`Mark as ${statusConfig[status].label}`, 'check_circle', () => handleBulkStatusChange(status), busy)),
+      ] },
+      { label: 'Process', actions: [
+        action('Generate notes?', 'auto_awesome', () => startBulkOperation('notes'), busy),
+        action('Auto-tag?', 'label', () => startBulkOperation('tags'), busy),
+        ...(papers.length ? [action('Fetch PDFs?', 'cloud_download', () => startBulkOperation('pdfs'), busy)] : []),
+        action('Generate embeddings?', 'memory', () => startBulkOperation('embeddings'), busy),
+      ] },
+      { label: 'Delete', actions: [{ ...action(single ? 'Delete item?' : `Delete ${targets.length} items?`, 'delete', () => setShowDeleteModal(true), busy), danger: true }] },
+    ]
+  }
+
   const allTags = useMemo(() => [...new Set(items.flatMap(p => p.tags || []))].sort(), [items])
   const activeFilterCount = (filterTab !== 'all' && !urlQuery ? 1 : 0)
     + (pdfFilter !== 'all' ? 1 : 0)
@@ -1841,7 +1913,11 @@ export default function Library() {
 
   return (
     <div className="flex h-full" ref={containerRef}>
+      {contextMenu && <ItemContextMenu x={contextMenu.x} y={contextMenu.y}
+        title={contextMenu.items.length === 1 ? contextMenu.item.title : `${contextMenu.items.length} selected items`}
+        groups={contextGroups()} onClose={closeContextMenu} />}
       <div className="flex-1 flex flex-col min-w-0">
+        {actionMessage && <div role="status" className="px-4 py-2 text-xs text-green-700 bg-green-50">{actionMessage}</div>}
         {/* Toolbar */}
         {urlQuery && <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-slate-200 bg-white">
           {urlQuery && (
@@ -2269,6 +2345,7 @@ export default function Library() {
                       {sortKey === 'date' && <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} className="text-[12px] text-blue-600" />}
                     </span>
                   </th>
+                  <th className="w-9"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -2280,6 +2357,7 @@ export default function Library() {
                     checked={selectedIds.has(item.id)}
                     onSelect={i => setSelectedItem(selectedItem?.id === i.id ? null : i)}
                     onCheck={toggleCheck}
+                    onContextMenu={openContextMenu}
                     onOpen={i => window.open(i.itemType === 'website' ? `/library/website/${i.id}` : i.itemType === 'github_repo' ? `/library/github-repo/${i.id}` : `/library/paper/${i.id}`, '_blank')}
                     onItemUpdate={updated => {
                       setItems(prev => prev.map(it => it.id === updated.id ? { ...it, ...updated } : it))
