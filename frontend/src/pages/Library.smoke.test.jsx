@@ -265,8 +265,9 @@ describe('Library page smoke', () => {
     renderLibrary()
     await waitFor(() => expect(screen.getByText('p_1')).toBeInTheDocument())
     fireEvent.click(document.querySelector('thead input[type="checkbox"]'))
-    fireEvent.click(screen.getByRole('button', { name: /Set Status/ }))
-    fireEvent.click(screen.getByRole('button', { name: /^check_circle\s*Read$/ }))
+    fireEvent.contextMenu(document.querySelector('tbody tr'))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Organize' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mark as Read' }))
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('1 succeeded; 1 could not be completed'))
     expect(batchApi.mutateItems).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ id: 'p_1' }), expect.objectContaining({ id: 'p_2' })]),
@@ -277,7 +278,7 @@ describe('Library page smoke', () => {
     expect(screen.getByText('1 item selected')).toBeInTheDocument()
   })
 
-  it('shows bulk action bar when selecting rows', async () => {
+  it('shows selection in the footer with all bulk actions available in the context menu', async () => {
     papersApi.list.mockResolvedValue([
       {
         id: 'p_1',
@@ -299,7 +300,25 @@ describe('Library page smoke', () => {
     fireEvent.click(checkbox)
 
     expect(screen.getByText(/1 item selected/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Delete All/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Delete All/i })).not.toBeInTheDocument()
+    const footer = screen.getByText('Showing 1 of 1 item').parentElement.parentElement
+    expect(footer).toContainElement(screen.getByText('1 item selected'))
+    fireEvent.contextMenu(document.querySelector('tbody tr'))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Organize' }))
+    for (const name of [/Add to collection/, 'Mark as Inbox', 'Mark as To Read', 'Mark as Read']) {
+      expect(screen.getByRole('menuitem', { name })).toBeInTheDocument()
+    }
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Process' }))
+    for (const name of [/Generate notes/, /Auto-tag/, /Fetch PDFs/, /Generate embeddings/]) {
+      expect(screen.getByRole('menuitem', { name })).toBeInTheDocument()
+    }
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Copy & export' }))
+    expect(screen.getByRole('menuitem', { name: /Export BibTeX/ })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /Delete item/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
+    expect(checkbox).not.toBeChecked()
+    expect(screen.queryByText('1 item selected')).not.toBeInTheDocument()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
   it('skips auto-tag items that already have tags or no source text', async () => {
@@ -360,7 +379,9 @@ describe('Library page smoke', () => {
     await waitFor(() => expect(screen.getByText('Already Tagged')).toBeInTheDocument())
     const selectAll = document.querySelector('thead input[type="checkbox"]')
     fireEvent.click(selectAll)
-    fireEvent.click(screen.getByRole('button', { name: /Auto-Tag/i }))
+    fireEvent.contextMenu(document.querySelector('tbody tr'))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Process' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Auto-tag/ }))
 
     await waitFor(() => expect(screen.getByText('3 items will be skipped (already have tags)')).toBeInTheDocument())
     expect(screen.getByText('1 items will be processed')).toBeInTheDocument()
@@ -390,7 +411,9 @@ describe('Library page smoke', () => {
     await waitFor(() => expect(screen.getByText('Ready Paper')).toBeInTheDocument())
     const checkbox = document.querySelector('tbody input[type="checkbox"]')
     fireEvent.click(checkbox)
-    fireEvent.click(screen.getByRole('button', { name: /Auto-Tag/i }))
+    fireEvent.contextMenu(document.querySelector('tbody tr'))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Process' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Auto-tag/ }))
 
     await waitFor(() => expect(screen.getByText('1 items will be processed')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
@@ -415,7 +438,9 @@ describe('Library page smoke', () => {
     renderLibrary()
     await waitFor(() => expect(screen.getByText('Large batch 0')).toBeInTheDocument())
     fireEvent.click(document.querySelector('thead input[type="checkbox"]'))
-    fireEvent.click(screen.getByRole('button', { name: /Auto-Tag/ }))
+    fireEvent.contextMenu(document.querySelector('tbody tr'))
+    fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Process' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Auto-tag/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(batchApi.tags).toHaveBeenCalledTimes(2))

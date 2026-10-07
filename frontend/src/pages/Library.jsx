@@ -1326,14 +1326,11 @@ export default function Library() {
   const selectedItemRef = useRef(null)
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkMoving, setBulkMoving] = useState(false)
-  const [bulkStatusChanging, setBulkStatusChanging] = useState(false)
   const [bulkError, setBulkError] = useState(null)
   const [bulkProgress, setBulkProgress] = useState(null)
   const bulkMutationRef = useRef(false)
   const activeLibraryRef = useRef(activeLibraryId)
   activeLibraryRef.current = activeLibraryId
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
-  const statusDropdownRef = useRef(null)
   const [showExportModal, setShowExportModal] = useState(false)
 
   // Bulk operation state (shared across all four bulk actions)
@@ -1493,17 +1490,6 @@ export default function Library() {
     }
   }, [batch.isRunning]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (!showStatusDropdown) return
-    const handleClickOutside = (e) => {
-      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target)) {
-        setShowStatusDropdown(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showStatusDropdown])
-
   const handleStatusChange = (itemId, newStatus) => {
     setItems(prev => prev.map(p => p.id === itemId ? { ...p, status: newStatus } : p))
     if (selectedItem?.id === itemId) setSelectedItem(prev => ({ ...prev, status: newStatus }))
@@ -1542,8 +1528,8 @@ export default function Library() {
     const selected = targets ?? items.filter(item => selectedIds.has(item.id))
     const libraryId = activeLibraryId
     const setBusy = options.action === 'delete' ? setBulkDeleting
-      : options.action === 'status' ? setBulkStatusChanging : setBulkMoving
-    setBusy(true)
+      : options.action === 'status' ? null : setBulkMoving
+    setBusy?.(true)
     setBulkError(null)
     setBulkProgress({ completed: 0, total: selected.length })
     try {
@@ -1573,7 +1559,7 @@ export default function Library() {
       if (activeLibraryRef.current === libraryId) setBulkError(err.message)
     } finally {
       bulkMutationRef.current = false
-      setBusy(false)
+      setBusy?.(false)
       setBulkProgress(null)
     }
   }
@@ -1726,7 +1712,6 @@ export default function Library() {
   }
 
   const handleBulkStatusChange = async (status, targets) => {
-    setShowStatusDropdown(false)
     await runBulkMutation({ action: 'status', status }, targets)
   }
 
@@ -1735,7 +1720,6 @@ export default function Library() {
     event.stopPropagation()
     if (showDeleteModal || showMoveModal || showConfirmBulk) return
     const targetItems = selectedIds.has(item.id) ? items.filter(i => selectedIds.has(i.id)) : [item]
-    setShowStatusDropdown(false)
     setActionMessage(null)
     const rect = event.currentTarget.getBoundingClientRect()
     setContextMenu({
@@ -2188,118 +2172,6 @@ export default function Library() {
         {bulkError && <div role="alert" className="px-4 py-2 text-sm text-red-600 bg-red-50">{bulkError}</div>}
         {bulkProgress && <div role="status" className="px-4 py-2 text-sm text-blue-700">Processed {bulkProgress.completed} of {bulkProgress.total} items...</div>}
 
-        {/* Bulk action bar */}
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border-b border-blue-200">
-            <span className="text-xs font-semibold text-blue-700">
-              {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} selected
-            </span>
-            <div className="flex items-center gap-2 ml-auto">
-              <button
-                onClick={() => { setDialogItems(items.filter(i => selectedIds.has(i.id))); setShowMoveModal(true) }}
-                disabled={!!bulkProgress || batch.isRunning}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                <Icon name="library_add" className="text-[14px]" />
-                Add to Collection...
-              </button>
-              {/* Set status dropdown */}
-              <div className="relative" ref={statusDropdownRef}>
-                <button
-                  onClick={() => setShowStatusDropdown(v => !v)}
-                  disabled={!!bulkProgress || batch.isRunning}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Icon name="label" className="text-[14px]" />
-                  {bulkStatusChanging ? 'Updating...' : 'Set Status'}
-                  <Icon name="arrow_drop_down" className="text-[14px]" />
-                </button>
-                {showStatusDropdown && (
-                  <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[130px]">
-                    <button
-                      onClick={() => handleBulkStatusChange('inbox')}
-                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
-                    >
-                      <Icon name="inbox" className="text-[14px] text-slate-400" />
-                      Inbox
-                    </button>
-                    <button
-                      onClick={() => handleBulkStatusChange('to-read')}
-                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
-                    >
-                      <Icon name="bookmark" className="text-[14px] text-amber-400" />
-                      To Read
-                    </button>
-                    <button
-                      onClick={() => handleBulkStatusChange('read')}
-                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
-                    >
-                      <Icon name="check_circle" className="text-[14px] text-green-500" />
-                      Read
-                    </button>
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => startBulkOperation('notes')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                <Icon name="auto_awesome" className="text-[14px]" />
-                Generate Notes
-              </button>
-              <button
-                onClick={() => startBulkOperation('tags')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                <Icon name="label" className="text-[14px]" />
-                Auto-Tag
-              </button>
-              <button
-                onClick={() => startBulkOperation('pdfs')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                <Icon name="cloud_download" className="text-[14px]" />
-                Fetch PDFs
-              </button>
-              <button
-                onClick={() => startBulkOperation('embeddings')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                <Icon name="memory" className="text-[14px]" />
-                Generate Embeddings
-              </button>
-              <button
-                onClick={() => {
-                  const itemIds = [...selectedIds]
-                  if (itemIds.length === 0) return
-                  setExportIds(itemIds)
-                  setShowExportModal(true)
-                }}
-                disabled={selectedIds.size === 0}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                <Icon name="download" className="text-[14px]" />
-                Export BibTeX
-              </button>
-              <button
-                onClick={() => { setDialogItems(items.filter(i => selectedIds.has(i.id))); setShowDeleteModal(true) }}
-                disabled={!!bulkProgress || batch.isRunning}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors"
-              >
-                <Icon name="delete" className="text-[14px]" />
-                Delete All
-              </button>
-              <button
-                onClick={() => setSelectedIds(new Set())}
-                className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors"
-                title="Clear selection"
-              >
-                <Icon name="close" className="text-[16px]" />
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Table */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
@@ -2376,13 +2248,27 @@ export default function Library() {
           )}
         </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-white text-sm text-slate-500">
-          <span>
-            {urlQuery
-              ? `${items.length} search result${items.length !== 1 ? 's' : ''} for "${urlQuery}"`
-              : `Showing ${filtered.length} of ${items.length} item${items.length !== 1 ? 's' : ''}`}
-          </span>
+        {/* Pagination and selection */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-slate-200 bg-white text-sm text-slate-500">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>
+              {urlQuery
+                ? `${items.length} search result${items.length !== 1 ? 's' : ''} for "${urlQuery}"`
+                : `Showing ${filtered.length} of ${items.length} item${items.length !== 1 ? 's' : ''}`}
+            </span>
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-1 text-blue-700">
+                <span aria-live="polite" className="text-xs font-semibold">
+                  {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} selected
+                </span>
+                <button onClick={() => { setSelectedIds(new Set()); closeContextMenu() }}
+                  aria-label="Clear selection" title="Clear selection"
+                  className="rounded p-1 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-500">
+                  <Icon name="close" className="text-[16px]" />
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-1">
             <button className="px-2 py-1 rounded hover:bg-slate-100 disabled:opacity-40" disabled>
               <Icon name="chevron_left" className="text-[18px]" />
