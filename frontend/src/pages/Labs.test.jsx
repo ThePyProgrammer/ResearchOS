@@ -35,7 +35,7 @@ describe('Labs', () => {
     mount()
     expect(await screen.findByRole('link', { name: 'Shared research' })).toHaveAttribute('href', '/library/paper/p_1')
     expect(screen.getByRole('link', { name: 'Jane Smith' })).toHaveAttribute('href', '/authors/a_1')
-    expect(screen.getByText('Research')).toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).toEqual(['Paper', 'Year', 'Actions'])
     for (const method of ['list', 'get', 'members', 'papers']) expect(labsApi[method]).toHaveBeenCalledTimes(1)
     expect(labsApi.memberOptions).not.toHaveBeenCalled()
   })

@@ -286,11 +286,11 @@ function LabDetail({ id, onUpdated, onDeleted }) {
       {papers.loading ? <p className="py-6 text-sm text-slate-500">Loading papers…</p> : papers.error ? <LoadError resource={papers} /> : <>
         {!papers.data.items.length ? <p className="py-8 text-sm text-slate-500">{paperSearch ? 'No papers match this search.' : 'No papers selected yet. Use Add papers, or choose papers from a member’s profile.'}</p> : <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs text-slate-500"><tr>{['Paper', 'Year', 'Venue', 'Library', 'Status', 'Actions'].map(label => <th key={label} scope="col" className="px-3 py-3 font-medium first:pl-0">{label}</th>)}</tr></thead>
+            <thead className="border-b border-slate-200 text-xs text-slate-500"><tr>{['Paper', 'Year'].map(label => <th key={label} scope="col" className="px-3 py-3 font-medium first:pl-0">{label}</th>)}<th scope="col" className="w-10"><span className="sr-only">Actions</span></th></tr></thead>
             <tbody className="divide-y divide-slate-100">{papers.data.items.map(paper => <tr key={paper.id} className="hover:bg-slate-50">
               <td className="min-w-[220px] py-3 pr-3"><Link className="font-medium text-blue-600 hover:underline" to={`/library/paper/${encodeURIComponent(paper.id)}`}>{paper.title}</Link><p className="mt-1 text-xs text-slate-500">{paper.authors.join(', ')}</p></td>
-              <td className="px-3 py-3 align-top text-slate-600">{paper.year || '—'}</td><td className="px-3 py-3 align-top text-slate-600">{paper.venue || '—'}</td><td className="px-3 py-3 align-top text-slate-600">{paper.libraryName || 'Unassigned'}</td><td className="whitespace-nowrap px-3 py-3 align-top text-xs text-slate-600">{{ inbox: 'Inbox', 'to-read': 'To read', read: 'Read' }[paper.status] || paper.status}</td>
-              <td className="px-3 py-3 align-top"><button className="text-xs text-red-600 disabled:opacity-40" disabled={!!busy} onClick={() => removePaper(paper.id)} aria-label={`Remove paper ${paper.title}`}>Remove</button></td>
+              <td className="px-3 py-3 align-top text-slate-600">{paper.year || '—'}</td>
+              <td className="py-3 pl-3 text-right align-top"><button className="inline-flex rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40" disabled={!!busy} onClick={() => removePaper(paper.id)} aria-label={`Remove paper ${paper.title}`} title="Remove paper from lab"><Icon name="delete" className="text-[18px]" /></button></td>
             </tr>)}</tbody>
           </table>
         </div>}
