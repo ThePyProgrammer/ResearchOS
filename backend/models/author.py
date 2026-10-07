@@ -74,3 +74,8 @@ class AuthorSearchResult(CamelModel):
     current_affiliation: Optional[str] = None
     orcid: Optional[str] = None
     paper_count: int = 0
+
+
+class PaperAuthorReference(CamelModel):
+    link: PaperAuthor
+    author: Optional[Author] = None

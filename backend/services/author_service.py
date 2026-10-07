@@ -11,6 +11,7 @@ from models.author import (
     AuthorSearchResult,
     AuthorUpdate,
     PaperAuthor,
+    PaperAuthorReference,
     TopAuthor,
 )
 from models.paper import Paper
@@ -37,58 +38,48 @@ def normalize_author_name(name: str) -> str:
     return " ".join(tokens)
 
 
-def _get_author_libraries(author_id: str) -> list[AuthorLibrary]:
-    """Get distinct libraries that contain papers linked to this author."""
-    pa_result = (
-        get_client()
-        .table(_PAPER_AUTHORS_TABLE)
-        .select("paper_id")
-        .eq("author_id", author_id)
-        .execute()
+def _read_related(table: str, columns: str, field: str, ids: list[str]) -> list[dict]:
+    """Bound IN filters and page through results instead of trusting the DB row cap."""
+    rows = []
+    ids = list(dict.fromkeys(ids))
+    for start in range(0, len(ids), 100):
+        offset = 0
+        while True:
+            page = (get_client().table(table).select(columns)
+                    .in_(field, ids[start:start + 100]).order("id")
+                    .range(offset, offset + 499).execute().data)
+            rows.extend(page)
+            if len(page) < 500:
+                break
+            offset += len(page)
+    return rows
+
+
+def _enrich_authors(authors: list[Author]) -> list[Author]:
+    # PostgREST joins links to papers; library_id has no foreign key to libraries.
+    links = _read_related(
+        _PAPER_AUTHORS_TABLE, "author_id,papers(library_id)",
+        "author_id", [author.id for author in authors],
     )
-    paper_ids = [r["paper_id"] for r in pa_result.data]
-    if not paper_ids:
-        return []
-
-    # Fetch library_id for each linked paper
-    lib_ids: set[str] = set()
-    papers_result = get_client().table("papers").select("id,library_id").execute()
-    paper_lib_map = {r["id"]: r.get("library_id") for r in papers_result.data}
-    for pid in paper_ids:
-        lid = paper_lib_map.get(pid)
-        if lid:
-            lib_ids.add(lid)
-
-    if not lib_ids:
-        return []
-
-    libs_result = get_client().table("libraries").select("id,name").execute()
-    lib_name_map = {r["id"]: r["name"] for r in libs_result.data}
-    return [
-        AuthorLibrary(id=lid, name=lib_name_map.get(lid, lid))
-        for lid in sorted(lib_ids)
-        if lid in lib_name_map
-    ]
-
-
-def _get_paper_count(author_id: str) -> int:
-    result = (
-        get_client()
-        .table(_PAPER_AUTHORS_TABLE)
-        .select("id", count="exact")
-        .eq("author_id", author_id)
-        .execute()
-    )
-    return result.count or 0
-
-
-def _author_with_enrichment(row: dict) -> Author:
-    author = Author.model_validate(row)
-    author = author.model_copy(update={
-        "paper_count": _get_paper_count(author.id),
-        "libraries": _get_author_libraries(author.id),
-    })
-    return author
+    library_ids = list(dict.fromkeys(
+        link["papers"]["library_id"] for link in links
+        if (link.get("papers") or {}).get("library_id")
+    ))
+    by_library = {row["id"]: AuthorLibrary.model_validate(row) for row in _read_related(
+        "libraries", "id,name", "id", library_ids,
+    )}
+    counts: dict[str, int] = {}
+    libraries: dict[str, dict[str, AuthorLibrary]] = {}
+    for link in links:
+        aid = link["author_id"]
+        counts[aid] = counts.get(aid, 0) + 1
+        lib = by_library.get((link.get("papers") or {}).get("library_id"))
+        if lib:
+            libraries.setdefault(aid, {})[lib.id] = lib
+    return [author.model_copy(update={
+        "paper_count": counts.get(author.id, 0),
+        "libraries": sorted(libraries.get(author.id, {}).values(), key=lambda lib: lib.id),
+    }) for author in authors]
 
 
 # ---------------------------------------------------------------------------
@@ -103,52 +94,11 @@ def list_authors(
     query = get_client().table(_AUTHORS_TABLE).select("*")
     if search:
         query = query.ilike("name_normalized", f"%{normalize_author_name(search)}%")
-    query = query.limit(limit)
-    result = query.execute()
-
-    # Batch count paper_authors and compute libraries
-    author_ids = [r["id"] for r in result.data]
-    counts: dict[str, int] = {}
-    author_paper_ids: dict[str, list[str]] = {}
-    if author_ids:
-        pa_result = get_client().table(_PAPER_AUTHORS_TABLE).select("author_id,paper_id").execute()
-        for row in pa_result.data:
-            aid = row["author_id"]
-            counts[aid] = counts.get(aid, 0) + 1
-            author_paper_ids.setdefault(aid, []).append(row["paper_id"])
-
-    # Build paper→library and library→name maps
-    paper_lib: dict[str, str | None] = {}
-    lib_map: dict[str, str] = {}
-    if author_paper_ids:
-        papers_result = get_client().table("papers").select("id,library_id").execute()
-        paper_lib = {r["id"]: r.get("library_id") for r in papers_result.data}
-
-        all_lib_ids = {lid for lid in paper_lib.values() if lid}
-        if all_lib_ids:
-            libs_result = get_client().table("libraries").select("id,name").execute()
-            lib_map = {r["id"]: r["name"] for r in libs_result.data}
-
-    authors = []
-    for r in result.data:
-        a = Author.model_validate(r)
-        # Compute libraries for this author
-        libs: list[AuthorLibrary] = []
-        seen_libs: set[str] = set()
-        for pid in author_paper_ids.get(a.id, []):
-            lid = paper_lib.get(pid)
-            if lid and lid not in seen_libs and lid in lib_map:
-                seen_libs.add(lid)
-                libs.append(AuthorLibrary(id=lid, name=lib_map[lid]))
-        a = a.model_copy(update={
-            "paper_count": counts.get(a.id, 0),
-            "libraries": sorted(libs, key=lambda x: x.id),
-        })
-        authors.append(a)
-    return authors
+    result = query.order("name").order("id").limit(limit).execute()
+    return _enrich_authors([Author.model_validate(row) for row in result.data])
 
 
-def get_author(author_id: str) -> Optional[Author]:
+def get_author(author_id: str, *, enrich: bool = True) -> Optional[Author]:
     result = (
         get_client()
         .table(_AUTHORS_TABLE)
@@ -158,7 +108,8 @@ def get_author(author_id: str) -> Optional[Author]:
     )
     if not result.data:
         return None
-    return _author_with_enrichment(result.data[0])
+    author = Author.model_validate(result.data[0])
+    return _enrich_authors([author])[0] if enrich else author
 
 
 def create_author(data: AuthorCreate) -> Author:
@@ -187,7 +138,7 @@ def update_author(author_id: str, data: AuthorUpdate) -> Optional[Author]:
     updates = data.model_dump(exclude_unset=True)
     if not updates:
         return get_author(author_id)
-    if get_author(author_id) is None:
+    if get_author(author_id, enrich=False) is None:
         return None
     # Recompute name_normalized if name changes
     if "name" in updates:
@@ -204,7 +155,7 @@ def update_author(author_id: str, data: AuthorUpdate) -> Optional[Author]:
 
 
 def delete_author(author_id: str) -> bool:
-    if get_author(author_id) is None:
+    if get_author(author_id, enrich=False) is None:
         return False
     get_client().table(_AUTHORS_TABLE).delete().eq("id", author_id).execute()
     logger.info("Deleted author %s", author_id)
@@ -231,8 +182,7 @@ def search_authors(query: str, limit: int = 10) -> list[AuthorSearchResult]:
     author_ids = [r["id"] for r in result.data]
     counts: dict[str, int] = {}
     if author_ids:
-        pa_result = get_client().table(_PAPER_AUTHORS_TABLE).select("author_id").execute()
-        for row in pa_result.data:
+        for row in _read_related(_PAPER_AUTHORS_TABLE, "author_id", "author_id", author_ids):
             aid = row["author_id"]
             counts[aid] = counts.get(aid, 0) + 1
 
@@ -349,47 +299,26 @@ def unlink_paper_author(paper_id: str, author_id: str) -> bool:
     return True
 
 
-def get_paper_author_links(paper_id: str) -> list[dict]:
-    """Get all author links for a paper, with Author data joined."""
-    result = (
-        get_client()
-        .table(_PAPER_AUTHORS_TABLE)
-        .select("*")
-        .eq("paper_id", paper_id)
-        .order("position")
-        .execute()
-    )
-    links = []
-    for row in result.data:
-        pa = PaperAuthor.model_validate(row)
-        author = get_author(row["author_id"])
-        links.append({
-            "link": pa,
-            "author": author,
-        })
-    return links
+def get_paper_author_links(paper_id: str) -> list[PaperAuthorReference]:
+    """Load links, author profiles, and enrichment in bounded batches."""
+    links = [PaperAuthor.model_validate(row) for row in _read_related(
+        _PAPER_AUTHORS_TABLE, "*", "paper_id", [paper_id],
+    )]
+    links.sort(key=lambda link: (link.position, link.id))
+    authors = _enrich_authors([Author.model_validate(row) for row in _read_related(
+        _AUTHORS_TABLE, "*", "id", [link.author_id for link in links],
+    )])
+    by_id = {author.id: author for author in authors}
+    return [PaperAuthorReference(link=link, author=by_id.get(link.author_id)) for link in links]
 
 
 def get_author_papers(author_id: str) -> list[Paper]:
-    result = (
-        get_client()
-        .table(_PAPER_AUTHORS_TABLE)
-        .select("paper_id")
-        .eq("author_id", author_id)
-        .execute()
-    )
-    paper_ids = [r["paper_id"] for r in result.data]
-    if not paper_ids:
-        return []
-
-    from services import paper_service
-
-    papers = []
-    for pid in paper_ids:
-        p = paper_service.get_paper(pid)
-        if p:
-            papers.append(p)
-    return papers
+    links = _read_related(_PAPER_AUTHORS_TABLE, "paper_id", "author_id", [author_id])
+    paper_ids = list(dict.fromkeys(row["paper_id"] for row in links))
+    papers = {row["id"]: Paper.model_validate(row) for row in _read_related(
+        "papers", "*", "id", paper_ids,
+    )}
+    return [papers[pid] for pid in paper_ids if pid in papers]
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +361,7 @@ def get_top_authors_for_papers(
 def find_potential_papers(author_id: str) -> list[dict]:
     """Find papers not yet linked whose authors string array contains a name
     that fuzzy-matches this author. Returns list of {paper, raw_name, confidence}."""
-    author = get_author(author_id)
+    author = get_author(author_id, enrich=False)
     if not author:
         return []
 

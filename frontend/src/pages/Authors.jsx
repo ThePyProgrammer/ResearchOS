@@ -76,23 +76,24 @@ export default function Authors() {
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
-    loadAuthors()
-  }, [search])
-
-  async function loadAuthors() {
-    try {
+    let active = true
+    async function loadAuthors() {
       setLoading(true)
-      const data = await authorsApi.list({ search: search || undefined })
-      setAuthors(data)
-      setError(null)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+      try {
+        const data = await authorsApi.list({ search: search.trim() || undefined })
+        if (active) { setAuthors(data); setError(null) }
+      } catch (err) {
+        if (active) setError(err.message)
+      } finally {
+        if (active) setLoading(false)
+      }
     }
-  }
+    const timer = setTimeout(loadAuthors, search ? 300 : 0)
+    return () => { active = false; clearTimeout(timer) }
+  }, [search, revision])
 
   function profileLinks(author) {
     const links = []
@@ -227,7 +228,7 @@ export default function Authors() {
       {showAdd && (
         <AddAuthorModal
           onClose={() => setShowAdd(false)}
-          onCreate={() => loadAuthors()}
+          onCreate={() => setRevision(value => value + 1)}
         />
       )}
     </div>

@@ -88,10 +88,36 @@ preserve counts, sorting, filtering, and bulk selection. Existing list endpoints
 also remain subject to the configured Supabase response row limit.
 
 Other features still contain synchronous service calls in async paths, including
-search/import workflows, and per-item lookups in author detail loading. This is
+search/import workflows. This is
 a focused improvement to library loading, not a conversion of the entire backend
 to an async database client.
 
-No live Supabase timing or query plan was measured. Compare browser network
+No before/after live Supabase benchmark or query plan was measured. Compare browser network
 timings before/after on the same library, and inspect database query plans before
 attributing any remaining delay to hosting region, network latency, or indexes.
+
+
+## Authors and author references
+
+The Authors page already made one HTTP request per load, but its enrichment
+scanned all paper-author links, papers, and libraries. It now filters links to
+returned authors, joins only their papers, and fetches only referenced libraries.
+Search waits for a 300 ms typing pause and ignores obsolete responses.
+
+Paper author references previously used one link query plus up to five queries
+per author. They now batch profiles and enrichment: at most four service queries
+for up to 100 authors, fewer than 500 links per batch, and up to 100 libraries.
+The existing paper-existence check adds one query at the route level. Author
+paper lists similarly use two service queries for fewer than 500 links and up to
+100 papers, instead of one plus a separate lookup per paper. ID batches are
+limited to 100 and result pages to 500, with stable ordering and complete counts.
+The response schemas, link positions, and library associations are preserved.
+Ordinary synchronous author routes now run in FastAPI's worker pool; existence
+checks skip unused enrichment. No database migration is needed.
+
+The batched list query was verified against the configured Supabase database.
+One cold read of ten authors took 4.79 seconds; this is not a before/after latency
+benchmark. Query-count, pagination, API-shape, stale-search, and browser workflow
+regressions are covered by tests. Optional fuzzy author matching and potential
+paper discovery still scan their respective tables; the directory also retains
+its existing 50-author default limit.

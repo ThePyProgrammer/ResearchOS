@@ -15,7 +15,7 @@ NOT_FOUND = {"error": "not_found", "detail": "Author not found"}
 
 
 @router.get("")
-async def list_authors(
+def list_authors(
     search: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
 ):
@@ -24,7 +24,7 @@ async def list_authors(
 
 
 @router.get("/search")
-async def search_authors(
+def search_authors(
     q: str = Query("", min_length=1),
     limit: int = Query(10, ge=1, le=50),
 ):
@@ -38,7 +38,7 @@ class MatchRequest(BaseModel):
 
 
 @router.post("/match")
-async def match_authors(data: MatchRequest):
+def match_authors(data: MatchRequest):
     if not data.name.strip():
         raise HTTPException(status_code=422, detail="name must not be empty")
     candidates = author_service.find_matching_authors(data.name)
@@ -52,7 +52,7 @@ async def match_authors(data: MatchRequest):
 
 
 @router.post("", status_code=201)
-async def create_author(data: AuthorCreate):
+def create_author(data: AuthorCreate):
     if not data.name.strip():
         raise HTTPException(status_code=422, detail="name must not be empty")
     author = author_service.create_author(data)
@@ -60,7 +60,7 @@ async def create_author(data: AuthorCreate):
 
 
 @router.get("/{author_id}")
-async def get_author(author_id: str):
+def get_author(author_id: str):
     author = author_service.get_author(author_id)
     if author is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -68,7 +68,7 @@ async def get_author(author_id: str):
 
 
 @router.patch("/{author_id}")
-async def update_author(author_id: str, data: AuthorUpdate):
+def update_author(author_id: str, data: AuthorUpdate):
     author = author_service.update_author(author_id, data)
     if author is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -76,15 +76,15 @@ async def update_author(author_id: str, data: AuthorUpdate):
 
 
 @router.delete("/{author_id}", status_code=204)
-async def delete_author(author_id: str):
+def delete_author(author_id: str):
     deleted = author_service.delete_author(author_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
 
 
 @router.get("/{author_id}/papers")
-async def get_author_papers(author_id: str):
-    author = author_service.get_author(author_id)
+def get_author_papers(author_id: str):
+    author = author_service.get_author(author_id, enrich=False)
     if author is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
     papers = author_service.get_author_papers(author_id)
@@ -92,8 +92,8 @@ async def get_author_papers(author_id: str):
 
 
 @router.get("/{author_id}/potential-papers")
-async def get_potential_papers(author_id: str):
-    author = author_service.get_author(author_id)
+def get_potential_papers(author_id: str):
+    author = author_service.get_author(author_id, enrich=False)
     if author is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
     matches = author_service.find_potential_papers(author_id)

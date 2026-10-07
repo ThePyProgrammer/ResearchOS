@@ -586,13 +586,7 @@ def get_paper_authors(paper_id: str):
         raise HTTPException(status_code=404, detail=NOT_FOUND)
     from services import author_service
     links = author_service.get_paper_author_links(paper_id)
-    return JSONResponse([
-        {
-            "link": l["link"].model_dump(by_alias=True),
-            "author": l["author"].model_dump(by_alias=True) if l["author"] else None,
-        }
-        for l in links
-    ])
+    return JSONResponse([link.model_dump(by_alias=True) for link in links])
 
 
 @router.post("/{paper_id}/authors/link", status_code=201)

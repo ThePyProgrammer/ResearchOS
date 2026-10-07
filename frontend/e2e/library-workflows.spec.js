@@ -307,3 +307,28 @@ test('row context menu fits the viewport and supports clipboard and keyboard act
   await page.getByRole('menuitem', { name: 'Copy title', exact: true }).click()
   await expect(menu).toBeHidden()
 })
+
+
+test('authors search batches typing, opens profiles, and surfaces errors', async ({ page }) => {
+  await mockApi(page)
+  const author = { id: 'a1', name: 'Jane Smith', paperCount: 1, affiliations: [], libraries: [] }
+  const searches = []
+  await page.route('**/api/authors**', route => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/authors/a1') return route.fulfill({ json: author })
+    if (url.pathname === '/api/authors/a1/papers') return route.fulfill({ json: [] })
+    const search = url.searchParams.get('search')
+    searches.push(search)
+    if (search === 'failure') return route.fulfill({ status: 502, json: { detail: 'Author lookup unavailable' } })
+    return route.fulfill({ json: [author] })
+  })
+  await page.goto('/authors')
+  await expect(page.getByText('Jane Smith', { exact: true })).toBeVisible()
+  await page.getByPlaceholder('Search authors...').pressSequentially('Jane', { delay: 30 })
+  await expect.poll(() => searches.filter(Boolean)).toEqual(['Jane'])
+  await page.getByText('Jane Smith', { exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Jane Smith' })).toBeVisible()
+  await page.getByRole('button', { name: 'All Authors' }).click()
+  await page.getByPlaceholder('Search authors...').fill('failure')
+  await expect(page.getByText('Author lookup unavailable')).toBeVisible()
+})
