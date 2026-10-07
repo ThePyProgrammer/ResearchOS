@@ -1309,6 +1309,7 @@ export default function Library() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [contextMenu, setContextMenu] = useState(null)
+  const [dialogItems, setDialogItems] = useState([])
   const [actionMessage, setActionMessage] = useState(null)
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -1535,10 +1536,10 @@ export default function Library() {
     }
   }
 
-  const runBulkMutation = async (options) => {
+  const runBulkMutation = async (options, targets) => {
     if (bulkMutationRef.current || batch.isRunning) return
     bulkMutationRef.current = true
-    const selected = items.filter(item => selectedIds.has(item.id))
+    const selected = targets ?? items.filter(item => selectedIds.has(item.id))
     const libraryId = activeLibraryId
     const setBusy = options.action === 'delete' ? setBulkDeleting
       : options.action === 'status' ? setBulkStatusChanging : setBulkMoving
@@ -1562,7 +1563,7 @@ export default function Library() {
       })
       if (activeLibraryRef.current !== libraryId) return
       if (result.failed.length) {
-        setBulkError(`${result.succeededIds.length} succeeded; ${result.failed.length} could not be completed and remain selected. ${result.failed[0].detail}`)
+        setBulkError(`${result.succeededIds.length} succeeded; ${result.failed.length} could not be completed. ${result.failed[0].detail}`)
       }
       setShowDeleteModal(false)
       setShowMoveModal(false)
@@ -1577,8 +1578,8 @@ export default function Library() {
     }
   }
 
-  const handleBulkDelete = () => runBulkMutation({ action: 'delete' })
-  const handleBulkMove = (collectionId) => runBulkMutation({ action: 'add_to_collection', collectionId })
+  const handleBulkDelete = () => runBulkMutation({ action: 'delete' }, dialogItems)
+  const handleBulkMove = (collectionId) => runBulkMutation({ action: 'add_to_collection', collectionId }, dialogItems)
 
   const computeSkipCount = async (selected, operation) => {
     if (operation === 'tags') {
@@ -1613,9 +1614,9 @@ export default function Library() {
     return 0
   }
 
-  const startBulkOperation = async (operation) => {
+  const startBulkOperation = async (operation, targets) => {
     if (bulkMutationRef.current || batch.isRunning) return
-    const selected = items.filter(i => selectedIds.has(i.id))
+    const selected = targets ?? items.filter(i => selectedIds.has(i.id))
     const operationItems = operation === 'pdfs'
       ? selected.filter(i => i.itemType !== 'website' && i.itemType !== 'github_repo')
       : selected
@@ -1724,9 +1725,9 @@ export default function Library() {
     // Do NOT clear bulkOperation/bulkItems — job may still be running in background
   }
 
-  const handleBulkStatusChange = async (status) => {
+  const handleBulkStatusChange = async (status, targets) => {
     setShowStatusDropdown(false)
-    await runBulkMutation({ action: 'status', status })
+    await runBulkMutation({ action: 'status', status }, targets)
   }
 
   const openContextMenu = (event, item) => {
@@ -1734,7 +1735,6 @@ export default function Library() {
     event.stopPropagation()
     if (showDeleteModal || showMoveModal || showConfirmBulk) return
     const targetItems = selectedIds.has(item.id) ? items.filter(i => selectedIds.has(i.id)) : [item]
-    setSelectedIds(new Set(targetItems.map(i => i.id)))
     setShowStatusDropdown(false)
     setActionMessage(null)
     const rect = event.currentTarget.getBoundingClientRect()
@@ -1776,19 +1776,19 @@ export default function Library() {
         action(single ? 'Copy library link' : 'Copy library links', 'link', () => copyContextText(targets.map(i => new URL(route(i), window.location.origin).href).join('\n'), 'Library link')),
         ...(single && item.doi ? [action('Copy DOI', 'content_copy', () => copyContextText(item.doi, 'DOI'))] : []),
         ...(single && source ? [action('Copy source URL', 'content_copy', () => copyContextText(source, 'Source URL'))] : []),
-        action('Export BibTeX?', 'download', () => { setExportIds(targets.map(i => i.id)); setShowExportModal(true) }),
+        action('Export BibTeX…', 'download', () => { setExportIds(targets.map(i => i.id)); setShowExportModal(true) }),
       ] },
       { label: 'Organize', actions: [
-        action('Add to collection?', 'library_add', () => setShowMoveModal(true), busy),
-        ...['inbox', 'to-read', 'read'].map(status => action(`Mark as ${statusConfig[status].label}`, 'check_circle', () => handleBulkStatusChange(status), busy)),
+        action('Add to collection…', 'library_add', () => { setDialogItems(targets); setShowMoveModal(true) }, busy),
+        ...['inbox', 'to-read', 'read'].map(status => action(`Mark as ${statusConfig[status].label}`, 'check_circle', () => handleBulkStatusChange(status, targets), busy)),
       ] },
       { label: 'Process', actions: [
-        action('Generate notes?', 'auto_awesome', () => startBulkOperation('notes'), busy),
-        action('Auto-tag?', 'label', () => startBulkOperation('tags'), busy),
-        ...(papers.length ? [action('Fetch PDFs?', 'cloud_download', () => startBulkOperation('pdfs'), busy)] : []),
-        action('Generate embeddings?', 'memory', () => startBulkOperation('embeddings'), busy),
+        action('Generate notes…', 'auto_awesome', () => startBulkOperation('notes', targets), busy),
+        action('Auto-tag…', 'label', () => startBulkOperation('tags', targets), busy),
+        ...(papers.length ? [action('Fetch PDFs…', 'cloud_download', () => startBulkOperation('pdfs', targets), busy)] : []),
+        action('Generate embeddings…', 'memory', () => startBulkOperation('embeddings', targets), busy),
       ] },
-      { label: 'Delete', actions: [{ ...action(single ? 'Delete item?' : `Delete ${targets.length} items?`, 'delete', () => setShowDeleteModal(true), busy), danger: true }] },
+      { label: 'Delete', actions: [{ ...action(single ? 'Delete item…' : `Delete ${targets.length} items…`, 'delete', () => { setDialogItems(targets); setShowDeleteModal(true) }, busy), danger: true }] },
     ]
   }
 
@@ -2196,7 +2196,7 @@ export default function Library() {
             </span>
             <div className="flex items-center gap-2 ml-auto">
               <button
-                onClick={() => setShowMoveModal(true)}
+                onClick={() => { setDialogItems(items.filter(i => selectedIds.has(i.id))); setShowMoveModal(true) }}
                 disabled={!!bulkProgress || batch.isRunning}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors"
               >
@@ -2282,7 +2282,7 @@ export default function Library() {
                 Export BibTeX
               </button>
               <button
-                onClick={() => setShowDeleteModal(true)}
+                onClick={() => { setDialogItems(items.filter(i => selectedIds.has(i.id))); setShowDeleteModal(true) }}
                 disabled={!!bulkProgress || batch.isRunning}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors"
               >
@@ -2440,7 +2440,7 @@ export default function Library() {
         <WindowModal
           open={showDeleteModal}
           onClose={() => { if (!bulkDeleting) setShowDeleteModal(false) }}
-          title={`Delete ${selectedIds.size} item${selectedIds.size !== 1 ? 's' : ''}`}
+          title={`Delete ${dialogItems.length} item${dialogItems.length !== 1 ? 's' : ''}`}
           iconName="delete"
           iconWrapClassName="bg-red-100"
           iconClassName="text-[16px] text-red-600"
@@ -2450,7 +2450,7 @@ export default function Library() {
           <div className="p-6">
             <p className="text-xs text-slate-500 mb-4">This action cannot be undone. All selected papers and websites will be permanently removed.</p>
             <div className="max-h-32 overflow-y-auto mb-4 border border-slate-100 rounded-lg">
-              {items.filter(i => selectedIds.has(i.id)).map(i => (
+              {dialogItems.map(i => (
                 <div key={i.id} className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-600 border-b border-slate-50 last:border-0">
                   <Icon name={i.itemType === 'website' ? 'link' : i.itemType === 'github_repo' ? 'code' : 'description'} className="text-[14px] text-slate-400 flex-shrink-0" />
                   <span className="truncate">{i.title}</span>
@@ -2463,7 +2463,7 @@ export default function Library() {
                 disabled={bulkDeleting}
                 className="flex-1 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
-                {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} item${selectedIds.size !== 1 ? 's' : ''}`}
+                {bulkDeleting ? 'Deleting...' : `Delete ${dialogItems.length} item${dialogItems.length !== 1 ? 's' : ''}`}
               </button>
               <button
                 onClick={() => setShowDeleteModal(false)}
@@ -2482,7 +2482,7 @@ export default function Library() {
         <WindowModal
           open={showMoveModal}
           onClose={() => { if (!bulkMoving) { setShowMoveModal(false); setMoveSearch('') } }}
-          title={`Add ${selectedIds.size} item${selectedIds.size !== 1 ? 's' : ''} to collection`}
+          title={`Add ${dialogItems.length} item${dialogItems.length !== 1 ? 's' : ''} to collection`}
           iconName="library_add"
           iconWrapClassName="bg-blue-100"
           iconClassName="text-[16px] text-blue-600"
