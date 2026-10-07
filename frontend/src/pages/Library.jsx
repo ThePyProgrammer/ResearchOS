@@ -50,6 +50,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
   const status = statusConfig[item.status] || statusConfig['inbox']
   const isWebsite = item.itemType === 'website'
   const isGitHubRepo = item.itemType === 'github_repo'
+  const hoverClass = isWebsite ? 'hover:bg-teal-50' : isGitHubRepo ? 'hover:bg-violet-50' : 'hover:bg-blue-50'
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [editingYear, setEditingYear] = useState(false)
@@ -93,8 +94,8 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
       }}
       onClick={() => onSelect(item)}
       onDoubleClick={() => onOpen?.(item)}
-      className={`group cursor-pointer transition-colors ${
-        selected ? 'bg-blue-50' : checked ? 'bg-blue-50/50' : 'hover:bg-slate-50'
+      className={`group cursor-pointer transition-colors ${hoverClass} ${
+        selected ? 'bg-blue-50' : checked ? 'bg-blue-50/50' : ''
       }`}
     >
       <td className="pl-4 pr-2 py-3 w-8">
@@ -135,16 +136,6 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
               title="Double-click to edit"
             >
               {item.title}
-            </span>
-          )}
-          {isWebsite && (
-            <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
-              Website
-            </span>
-          )}
-          {isGitHubRepo && (
-            <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
-              GitHub
             </span>
           )}
           {!isWebsite && !isGitHubRepo && (!item.pdfUrl || !item.pdfUrl.includes('/storage/v1/object/public/pdfs/')) && (
