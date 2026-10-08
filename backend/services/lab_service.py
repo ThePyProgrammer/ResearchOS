@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from postgrest.exceptions import APIError
 
 from models.lab import (
-    Lab, LabCreate, LabMember, LabMemberPage, LabPage,
+    Lab, LabCreate, LabDetail, LabMember, LabMemberPage, LabPage,
     LabPaper, LabPaperAddResult, LabPaperPage, LabPaperSelection, LabUpdate,
 )
 from services.db import get_client
@@ -33,28 +33,53 @@ def list_labs(search: str = "", limit: int = 30, offset: int = 0) -> LabPage:
                    total=result.count, limit=limit, offset=offset)
 
 
-def get_lab(lab_id: str) -> Optional[Lab]:
-    result = get_client().table("labs").select("*").eq("id", lab_id).execute()
-    return Lab.model_validate(result.data[0]) if result.data else None
+def _details_migration_required() -> None:
+    logger.warning("Lab details schema unavailable; apply 027_lab_details.sql")
+    raise HTTPException(503, detail="Labs needs migration 027_lab_details.sql. Apply it in Supabase and retry.")
 
 
-def create_lab(data: LabCreate) -> Lab:
-    lab = Lab(id=f"lab_{uuid.uuid4().hex}", created_at=datetime.now(timezone.utc).isoformat(),
-              **data.model_dump())
-    get_client().table("labs").insert(lab.model_dump()).execute()
-    logger.info("Created lab %s", lab.id)
-    return lab
+def get_lab(lab_id: str) -> Optional[LabDetail]:
+    try:
+        result = get_client().table("lab_details").select("*").eq("id", lab_id).execute()
+    except APIError as exc:
+        if exc.code in ("PGRST205", "42P01"):
+            _details_migration_required()
+        raise
+    return LabDetail.model_validate(result.data[0]) if result.data else None
 
 
-def update_lab(lab_id: str, data: LabUpdate) -> Optional[Lab]:
-    updates = data.model_dump(exclude_unset=True)
-    if not updates:
-        return get_lab(lab_id)
-    result = get_client().table("labs").update(updates).eq("id", lab_id).execute()
-    if not result.data:
-        return None
-    logger.info("Updated lab %s", lab_id)
-    return Lab.model_validate(result.data[0])
+def _save_lab(lab_id: str, data: LabUpdate, created_at: Optional[str] = None) -> Optional[LabDetail]:
+    try:
+        result = get_client().rpc("save_lab_details", {
+            "p_lab_id": lab_id, "p_data": data.model_dump(exclude_unset=True),
+            "p_created_at": created_at,
+        }).execute()
+    except APIError as exc:
+        if exc.code == "PGRST202":
+            _details_migration_required()
+        if exc.code in ("P0002", "23503"):
+            raise HTTPException(404, detail={"error": "not_found", "detail": "One or more selected PIs no longer exist."}) from exc
+        if exc.code == "22023":
+            raise HTTPException(422, detail="Select up to 50 PIs and add up to 20 valid HTTP/HTTPS website URLs.") from exc
+        raise
+    logger.info("Saved lab details %s", lab_id)
+    return LabDetail.model_validate(result.data) if result.data is not None else None
+
+
+def create_lab(data: LabCreate) -> LabDetail:
+    return _save_lab(f"lab_{uuid.uuid4().hex}", LabUpdate.model_validate(data.model_dump()),
+                     datetime.now(timezone.utc).isoformat())
+
+
+def update_lab(lab_id: str, data: LabUpdate) -> Optional[LabDetail]:
+    return _save_lab(lab_id, data) if data.model_fields_set else get_lab(lab_id)
+
+
+def pi_options(search: str, limit: int = 20) -> list[LabMember]:
+    result = (get_client().table("authors").select("author_id:id,name,orcid")
+              .ilike("name", _contains(search)).order("name").order("id")
+              .range(0, limit - 1).execute())
+    return [LabMember.model_validate(row) for row in result.data]
 
 
 def delete_lab(lab_id: str) -> bool:

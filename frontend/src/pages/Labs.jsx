@@ -58,6 +58,11 @@ function Pagination({ page, onChange, label }) {
 function LabForm({ lab, onClose, onSaved }) {
   const [name, setName] = useState(lab?.name || '')
   const [description, setDescription] = useState(lab?.description || '')
+  const [websites, setWebsites] = useState(lab?.websites?.length ? lab.websites : [''])
+  const [pis, setPis] = useState(lab?.principalInvestigators || [])
+  const [piSearch, setPiSearch] = useState('')
+  const piQuery = piSearch.trim()
+  const piOptions = useResource(useCallback(() => piQuery.length < 2 ? Promise.resolve([]) : labsApi.piOptions(piQuery), [piQuery]), 300)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   async function save(event) {
@@ -66,7 +71,12 @@ function LabForm({ lab, onClose, onSaved }) {
     setSaving(true)
     setError(null)
     try {
-      const data = { name: name.trim(), description: description.trim() || null }
+      const urls = [...new Set(websites.map(url => url.trim()).filter(Boolean))]
+      if (urls.some(value => {
+        try { const url = new URL(value); return !['https:', 'http:'].includes(url.protocol) || !!url.username || !!url.password }
+        catch { return true }
+      })) throw new Error('Enter valid HTTP or HTTPS website URLs without credentials.')
+      const data = { name: name.trim(), description: description.trim() || null, websites: urls, piAuthorIds: pis.map(pi => pi.authorId) }
       const saved = lab ? await labsApi.update(lab.id, data) : await labsApi.create(data)
       onSaved(saved)
       onClose()
@@ -75,15 +85,42 @@ function LabForm({ lab, onClose, onSaved }) {
       setSaving(false)
     }
   }
-  return <WindowModal open title={lab ? 'Edit lab' : 'Create lab'} iconName="science" onClose={onClose} disableClose={saving} bodyClassName="overflow-auto p-5">
+  return <WindowModal open title={lab ? 'Edit lab' : 'Create lab'} iconName="science" onClose={onClose} disableClose={saving} allowMinimize={!saving} bodyClassName="max-h-[75vh] overflow-auto p-5">
     <form onSubmit={save} className="space-y-4">
+      <fieldset disabled={saving} className="space-y-4">
       <label className="block text-sm font-medium text-slate-700">Lab name
         <input autoFocus required maxLength={200} value={name} onChange={event => setName(event.target.value)} className={`${INPUT} mt-1`} placeholder="e.g. Language and Learning Lab" />
       </label>
       <label className="block text-sm font-medium text-slate-700">Description (optional)
         <textarea maxLength={5000} rows={3} value={description} onChange={event => setDescription(event.target.value)} className={`${INPUT} mt-1`} />
       </label>
+      <section aria-label="Lab websites" className="space-y-2">
+        <h3 className="text-sm font-medium text-slate-700">Websites (optional)</h3>
+        {websites.map((url, index) => <div key={index} className="flex items-center gap-2">
+          <input type="url" aria-label={`Website ${index + 1}`} maxLength={2083} value={url} placeholder="https://example.org" className={INPUT} onChange={event => setWebsites(previous => previous.map((value, i) => i === index ? event.target.value : value))} />
+          <button type="button" className="rounded p-1 text-slate-400 hover:text-red-600" aria-label={`Remove website ${index + 1}`} onClick={() => setWebsites(previous => previous.filter((_, i) => i !== index))}><Icon name="delete" className="text-[18px]" /></button>
+        </div>)}
+        <button type="button" className={BUTTON} disabled={websites.length >= 20} onClick={() => setWebsites(previous => [...previous, ''])}>Add website</button>
+      </section>
+      <section aria-label="Select principal investigators" className="space-y-2">
+        <h3 className="text-sm font-medium text-slate-700">Principal investigators (PIs)</h3>
+        <p className="text-xs text-slate-500">Select existing authors. PI assignments are independent of members and papers.</p>
+        <ul className="flex flex-wrap gap-2">{pis.map(pi => <li key={pi.authorId} className="flex items-center gap-1 rounded-lg bg-blue-50 px-2 py-1 text-sm text-blue-700">{pi.name}<button type="button" className="inline-flex rounded p-1 hover:bg-blue-100" aria-label={`Remove PI ${pi.name}`} onClick={() => setPis(previous => previous.filter(item => item.authorId !== pi.authorId))}><Icon name="close" className="text-[16px]" /></button></li>)}</ul>
+        <label className="block text-sm text-slate-700">Search PI authors
+          <input maxLength={200} value={piSearch} onChange={event => setPiSearch(event.target.value)} className={`${INPUT} mt-1`} placeholder="Type at least 2 characters" />
+        </label>
+        {piQuery.length >= 2 && (piOptions.loading ? <p className="text-xs text-slate-500">Searching authors…</p> : piOptions.error ? <div role="alert" className="text-sm text-red-600">{piOptions.error} <button type="button" className="underline" onClick={piOptions.retry}>Retry author search</button></div> : <>
+          <ul className="max-h-48 divide-y divide-slate-100 overflow-auto">{piOptions.data?.map(author => <li key={author.authorId} className="flex items-center justify-between gap-2 py-2">
+            <span className="min-w-0 text-sm text-slate-700">{author.name}<span className="block text-xs text-slate-500">{author.orcid || author.authorId}</span></span>
+            <button type="button" className={BUTTON} disabled={pis.length >= 50 || pis.some(pi => pi.authorId === author.authorId)} aria-label={`Select PI ${author.name}`} onClick={() => setPis(previous => [...previous, author])}>{pis.some(pi => pi.authorId === author.authorId) ? 'Selected' : 'Select'}</button>
+          </li>)}</ul>
+          {!piOptions.data?.length && <p className="text-xs text-slate-500">No matching authors. Create an author on the Authors page first.</p>}
+          {piOptions.data?.length === 20 && <p className="text-xs text-slate-500">Showing the first 20 matches. Refine your search for more.</p>}
+        </>)}
+        {pis.length >= 50 && <p className="text-xs text-slate-500">You can select up to 50 PIs.</p>}
+      </section>
       <p className="text-xs text-slate-500">Add members and choose papers independently. A lab can track papers without any members.</p>
+      </fieldset>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" className={BUTTON} onClick={onClose} disabled={saving}>Cancel</button>
@@ -263,6 +300,15 @@ function LabDetail({ id, onUpdated, onDeleted }) {
       <div className="flex flex-wrap gap-2"><button className={BUTTON} disabled={!!busy} onClick={() => setEditing(true)}>Edit lab</button><button className={`${BUTTON} text-red-600`} disabled={!!busy} onClick={() => { setError(null); setDeleting(true) }}>Delete lab</button></div>
     </div>
     {error && !deleting && <p role="alert" className="text-sm text-red-600">{error}</p>}
+
+    <div className="grid gap-4 sm:grid-cols-2">
+      <section aria-label="Websites"><h3 className="text-sm font-semibold text-slate-800">Websites</h3>
+        {lab.data.websites?.length ? <ul className="mt-2 space-y-1">{lab.data.websites.map(url => <li key={url}><a href={url} target="_blank" rel="noopener noreferrer" className="break-all text-sm text-blue-600 hover:underline">{url}<Icon name="open_in_new" className="ml-1 align-middle text-[14px]" /></a></li>)}</ul> : <p className="mt-1 text-xs text-slate-500">No websites added. Use Edit lab to add links.</p>}
+      </section>
+      <section aria-label="Principal investigators"><h3 className="text-sm font-semibold text-slate-800">Principal investigators (PIs)</h3>
+        {lab.data.principalInvestigators?.length ? <ul className="mt-2 space-y-1">{lab.data.principalInvestigators.map(pi => <li key={pi.authorId}><Link to={`/authors/${encodeURIComponent(pi.authorId)}`} className="text-sm text-blue-600 hover:underline">{pi.name}</Link></li>)}</ul> : <p className="mt-1 text-xs text-slate-500">No PIs selected. Use Edit lab to choose authors.</p>}
+      </section>
+    </div>
 
     <section aria-label="Lab members">
       <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold text-slate-800">Members{!members.loading && !members.error && ` (${members.data.total})`}</h3><button className={BUTTON} disabled={!!busy} onClick={() => setAdding(true)}>Add members</button></div>

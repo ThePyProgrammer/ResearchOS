@@ -290,6 +290,7 @@ export const chatApi = {
 }
 
 export const labsApi = {
+  piOptions: (search) => apiFetch(`/labs/pi-options?${new URLSearchParams({ search, limit: 20 })}`),
   list: (params = {}) => apiFetch(`/labs?${new URLSearchParams(params)}`),
   get: (id) => apiFetch(`/labs/${encodeURIComponent(id)}`),
   create: (data) => apiFetch('/labs', { method: 'POST', body: data }),

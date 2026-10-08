@@ -5,7 +5,7 @@ import httpx
 from postgrest import SyncPostgrestClient
 from postgrest.exceptions import APIError
 
-from models.lab import Lab, LabCreate, LabMemberPage, LabPaperPage, LabUpdate
+from models.lab import LabDetail, LabCreate, LabMemberPage, LabPaperPage, LabUpdate
 from services import lab_service
 
 
@@ -15,12 +15,12 @@ PAPER = {"id": "p_1", "title": "Shared work", "authors": ["Jane", "John"], "year
 
 
 def test_create_and_update_contracts(client, mocker):
-    create = mocker.patch.object(lab_service, "create_lab", return_value=Lab.model_validate(LAB))
+    create = mocker.patch.object(lab_service, "create_lab", return_value=LabDetail.model_validate(LAB))
     response = client.post("/api/labs", json={"name": " Language Lab "})
     assert response.status_code == 201
-    assert response.json() == {"id": "lab_1", "name": "Language Lab", "description": None, "createdAt": "2026-10-07"}
+    assert response.json() == {"id": "lab_1", "name": "Language Lab", "description": None, "createdAt": "2026-10-07", "websites": [], "principalInvestigators": []}
     assert create.call_args.args[0].name == "Language Lab"
-    update = mocker.patch.object(lab_service, "update_lab", return_value=Lab.model_validate(LAB))
+    update = mocker.patch.object(lab_service, "update_lab", return_value=LabDetail.model_validate(LAB))
     assert client.patch("/api/labs/lab_1", json={"description": None}).status_code == 200
     assert update.call_args.args[1].model_dump(exclude_unset=True) == {"description": None}
 
@@ -121,13 +121,14 @@ def test_lab_list_has_database_search_count_and_stable_pagination(database):
 
 def test_writes_do_not_read_back_or_chain_select(database):
     db, query = database
+    query.execute.return_value.data = {**LAB, "name": "Test"}
     lab = lab_service.create_lab(LabCreate(name=" Test "))
     assert lab.name == "Test"
     query.execute.assert_called_once()
     query.select.assert_not_called()
     query.reset_mock()
     assert lab_service.update_lab("lab_1", LabUpdate(description=None)).id == "lab_1"
-    query.update.assert_called_once_with({"description": None})
+    assert db.rpc.call_args.args == ("save_lab_details", {"p_lab_id": "lab_1", "p_data": {"description": None}, "p_created_at": None})
     query.execute.assert_called_once()
     query.select.assert_not_called()
     query.reset_mock()
@@ -191,7 +192,7 @@ def test_missing_rpc_falls_back_through_real_postgrest_client(
                 assert request.url.params["order"] == "name.asc,author_id.asc"
             rows = [row] if total and offset == 0 else []
             return httpx.Response(200, json=rows, headers={"content-range": f"0-0/{total}"})
-        assert request.url.path == "/labs"
+        assert request.url.path == "/lab_details"
         return httpx.Response(200, json=[LAB] if lab_exists else [])
 
     with httpx.Client(transport=httpx.MockTransport(handle)) as http:
@@ -300,8 +301,69 @@ def test_invalid_batch_errors_are_sanitized(client, database, code, status):
 
 def test_unlinking_paper_preserves_source_and_member_records(client, database, mocker):
     db, query = database
-    mocker.patch.object(lab_service, "get_lab", return_value=Lab.model_validate(LAB))
+    mocker.patch.object(lab_service, "get_lab", return_value=LabDetail.model_validate(LAB))
     response = client.delete("/api/labs/lab_1/papers/p_1")
     assert response.status_code == 204
     db.table.assert_called_once_with("lab_paper_links")
     assert [call.args for call in query.eq.call_args_list] == [("lab_id", "lab_1"), ("paper_id", "p_1")]
+
+
+@pytest.mark.parametrize("payload", [
+    {"websites": ["javascript:alert(1)"]}, {"websites": ["ftp://example.org"]},
+    {"websites": ["https://user:password@example.org"]}, {"websites": ["not a URL"]},
+    {"websites": None}, {"websites": ["https://example.org"] * 21},
+    {"piAuthorIds": None}, {"piAuthorIds": [""]}, {"piAuthorIds": ["a"] * 51},
+])
+def test_invalid_lab_details_do_not_reach_database(client, database, payload):
+    db, _ = database
+    assert client.patch("/api/labs/lab_1", json=payload).status_code == 422
+    db.rpc.assert_not_called()
+    db.table.assert_not_called()
+
+
+def test_lab_detail_read_includes_pis_in_one_query(client, database):
+    db, query = database
+    query.execute.return_value.data = [{**LAB, "websites": ["https://example.org/"],
+        "principal_investigators": [{"author_id": "a_1", "name": "Jane", "orcid": None}]}]
+    response = client.get("/api/labs/lab_1")
+    assert response.status_code == 200
+    assert response.json()["principalInvestigators"][0]["authorId"] == "a_1"
+    assert response.json()["websites"] == ["https://example.org/"]
+    db.table.assert_called_once_with("lab_details")
+    query.execute.assert_called_once()
+
+
+def test_detail_save_is_atomic_and_clear_is_explicit(client, database):
+    db, query = database
+    query.execute.return_value.data = LAB
+    response = client.patch("/api/labs/lab_1", json={"websites": [" https://example.org "], "piAuthorIds": ["a_1", "a_2"]})
+    assert response.status_code == 200
+    assert db.rpc.call_args.args[1]["p_data"] == {"websites": ["https://example.org/"], "pi_author_ids": ["a_1", "a_2"]}
+    query.execute.assert_called_once()
+    db.table.assert_not_called()
+    client.patch("/api/labs/lab_1", json={"piAuthorIds": [], "websites": []})
+    assert db.rpc.call_args.args[1]["p_data"] == {"pi_author_ids": [], "websites": []}
+
+
+def test_pi_options_are_bounded_and_do_not_load_papers(client, database):
+    db, query = database
+    query.execute.return_value.data = [{"author_id": "a_1", "name": "Jane", "orcid": None}]
+    response = client.get("/api/labs/pi-options?search=50%25_&limit=20")
+    assert response.status_code == 200
+    assert response.json()[0]["authorId"] == "a_1"
+    db.table.assert_called_once_with("authors")
+    query.select.assert_called_once_with("author_id:id,name,orcid")
+    query.ilike.assert_called_once_with("name", "%50\\%\\_%")
+    query.range.assert_called_once_with(0, 19)
+    query.execute.assert_called_once()
+
+
+@pytest.mark.parametrize("code,status", [("P0002", 404), ("23503", 404), ("PGRST202", 503), ("22023", 422), ("42501", 500)])
+def test_lab_detail_save_errors(client, database, code, status):
+    _, query = database
+    query.execute.side_effect = APIError({"code": code, "message": "private database details", "details": None, "hint": None})
+    response = client.patch("/api/labs/lab_1", json={"piAuthorIds": ["a_1"]})
+    assert response.status_code == status
+    assert "private database details" not in response.text
+    if status == 503:
+        assert "027_lab_details.sql" in response.text

@@ -1,21 +1,36 @@
 from typing import Annotated, Optional
 
-from pydantic import Field, StringConstraints, field_validator
+from pydantic import AfterValidator, Field, HttpUrl, StringConstraints, TypeAdapter, field_validator
 
 from models.base import CamelModel
 
 
 LabName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+RecordId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+
+
+def _website_url(value: str) -> str:
+    url = TypeAdapter(HttpUrl).validate_python(value)
+    if url.username or url.password:
+        raise ValueError("Website URLs cannot contain credentials")
+    return str(url)
+
+
+WebsiteUrl = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2083), AfterValidator(_website_url)]
 
 
 class LabCreate(CamelModel):
     name: LabName
     description: Optional[str] = Field(None, max_length=5000)
+    websites: list[WebsiteUrl] = Field(default_factory=list, max_length=20)
+    pi_author_ids: list[RecordId] = Field(default_factory=list, max_length=50)
 
 
 class LabUpdate(CamelModel):
     name: Optional[LabName] = None
     description: Optional[str] = Field(None, max_length=5000)
+    websites: list[WebsiteUrl] = Field(default_factory=list, max_length=20)
+    pi_author_ids: list[RecordId] = Field(default_factory=list, max_length=50)
 
     @field_validator("name")
     @classmethod
@@ -30,6 +45,7 @@ class Lab(CamelModel):
     name: str
     description: Optional[str] = None
     created_at: str
+    websites: list[WebsiteUrl] = Field(default_factory=list)
 
 
 class LabPage(CamelModel):
@@ -43,6 +59,10 @@ class LabMember(CamelModel):
     author_id: str
     name: str
     orcid: Optional[str] = None
+
+
+class LabDetail(Lab):
+    principal_investigators: list[LabMember] = Field(default_factory=list)
 
 
 class LabMemberPage(CamelModel):
@@ -68,9 +88,6 @@ class LabPaperPage(CamelModel):
     total: int
     limit: int
     offset: int
-
-
-RecordId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
 
 class LabPaperSelection(CamelModel):

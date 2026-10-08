@@ -1,5 +1,66 @@
 import { expect, test } from '@playwright/test'
 
+test('Labs saves websites and multiple PIs independently of members and papers', async ({ page }) => {
+  let lab = null
+  let failSave = true
+  const pis = [{ authorId: 'pi_1', name: 'Ada Smith', orcid: null }, { authorId: 'pi_2', name: 'Bea Smith', orcid: null }]
+  const calls = []
+  await page.route('**/api/**', async route => {
+    const request = route.request()
+    const url = new URL(request.url())
+    const path = url.pathname
+    const method = request.method()
+    calls.push(`${method} ${path}`)
+    if (path === '/api/libraries') return route.fulfill({ json: [] })
+    if (path === '/api/labs/pi-options') return route.fulfill({ json: pis })
+    if ((path === '/api/labs' && method === 'POST') || (path === '/api/labs/details' && method === 'PATCH')) {
+      if (failSave) { failSave = false; return route.fulfill({ status: 503, json: { detail: 'Save failed. Please retry.' } }) }
+      const data = request.postDataJSON()
+      lab = { id: 'details', createdAt: '2026-10-08', ...data, principalInvestigators: pis.filter(pi => data.piAuthorIds.includes(pi.authorId)) }
+      return route.fulfill({ status: method === 'POST' ? 201 : 200, json: lab })
+    }
+    if (path === '/api/labs') return route.fulfill({ json: { items: lab ? [lab] : [], total: lab ? 1 : 0, limit: 30, offset: 0 } })
+    if (path === '/api/labs/details') return route.fulfill({ json: lab })
+    if (path.endsWith('/members') || path.endsWith('/papers')) return route.fulfill({ json: { items: [], total: 0, limit: 25, offset: 0 } })
+    return route.fulfill({ json: [] })
+  })
+  await page.goto('/labs')
+  await page.getByRole('button', { name: 'Create lab', exact: true }).click()
+  await page.getByLabel('Lab name').fill('Systems Lab')
+  await page.getByLabel('Website 1', { exact: true }).fill('https://lab.example/')
+  await page.getByRole('button', { name: 'Add website' }).click()
+  await page.getByLabel('Website 2', { exact: true }).fill('https://lab.example/projects')
+  await page.getByLabel('Search PI authors').fill('Smith')
+  for (const pi of pis) await page.getByRole('button', { name: `Select PI ${pi.name}` }).click()
+  await page.screenshot({ path: 'test-results/labs-details-form.png', fullPage: true, animations: 'disabled' })
+  await page.getByRole('button', { name: 'Create lab', exact: true }).last().click()
+  await expect(page.getByRole('alert')).toHaveText('Save failed. Please retry.')
+  await expect(page.getByLabel('Website 2', { exact: true })).toHaveValue('https://lab.example/projects')
+  await expect(page.getByRole('button', { name: 'Remove PI Ada Smith' })).toBeVisible()
+  await page.getByRole('button', { name: 'Create lab', exact: true }).last().click()
+  await expect(page.getByRole('heading', { name: 'Systems Lab' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Ada Smith' })).toHaveAttribute('href', '/authors/pi_1')
+  await expect(page.getByRole('link', { name: 'Bea Smith' })).toHaveAttribute('href', '/authors/pi_2')
+  await expect(page.getByRole('link', { name: 'https://lab.example/', exact: true })).toHaveAttribute('target', '_blank')
+  await expect(page.getByRole('heading', { name: 'Members (0)' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Papers (0)' })).toBeVisible()
+  await page.screenshot({ path: 'test-results/labs-details-desktop.png', fullPage: true, animations: 'disabled' })
+  await page.getByTitle('Collapse sidebar').click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({ path: 'test-results/labs-details-mobile.png', fullPage: true, animations: 'disabled' })
+  await page.getByRole('button', { name: 'Edit lab', exact: true }).click()
+  await expect(page.getByLabel('Website 2', { exact: true })).toHaveValue('https://lab.example/projects')
+  for (const pi of pis) await page.getByRole('button', { name: `Remove PI ${pi.name}` }).click()
+  await page.getByRole('button', { name: 'Remove website 2' }).click()
+  await page.getByRole('button', { name: 'Remove website 1' }).click()
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  await expect(page.getByText('No PIs selected. Use Edit lab to choose authors.')).toBeVisible()
+  await expect(page.getByText('No websites added. Use Edit lab to add links.')).toBeVisible()
+  expect(calls.filter(call => call === 'GET /api/labs/details/members')).toHaveLength(1)
+  expect(calls.filter(call => call === 'GET /api/labs/details/papers')).toHaveLength(1)
+  expect(calls.filter(call => /^(PUT|POST|DELETE).*\/(members|papers)/.test(call))).toHaveLength(0)
+})
+
 test('Labs supports explicit paper selection with or without members', async ({ page }) => {
   let lab = null
   let members = []

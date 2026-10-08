@@ -8,6 +8,7 @@ vi.mock('../services/api', () => ({ labsApi: {
   list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(),
   members: vi.fn(), memberOptions: vi.fn(), addMember: vi.fn(), removeMember: vi.fn(), papers: vi.fn(),
   paperOptions: vi.fn(), addPapers: vi.fn(), removePaper: vi.fn(),
+  piOptions: vi.fn(),
 } }))
 
 const lab = { id: 'lab_1', name: 'Language Lab', description: 'Language research', createdAt: '2026-10-07' }
@@ -28,9 +29,46 @@ beforeEach(() => {
   labsApi.paperOptions.mockResolvedValue(page([{ ...paper, id: 'p_2', title: 'Available paper' }]))
   labsApi.addPapers.mockResolvedValue({ addedCount: 1 })
   labsApi.removePaper.mockResolvedValue(null)
+  labsApi.piOptions.mockResolvedValue([member, { authorId: 'a_2', name: 'John Smith', orcid: null }])
 })
 
 describe('Labs', () => {
+  it('saves multiple websites and PIs together, retains them on failure, and can clear them', async () => {
+    const pis = [member, { authorId: 'a_2', name: 'John Smith', orcid: null }]
+    const detailed = { ...lab, websites: ['https://lab.example/', 'https://lab.example/projects'], principalInvestigators: pis }
+    labsApi.update.mockRejectedValueOnce(new Error('PI was deleted')).mockResolvedValueOnce(detailed).mockResolvedValueOnce({ ...lab, websites: [], principalInvestigators: [] })
+    mount()
+    await screen.findByRole('link', { name: paper.title })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit lab' }))
+    expect(labsApi.piOptions).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Website 1'), { target: { value: detailed.websites[0] } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add website' }))
+    fireEvent.change(screen.getByLabelText('Website 2'), { target: { value: detailed.websites[1] } })
+    fireEvent.change(screen.getByLabelText('Search PI authors'), { target: { value: 'Smith' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Select PI Jane Smith' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select PI John Smith' }))
+    expect(screen.getByRole('button', { name: 'Select PI Jane Smith' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('PI was deleted')
+    expect(screen.getByLabelText('Website 2')).toHaveValue(detailed.websites[1])
+    expect(screen.getByRole('button', { name: 'Remove PI Jane Smith' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    const piSection = await screen.findByRole('region', { name: 'Principal investigators' })
+    await waitFor(() => expect(within(piSection).getByRole('link', { name: 'John Smith' })).toHaveAttribute('href', '/authors/a_2'))
+    expect(labsApi.update).toHaveBeenLastCalledWith(lab.id, { name: lab.name, description: lab.description, websites: detailed.websites, piAuthorIds: ['a_1', 'a_2'] })
+    expect(screen.getByRole('link', { name: 'https://lab.example/' })).toHaveAttribute('rel', 'noopener noreferrer')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit lab' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove website 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove website 1' }))
+    for (const pi of pis) fireEvent.click(screen.getByRole('button', { name: `Remove PI ${pi.name}` }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(labsApi.update).toHaveBeenLastCalledWith(lab.id, { name: lab.name, description: lab.description, websites: [], piAuthorIds: [] }))
+    expect(labsApi.papers).toHaveBeenCalledTimes(1)
+    expect(labsApi.members).toHaveBeenCalledTimes(1)
+    expect(labsApi.addMember).not.toHaveBeenCalled()
+    expect(labsApi.addPapers).not.toHaveBeenCalled()
+  })
+
   it('loads one bounded resource per section and links papers and authors', async () => {
     mount()
     expect(await screen.findByRole('link', { name: 'Shared research' })).toHaveAttribute('href', '/library/paper/p_1')
@@ -49,7 +87,7 @@ describe('Labs', () => {
     fireEvent.change(screen.getByLabelText('Lab name'), { target: { value: ' Language Lab ' } })
     fireEvent.click(screen.getAllByRole('button', { name: 'Create lab' }).at(-1))
     await screen.findByRole('heading', { name: lab.name })
-    expect(labsApi.create).toHaveBeenCalledWith({ name: 'Language Lab', description: null })
+    expect(labsApi.create).toHaveBeenCalledWith({ name: 'Language Lab', description: null, websites: [], piAuthorIds: [] })
   })
 
   it('debounces paper search and refreshes only the paper section', async () => {
@@ -119,7 +157,7 @@ describe('Labs', () => {
     expect(screen.getByLabelText('Lab name')).toHaveValue('Renamed lab')
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await screen.findByRole('heading', { name: 'Renamed lab' })
-    expect(labsApi.update).toHaveBeenLastCalledWith('lab_1', { name: 'Renamed lab', description: null })
+    expect(labsApi.update).toHaveBeenLastCalledWith('lab_1', { name: 'Renamed lab', description: null, websites: [], piAuthorIds: [] })
     expect(labsApi.papers).toHaveBeenCalledTimes(1)
   })
 

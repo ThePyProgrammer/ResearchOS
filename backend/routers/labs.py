@@ -2,7 +2,7 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
-from models.lab import Lab, LabCreate, LabMember, LabMemberPage, LabPage, LabPaperAddResult, LabPaperPage, LabPaperSelection, LabUpdate
+from models.lab import LabCreate, LabDetail, LabMember, LabMemberPage, LabPage, LabPaperAddResult, LabPaperPage, LabPaperSelection, LabUpdate
 from services import lab_service
 
 router = APIRouter(prefix="/api/labs", tags=["labs"])
@@ -18,12 +18,18 @@ def list_labs(search: str = Query("", max_length=200), limit: int = Query(30, ge
     return lab_service.list_labs(search=search, limit=limit, offset=offset)
 
 
-@router.post("", response_model=Lab, status_code=201)
+@router.get("/pi-options", response_model=list[LabMember])
+def pi_options(search: str = Query(..., min_length=2, max_length=200),
+               limit: int = Query(20, ge=1, le=50)):
+    return lab_service.pi_options(search=search, limit=limit)
+
+
+@router.post("", response_model=LabDetail, status_code=201)
 def create_lab(data: LabCreate):
     return lab_service.create_lab(data)
 
 
-@router.get("/{lab_id}", response_model=Lab)
+@router.get("/{lab_id}", response_model=LabDetail)
 def get_lab(lab_id: LabId):
     lab = lab_service.get_lab(lab_id)
     if lab is None:
@@ -31,7 +37,7 @@ def get_lab(lab_id: LabId):
     return lab
 
 
-@router.patch("/{lab_id}", response_model=Lab)
+@router.patch("/{lab_id}", response_model=LabDetail)
 def update_lab(lab_id: LabId, data: LabUpdate):
     lab = lab_service.update_lab(lab_id, data)
     if lab is None:
