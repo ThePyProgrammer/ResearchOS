@@ -4,10 +4,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from fastapi import HTTPException
+from postgrest.exceptions import APIError
+
 from models.author import (
     Author,
     AuthorCreate,
     AuthorLibrary,
+    AuthorLab,
     AuthorSearchResult,
     AuthorUpdate,
     PaperAuthor,
@@ -55,7 +59,39 @@ def _read_related(table: str, columns: str, field: str, ids: list[str]) -> list[
     return rows
 
 
-def _enrich_authors(authors: list[Author]) -> list[Author]:
+def _read_author_labs(author_ids: list[str]) -> dict[str, list[AuthorLab]]:
+    """Read both roles in bounded batches, merging a lab when an author has both."""
+    by_author: dict[str, dict[str, AuthorLab]] = {}
+    ids = list(dict.fromkeys(author_ids))
+    for table, role in (("lab_members", "is_member"), ("lab_principal_investigators", "is_pi")):
+        for start in range(0, len(ids), 100):
+            offset = 0
+            while True:
+                try:
+                    rows = (get_client().table(table).select("author_id,labs(id,name)")
+                            .in_("author_id", ids[start:start + 100])
+                            .order("author_id").order("lab_id")
+                            .range(offset, offset + 499).execute().data)
+                except APIError as exc:
+                    if exc.code in ("PGRST205", "PGRST200", "42P01"):
+                        logger.warning("Author lab associations unavailable; apply Labs migrations through 027_lab_details.sql")
+                        raise HTTPException(503, detail="Author labs need the Labs migrations through 027_lab_details.sql. Apply them in Supabase and retry.") from exc
+                    raise
+                for row in rows:
+                    if row.get("labs") is None:
+                        continue
+                    lab = AuthorLab.model_validate(row["labs"])
+                    author_labs = by_author.setdefault(row["author_id"], {})
+                    existing = author_labs.get(lab.id, lab)
+                    author_labs[lab.id] = existing.model_copy(update={role: True})
+                if len(rows) < 500:
+                    break
+                offset += len(rows)
+    return {aid: sorted(labs.values(), key=lambda lab: (lab.name.casefold(), lab.id))
+            for aid, labs in by_author.items()}
+
+
+def _enrich_authors(authors: list[Author], *, include_labs: bool = False) -> list[Author]:
     # PostgREST joins links to papers; library_id has no foreign key to libraries.
     links = _read_related(
         _PAPER_AUTHORS_TABLE, "author_id,papers(library_id)",
@@ -76,7 +112,9 @@ def _enrich_authors(authors: list[Author]) -> list[Author]:
         lib = by_library.get((link.get("papers") or {}).get("library_id"))
         if lib:
             libraries.setdefault(aid, {})[lib.id] = lib
+    labs = _read_author_labs([author.id for author in authors]) if include_labs else {}
     return [author.model_copy(update={
+        "labs": labs.get(author.id, []),
         "paper_count": counts.get(author.id, 0),
         "libraries": sorted(libraries.get(author.id, {}).values(), key=lambda lib: lib.id),
     }) for author in authors]
@@ -95,7 +133,7 @@ def list_authors(
     if search:
         query = query.ilike("name_normalized", f"%{normalize_author_name(search)}%")
     result = query.order("name").order("id").limit(limit).execute()
-    return _enrich_authors([Author.model_validate(row) for row in result.data])
+    return _enrich_authors([Author.model_validate(row) for row in result.data], include_labs=True)
 
 
 def get_author(author_id: str, *, enrich: bool = True) -> Optional[Author]:
@@ -109,7 +147,7 @@ def get_author(author_id: str, *, enrich: bool = True) -> Optional[Author]:
     if not result.data:
         return None
     author = Author.model_validate(result.data[0])
-    return _enrich_authors([author])[0] if enrich else author
+    return _enrich_authors([author], include_labs=True)[0] if enrich else author
 
 
 def create_author(data: AuthorCreate) -> Author:

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { authorsApi } from '../services/api'
+import AuthorLabLinks from '../components/AuthorLabLinks'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -166,12 +167,13 @@ export default function Authors() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <table className="w-full">
+          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+            <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Name</th>
                   <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Affiliation</th>
+                  <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Labs</th>
                   <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Papers</th>
                   <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Links</th>
                 </tr>
@@ -194,6 +196,7 @@ export default function Authors() {
                     <td className="px-4 py-3 text-sm text-slate-600">
                       {currentAffiliation(author) || <span className="text-slate-400 italic">—</span>}
                     </td>
+                    <td className="px-4 py-3"><AuthorLabLinks labs={author.labs} /></td>
                     <td className="px-4 py-3 text-center">
                       <span className="inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
                         {author.paperCount}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { authorsApi, papersApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
+import AuthorLabLinks from '../components/AuthorLabLinks'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -529,6 +530,12 @@ export default function AuthorDetail() {
           {/* Profile */}
           <div className="lg:col-span-1 space-y-6">
             <ProfileLinksCard author={author} onSave={handleFieldSave} />
+
+            <section aria-label="Author labs" className="bg-white rounded-xl border border-slate-200 p-5">
+              <h2 className="text-sm font-semibold text-slate-800 mb-3">Labs</h2>
+              <AuthorLabLinks labs={author.labs} emptyText="No labs associated." />
+              <p className="mt-3 text-xs text-slate-500">Membership and principal investigator (PI) assignments are managed on the Labs page.</p>
+            </section>
 
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <h2 className="text-sm font-semibold text-slate-800 mb-3">Affiliations</h2>

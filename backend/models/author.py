@@ -15,6 +15,13 @@ class AuthorLibrary(CamelModel):
     name: str
 
 
+class AuthorLab(CamelModel):
+    id: str
+    name: str
+    is_member: bool = False
+    is_pi: bool = False
+
+
 class Author(CamelModel):
     id: str
     name: str
@@ -29,6 +36,7 @@ class Author(CamelModel):
     created_at: str
     paper_count: int = 0
     libraries: list[AuthorLibrary] = []
+    labs: list[AuthorLab] = []
 
 
 class AuthorCreate(CamelModel):

@@ -311,7 +311,16 @@ test('row context menu fits the viewport and supports clipboard and keyboard act
 
 test('authors search batches typing, opens profiles, and surfaces errors', async ({ page }) => {
   await mockApi(page)
-  const author = { id: 'a1', name: 'Jane Smith', paperCount: 1, affiliations: [], libraries: [] }
+  const author = { id: 'a1', name: 'Jane Smith', paperCount: 1, affiliations: [], libraries: [], labs: [
+    { id: 'l1', name: 'Language Lab', isMember: true, isPi: true },
+    { id: 'l2', name: 'Vision Lab', isMember: false, isPi: true },
+  ] }
+  await page.route('**/api/labs**', route => {
+    const path = new URL(route.request().url()).pathname
+    const lab = { id: 'l1', name: 'Language Lab', createdAt: '2026-10-08', websites: [], principalInvestigators: [] }
+    if (path === '/api/labs/l1') return route.fulfill({ json: lab })
+    return route.fulfill({ json: { items: path === '/api/labs' ? [lab] : [], total: path === '/api/labs' ? 1 : 0, offset: 0, limit: 30 } })
+  })
   const searches = []
   await page.route('**/api/authors**', route => {
     const url = new URL(route.request().url())
@@ -326,8 +335,20 @@ test('authors search batches typing, opens profiles, and surfaces errors', async
   await expect(page.getByText('Jane Smith', { exact: true })).toBeVisible()
   await page.getByPlaceholder('Search authors...').pressSequentially('Jane', { delay: 30 })
   await expect.poll(() => searches.filter(Boolean)).toEqual(['Jane'])
+  await expect(page.getByRole('columnheader', { name: 'Labs' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Vision Lab PI' })).toBeVisible()
+  await page.screenshot({ path: 'test-results/authors-labs-table.png', fullPage: true, animations: 'disabled' })
+  await page.getByRole('link', { name: /Language Lab PI.*Member/ }).click()
+  await expect(page).toHaveURL(/\/labs\?lab=l1$/)
+  await expect(page.getByRole('heading', { name: 'Language Lab', exact: true })).toBeVisible()
+  await page.goBack()
+  await expect(page.getByText('Jane Smith', { exact: true })).toBeVisible()
   await page.getByText('Jane Smith', { exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Jane Smith' })).toBeVisible()
+  const labSection = page.getByRole('region', { name: 'Author labs' })
+  await expect(labSection.getByRole('link', { name: /Language Lab PI.*Member/ })).toHaveAttribute('href', '/labs?lab=l1')
+  await expect(labSection.getByRole('link', { name: 'Vision Lab PI' })).toHaveAttribute('href', '/labs?lab=l2')
+  await page.screenshot({ path: 'test-results/author-labs-profile.png', fullPage: true, animations: 'disabled' })
   await page.getByRole('button', { name: 'All Authors' }).click()
   await page.getByPlaceholder('Search authors...').fill('failure')
   await expect(page.getByText('Author lookup unavailable')).toBeVisible()

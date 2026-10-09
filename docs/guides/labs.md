@@ -134,3 +134,20 @@ functions on older installations; apply migrations in order.
   duplicate retries, deletion behavior, and 1,105-paper pagination.
 - [`labs.sql`](../../backend/tests/sql/labs.sql) covers the original 024/025
   behavior and is intended to run before applying 026 during upgrade testing.
+
+## Labs on authors
+
+The Authors table includes a Labs column, and each author profile has a Labs
+section. Both link directly to the selected lab and show Member and/or PI roles.
+A lab appears once when the author has both roles. These associations come only
+from explicit memberships and PI assignments, never from an author's papers.
+Manage these relationships on the Labs page; authors without either role show
+an empty state. Lab names are read from the current lab record.
+
+Author list and detail responses include `labs: [{id, name, isMember, isPi}]`.
+No extra frontend requests are made. The author service joins lab names in two
+batched relationship reads (members and PIs) per group of up to 100 author IDs,
+with stable 500-row paging for larger result sets. Empty author lists make no
+relationship queries. Existing author search and paper-reference paths do not
+perform these extra lab reads. This reuses migrations 024 through 027; no new
+migration is required.
