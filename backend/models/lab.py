@@ -48,13 +48,6 @@ class Lab(CamelModel):
     websites: list[WebsiteUrl] = Field(default_factory=list)
 
 
-class LabPage(CamelModel):
-    items: list[Lab]
-    total: int
-    limit: int
-    offset: int
-
-
 class LabMember(CamelModel):
     author_id: str
     name: str
@@ -63,6 +56,13 @@ class LabMember(CamelModel):
 
 class LabDetail(Lab):
     principal_investigators: list[LabMember] = Field(default_factory=list)
+
+
+class LabPage(CamelModel):
+    items: list[LabDetail]
+    total: int
+    limit: int
+    offset: int
 
 
 class LabMemberPage(CamelModel):

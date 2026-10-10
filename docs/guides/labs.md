@@ -56,12 +56,18 @@ an author does not automatically alter a lab's papers. Future papers by a member
 also require explicit selection. A paper can belong to several labs and appears
 only once within each lab, regardless of which picker added it.
 
-The selected lab is in the URL (`/labs?lab=...`) for bookmarks, refresh, and browser
-history. Forms use the existing minimizable window shell. Sections have separate
+The `/labs` directory shows compact, neutral, searchable cards in three columns
+on desktop, two on tablets, and one on small screens. Cards show the lab name
+and available description/website without placeholder badges or accent colors. Each card opens a
+dedicated `/labs/:id` page with lab information and actions at the top, PIs and
+members in a sidebar, and a Library-styled paper table with authors below titles
+and no status column. Old `/labs?lab=...` bookmarks redirect to the new route.
+Directory searches and pages are kept in the URL and restored by All labs or
+browser Back. Forms use the existing minimizable window shell. Sections have separate
 loading, empty, error, and retry states. Failed paper saves keep the selection;
 the batch is transactional, so a missing or invalid paper does not partially add
-other papers. On small screens, the list and detail stack; collapse the sidebar
-for additional space.
+other papers. On small screens, the people sidebar stacks above the paper table; collapse the
+application sidebar for additional space.
 
 ## Queries and contracts
 
@@ -86,7 +92,9 @@ standard `not_found` object; unexpected errors use the sanitized global 500.
 Metadata, members, and selected papers load concurrently on selection. Searches
 are debounced by 300 ms; author search starts after two characters. Membership
 mutations refresh only members. Paper mutations refresh only selected papers.
-Editing metadata updates detail from the response and refreshes the lab list.
+Editing metadata updates detail from the response. The directory makes one list
+request without per-card detail/count calls; a detail page loads only metadata,
+members, and papers. Returning to the directory fetches its current page.
 Detail reads include PI names through `lab_details`, with no per-author calls.
 The list uses the base labs table and does not aggregate PIs. `save_lab_details`
 saves metadata and replaces the selected PI set in one transaction, locking the
@@ -151,3 +159,19 @@ with stable 500-row paging for larger result sets. Empty author lists make no
 relationship queries. Existing author search and paper-reference paths do not
 perform these extra lab reads. This reuses migrations 024 through 027; no new
 migration is required.
+
+
+The lab detail header sits directly on the page with icon controls for editing
+and deletion. Its compact people sidebar displays PIs separately from members:
+authors who are PIs are omitted from the member list without deleting their
+memberships. The detail page requests `members?excludePis=true`; the service
+reads the lab's PI IDs and filters the counted, paginated member query before
+returning it (two bounded database reads, no per-author calls). Other callers
+retain the full membership list by default. Changing PI assignments refreshes
+the member section, but does not reload papers. No additional migration is needed.
+
+
+Directory cards show a muted, comma-separated PI byline beneath the lab name.
+Labs without PIs omit the byline. The paginated list reads the existing
+`lab_details` view in one database request, including current PI names;
+there are no per-card detail requests and no new migration.

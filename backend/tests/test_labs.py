@@ -367,3 +367,63 @@ def test_lab_detail_save_errors(client, database, code, status):
     assert "private database details" not in response.text
     if status == 503:
         assert "027_lab_details.sql" in response.text
+
+
+@pytest.mark.parametrize("pi_ids,total,offset", [(["pi_1"], 51, 50), (["pi_1"], 0, 0), ([], 1, 0)])
+def test_filtered_members_count_and_paginate_in_database(client, mocker, pi_ids, total, offset):
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        if request.url.path == "/lab_details":
+            return httpx.Response(200, json=[{**LAB, "principal_investigators": [
+                {"author_id": author_id, "name": "PI"} for author_id in pi_ids
+            ]}])
+        assert request.url.path == "/lab_member_details"
+        assert request.url.params["lab_id"] == "eq.lab_1"
+        assert request.url.params["offset"] == str(offset)
+        assert request.url.params["limit"] == "50"
+        assert request.url.params["order"] == "name.asc,author_id.asc"
+        assert request.headers["prefer"] == "count=exact"
+        if pi_ids:
+            assert request.url.params["author_id"] == "not.in.(pi_1)"
+        else:
+            assert "author_id" not in request.url.params
+        return httpx.Response(200, json=[{"author_id": "member_1", "name": "Member"}] if total else [],
+                              headers={"content-range": f"0-0/{total}"})
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        postgrest = SyncPostgrestClient("http://database.test", http_client=http)
+        mocker.patch.object(lab_service, "get_client", return_value=SimpleNamespace(
+            rpc=postgrest.rpc, table=postgrest.from_,
+        ))
+        response = client.get("/api/labs/lab_1/members", params={"excludePis": "true", "offset": offset})
+    assert response.status_code == 200
+    assert response.json()["total"] == total
+    assert response.json()["offset"] == offset
+    assert len(requests) == 2
+    assert all(request.method == "GET" for request in requests)
+
+
+def test_filtered_members_missing_lab(client, mocker):
+    mocker.patch.object(lab_service, "get_lab", return_value=None)
+    response = client.get("/api/labs/missing/members?excludePis=true")
+    assert response.status_code == 404
+    assert response.json() == {"error": "not_found", "detail": "Lab not found"}
+
+
+def test_lab_directory_returns_pi_bylines_in_one_query(client, database):
+    db, query = database
+    query.execute.return_value.data = [{**LAB, "principal_investigators": [
+        {"author_id": "pi_1", "name": "Ada Smith", "orcid": None},
+        {"author_id": "pi_2", "name": "Bea Smith", "orcid": None},
+    ]}]
+    response = client.get("/api/labs")
+    assert response.status_code == 200
+    assert response.json()["items"][0]["principalInvestigators"] == [
+        {"authorId": "pi_1", "name": "Ada Smith", "orcid": None},
+        {"authorId": "pi_2", "name": "Bea Smith", "orcid": None},
+    ]
+    db.table.assert_called_once_with("lab_details")
+    query.execute.assert_called_once()
+    db.rpc.assert_not_called()

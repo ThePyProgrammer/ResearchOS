@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import Labs from './Labs'
+import Labs, { LabDetailPage } from './Labs'
 import { labsApi } from '../services/api'
 
 vi.mock('../services/api', () => ({ labsApi: {
@@ -15,7 +15,7 @@ const lab = { id: 'lab_1', name: 'Language Lab', description: 'Language research
 const member = { authorId: 'a_1', name: 'Jane Smith', orcid: null }
 const paper = { id: 'p_1', title: 'Shared research', authors: ['Jane Smith'], year: 2026, venue: 'ICLR', status: 'read', libraryName: 'Research' }
 const page = (items, limit = 25, total = items.length, offset = 0) => ({ items, limit, total, offset })
-const mount = (path = '/labs?lab=lab_1') => render(<MemoryRouter initialEntries={[path]}><Labs /></MemoryRouter>)
+const mount = (path = '/labs/lab_1') => render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/labs" element={<Labs />} /><Route path="/labs/:id" element={<LabDetailPage />} /></Routes></MemoryRouter>)
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -33,6 +33,57 @@ beforeEach(() => {
 })
 
 describe('Labs', () => {
+  it('renders directory cards with one list request and only loads details after opening a card', async () => {
+    labsApi.list.mockResolvedValue(page([{ ...lab, principalInvestigators: [member, { authorId: 'a_2', name: 'John Smith' }] }], 30))
+    mount('/labs')
+    const card = await screen.findByRole('link', { name: 'Open Language Lab' })
+    expect(card).toHaveAttribute('href', '/labs/lab_1')
+    expect(within(card).getByLabelText('Principal investigators')).toHaveTextContent('Jane Smith, John Smith')
+    expect(screen.getByText('Language research')).toBeInTheDocument()
+    expect(labsApi.list).toHaveBeenCalledTimes(1)
+    for (const method of ['get', 'members', 'papers']) expect(labsApi[method]).not.toHaveBeenCalled()
+    fireEvent.click(card)
+    await screen.findByRole('link', { name: paper.title })
+    expect(screen.getByRole('heading', { level: 1, name: lab.name })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: 'Lab people' })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Labs directory' })).not.toBeInTheDocument()
+    expect(labsApi.list).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the filtered member page and keeps the header free of placeholder copy', async () => {
+    labsApi.get.mockResolvedValue({ ...lab, description: null, principalInvestigators: [member] })
+    labsApi.members.mockResolvedValue(page([{ authorId: 'other', name: 'Alex Lee' }], 50))
+    mount()
+    await screen.findByRole('link', { name: 'Alex Lee' })
+    const members = within(screen.getByRole('region', { name: 'Lab members' }))
+    expect(members.queryByRole('link', { name: member.name })).not.toBeInTheDocument()
+    expect(members.getByRole('heading', { name: 'Members (1)' })).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Principal investigators' })).getByRole('link', { name: member.name })).toBeInTheDocument()
+    expect(labsApi.members).toHaveBeenCalledWith(lab.id, { offset: 0, limit: 50, excludePis: true })
+    for (const text of ['Research lab', 'Add a description to introduce', 'Selected research from across your libraries.', 'Removing a paper here only unlinks it from this lab.', 'Members and papers are managed independently.']) {
+      expect(screen.queryByText(text, { exact: false })).not.toBeInTheDocument()
+    }
+    expect(screen.getByRole('button', { name: 'Edit lab' })).toHaveTextContent(/^edit$/)
+    expect(screen.getByRole('button', { name: 'Delete lab' })).toHaveTextContent(/^delete$/)
+  })
+
+  it('keeps old lab bookmarks working without fetching the directory', async () => {
+    mount('/labs?lab=lab_1')
+    await screen.findByRole('link', { name: paper.title })
+    expect(labsApi.get).toHaveBeenCalledWith('lab_1')
+    expect(labsApi.list).not.toHaveBeenCalled()
+  })
+
+  it('restores directory search and pagination when returning from a lab', async () => {
+    labsApi.list.mockResolvedValue(page([lab], 30, 61, 30))
+    mount('/labs?search=Language&offset=30')
+    fireEvent.click(await screen.findByRole('link', { name: 'Open Language Lab' }))
+    fireEvent.click(await screen.findByRole('link', { name: 'All labs' }))
+    await screen.findByRole('link', { name: 'Open Language Lab' })
+    expect(screen.getByRole('textbox', { name: 'Search labs' })).toHaveValue('Language')
+    expect(labsApi.list).toHaveBeenLastCalledWith({ search: 'Language', limit: 30, offset: 30 })
+  })
+
   it('saves multiple websites and PIs together, retains them on failure, and can clear them', async () => {
     const pis = [member, { authorId: 'a_2', name: 'John Smith', orcid: null }]
     const detailed = { ...lab, websites: ['https://lab.example/', 'https://lab.example/projects'], principalInvestigators: pis }
@@ -64,7 +115,7 @@ describe('Labs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await waitFor(() => expect(labsApi.update).toHaveBeenLastCalledWith(lab.id, { name: lab.name, description: lab.description, websites: [], piAuthorIds: [] }))
     expect(labsApi.papers).toHaveBeenCalledTimes(1)
-    expect(labsApi.members).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(labsApi.members).toHaveBeenCalledTimes(3))
     expect(labsApi.addMember).not.toHaveBeenCalled()
     expect(labsApi.addPapers).not.toHaveBeenCalled()
   })
@@ -73,8 +124,8 @@ describe('Labs', () => {
     mount()
     expect(await screen.findByRole('link', { name: 'Shared research' })).toHaveAttribute('href', '/library/paper/p_1')
     expect(screen.getByRole('link', { name: 'Jane Smith' })).toHaveAttribute('href', '/authors/a_1')
-    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).toEqual(['Paper', 'Year', 'Actions'])
-    for (const method of ['list', 'get', 'members', 'papers']) expect(labsApi[method]).toHaveBeenCalledTimes(1)
+    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).toEqual(['Title', 'Year', 'Actions'])
+    for (const method of ['get', 'members', 'papers']) expect(labsApi[method]).toHaveBeenCalledTimes(1)
     expect(labsApi.memberOptions).not.toHaveBeenCalled()
   })
 
@@ -99,7 +150,7 @@ describe('Labs', () => {
     await waitFor(() => expect(labsApi.papers).toHaveBeenCalledTimes(2))
     expect(labsApi.papers).toHaveBeenLastCalledWith('lab_1', { search: 'Shared', offset: 0, limit: 25 })
     expect(labsApi.members).toHaveBeenCalledTimes(1)
-    expect(labsApi.list).toHaveBeenCalledTimes(1)
+    expect(labsApi.list).not.toHaveBeenCalled()
     expect(labsApi.get).toHaveBeenCalledTimes(1)
   })
 
@@ -125,7 +176,7 @@ describe('Labs', () => {
     await waitFor(() => expect(labsApi.papers).toHaveBeenCalledTimes(2))
     expect(labsApi.addPapers).toHaveBeenCalledWith('lab_1', ['p_2'], 'a_2')
     expect(labsApi.get).toHaveBeenCalledTimes(1)
-    expect(labsApi.list).toHaveBeenCalledTimes(1)
+    expect(labsApi.list).not.toHaveBeenCalled()
   })
 
   it('keeps the paper page after member removal and resets only after unlinking a paper', async () => {
@@ -167,7 +218,9 @@ describe('Labs', () => {
     labsApi.papers.mockImplementation(id => id === 'lab_1' ? new Promise(resolve => { resolveOld = resolve }) : Promise.resolve(page([{ ...paper, id: 'p_2', title: 'Vision paper' }])))
     labsApi.get.mockImplementation(id => Promise.resolve(id === 'lab_1' ? lab : { ...lab, id, name: 'Vision Lab' }))
     mount()
-    fireEvent.click(await screen.findByRole('button', { name: 'Vision Lab' }))
+    await waitFor(() => expect(labsApi.papers).toHaveBeenCalled())
+    fireEvent.click(await screen.findByRole('link', { name: 'All labs' }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Open Vision Lab' }))
     await screen.findByRole('link', { name: 'Vision paper' })
     await act(async () => resolveOld(page([paper])))
     expect(screen.queryByRole('link', { name: paper.title })).not.toBeInTheDocument()
@@ -184,7 +237,7 @@ describe('Labs', () => {
     expect(labsApi.remove).not.toHaveBeenCalled()
     expect(screen.getByText(/Author profiles and papers will be kept/)).toBeInTheDocument()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' })))
-    await screen.findByText('Select a lab to explore its work')
+    await screen.findByRole('heading', { name: 'Labs', exact: true })
     expect(labsApi.remove).toHaveBeenCalledWith('lab_1')
   })
 

@@ -44,13 +44,13 @@ it('shows lab roles and opens the lab without triggering author row navigation',
   ] }])
   render(<MemoryRouter initialEntries={['/authors']}><Routes>
     <Route path="/authors" element={<Authors />} />
-    <Route path="/labs" element={<p>Lab destination</p>} />
+    <Route path="/labs/:id" element={<p>Lab destination</p>} />
     <Route path="/authors/:id" element={<p>Author destination</p>} />
   </Routes></MemoryRouter>)
   await act(async () => { await vi.advanceTimersByTimeAsync(0) })
   expect(screen.getByRole('columnheader', { name: 'Labs' })).toBeInTheDocument()
   const link = screen.getByRole('link', { name: /Language Lab PI.*Member/ })
-  expect(link).toHaveAttribute('href', '/labs?lab=lab%201')
+  expect(link).toHaveAttribute('href', '/labs/lab%201')
   expect(screen.getByRole('link', { name: 'Vision Lab PI' })).toBeInTheDocument()
   fireEvent.click(link)
   expect(screen.getByText('Lab destination')).toBeInTheDocument()

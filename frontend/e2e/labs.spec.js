@@ -56,7 +56,7 @@ test('Labs saves websites and multiple PIs independently of members and papers',
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByText('No PIs selected. Use Edit lab to choose authors.')).toBeVisible()
   await expect(page.getByText('No websites added. Use Edit lab to add links.')).toBeVisible()
-  expect(calls.filter(call => call === 'GET /api/labs/details/members')).toHaveLength(1)
+  await expect.poll(() => calls.filter(call => call === 'GET /api/labs/details/members').length).toBe(2)
   expect(calls.filter(call => call === 'GET /api/labs/details/papers')).toHaveLength(1)
   expect(calls.filter(call => /^(PUT|POST|DELETE).*\/(members|papers)/.test(call))).toHaveLength(0)
 })
@@ -168,7 +168,7 @@ test('Labs supports explicit paper selection with or without members', async ({ 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByTitle('Collapse sidebar').click()
   await page.screenshot({ path: 'test-results/labs-mobile.png', fullPage: true, animations: 'disabled' })
-  expect((await page.getByRole('heading', { name: 'Language and Learning Lab' }).boundingBox()).width).toBeGreaterThan(240)
+  expect((await page.getByRole('heading', { name: 'Language and Learning Lab' }).boundingBox()).width).toBeGreaterThan(180)
   await page.getByRole('link', { name: paper.title }).scrollIntoViewIfNeeded()
   await page.screenshot({ path: 'test-results/labs-mobile-papers.png', fullPage: true, animations: 'disabled' })
   await page.setViewportSize({ width: 1280, height: 900 })
@@ -191,4 +191,70 @@ test('Labs supports explicit paper selection with or without members', async ({ 
   await page.getByRole('button', { name: 'Confirm delete' }).click()
   await expect(page.getByText('No labs yet. Create your first lab to get started.')).toBeVisible()
   expect(calls.filter(call => call.startsWith('GET /api/authors'))).toEqual([])
+})
+
+
+test('Labs directory opens a dedicated workspace without loading every card detail', async ({ page }) => {
+  test.setTimeout(60000)
+  const labs = [
+    ['Language and Learning Lab', 'Understanding how humans and machines learn, reason, and communicate through language.', 'https://language.example.org/'],
+    ['Visual Intelligence Group', 'Exploring perception, spatial reasoning, and the next generation of visual representations.', 'https://vision.example.org/'],
+    ['Human-Centered AI Lab', 'Building intelligent systems that support human creativity, collaboration, and agency.', 'https://hai.example.org/'],
+    ['Robotics & Embodied Learning', 'Connecting learning algorithms to action in the physical world.', ''],
+    ['Computational Discovery Lab', 'New methods at the intersection of machine learning and scientific discovery.', ''],
+    ['Open Systems Research', 'Reproducible tools and shared infrastructure for open-ended research.', ''],
+  ].map(([name, description, website], index) => ({ id: `design_${index}`, name, description, websites: website ? [website] : [], createdAt: '2026-10-09' }))
+  const pis = [{ authorId: 'pi_1', name: 'Maya Chen' }, { authorId: 'pi_2', name: 'Daniel Park' }]
+  const members = [{ authorId: 'a1', name: 'Sofia Martinez' }, { authorId: 'a2', name: 'Arjun Patel' }, { authorId: 'a3', name: 'Emma Wilson' }]
+  const papers = [
+    { id: 'p1', title: 'Learning to reason through language: a framework for compositional generalization', authors: ['Maya Chen', 'Sofia Martinez', 'Daniel Park'], year: 2026 },
+    { id: 'p2', title: 'What language models learn from human feedback', authors: ['Arjun Patel', 'Emma Wilson'], year: 2025 },
+    { id: 'p3', title: 'Grounding abstract concepts in interactive environments', authors: ['Daniel Park', 'Maya Chen'], year: 2025 },
+  ]
+  const calls = []
+  const paged = (items, limit = 25) => ({ items, total: items.length, offset: 0, limit })
+  await page.route('**/api/**', route => {
+    const path = new URL(route.request().url()).pathname
+    calls.push(path)
+    if (path === '/api/labs') return route.fulfill({ json: paged(labs, 30) })
+    if (path === '/api/labs/design_0') return route.fulfill({ json: { ...labs[0], principalInvestigators: pis } })
+    if (path === '/api/labs/design_0/members') return route.fulfill({ json: paged(members, 50) })
+    if (path === '/api/labs/design_0/papers') return route.fulfill({ json: paged(papers) })
+    return route.fulfill({ json: [] })
+  })
+  await page.goto('/labs')
+  await expect(page.getByRole('list', { name: 'Labs directory' }).getByRole('link')).toHaveCount(6)
+  expect(calls.filter(path => path.startsWith('/api/labs'))).toEqual(['/api/labs'])
+  const cards = page.getByRole('list', { name: 'Labs directory' }).getByRole('link')
+  const boxes = await Promise.all([0, 1, 2, 3].map(index => cards.nth(index).boundingBox()))
+  expect(boxes[0].y).toBe(boxes[1].y)
+  expect(boxes[1].y).toBe(boxes[2].y)
+  expect(boxes[3].y).toBeGreaterThan(boxes[0].y)
+  expect(boxes[0].height).toBeLessThan(180)
+  await page.screenshot({ path: 'test-results/labs-directory-desktop.png', fullPage: true, animations: 'disabled' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByTitle('Collapse sidebar').click()
+  await page.screenshot({ path: 'test-results/labs-directory-mobile.png', fullPage: true, animations: 'disabled' })
+  await page.getByRole('link', { name: 'Open Language and Learning Lab' }).click()
+  await expect(page).toHaveURL(/\/labs\/design_0$/)
+  await expect(page.getByRole('heading', { level: 1, name: labs[0].name })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(844)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await page.screenshot({ path: 'test-results/labs-workspace-mobile.png', fullPage: true, animations: 'disabled' })
+  await page.getByRole('link', { name: papers[0].title }).scrollIntoViewIfNeeded()
+  await page.screenshot({ path: 'test-results/labs-workspace-mobile-papers.png', fullPage: true, animations: 'disabled' })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.getByTitle('Expand sidebar').click()
+  await page.getByRole('heading', { level: 1, name: labs[0].name }).scrollIntoViewIfNeeded()
+  await expect(page.getByRole('complementary', { name: 'Lab people' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Status' })).toHaveCount(0)
+  await expect(page.getByRole('row').filter({ hasText: papers[0].title }).locator('td').first()).toContainText('Maya Chen, Sofia Martinez, Daniel Park')
+  await page.screenshot({ path: 'test-results/labs-workspace-desktop.png', fullPage: true, animations: 'disabled' })
+  expect(calls.filter(path => path === '/api/labs')).toHaveLength(1)
+  await page.reload()
+  await expect(page.getByRole('link', { name: papers[0].title })).toBeVisible()
+  expect(calls.filter(path => path === '/api/labs')).toHaveLength(1)
+  await page.getByRole('link', { name: 'All labs' }).click()
+  await expect(page).toHaveURL(/\/labs$/)
+  await expect(page.getByRole('list', { name: 'Labs directory' }).getByRole('link')).toHaveCount(6)
 })

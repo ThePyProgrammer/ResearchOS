@@ -52,8 +52,9 @@ def delete_lab(lab_id: LabId):
 
 
 @router.get("/{lab_id}/members", response_model=LabMemberPage)
-def list_members(lab_id: LabId, limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0)):
-    result = lab_service.list_members(lab_id, limit=limit, offset=offset)
+def list_members(lab_id: LabId, limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),
+                 exclude_pis: bool = Query(False, alias="excludePis")):
+    result = lab_service.list_members(lab_id, limit=limit, offset=offset, exclude_pis=exclude_pis)
     if result is None:
         raise HTTPException(404, detail=NOT_FOUND)
     return result

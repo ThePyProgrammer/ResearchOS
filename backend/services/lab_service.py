@@ -25,11 +25,16 @@ def _contains(value: str) -> str:
 
 
 def list_labs(search: str = "", limit: int = 30, offset: int = 0) -> LabPage:
-    query = get_client().table("labs").select("*", count="exact")
+    query = get_client().table("lab_details").select("*", count="exact")
     if search.strip():
         query = query.ilike("name", _contains(search))
-    result = query.order("name").order("id").range(offset, offset + limit - 1).execute()
-    return LabPage(items=[Lab.model_validate(row) for row in result.data],
+    try:
+        result = query.order("name").order("id").range(offset, offset + limit - 1).execute()
+    except APIError as exc:
+        if exc.code in ("PGRST205", "42P01"):
+            _details_migration_required()
+        raise
+    return LabPage(items=[LabDetail.model_validate(row) for row in result.data],
                    total=result.count, limit=limit, offset=offset)
 
 
@@ -90,7 +95,22 @@ def delete_lab(lab_id: str) -> bool:
     return True
 
 
-def list_members(lab_id: str, limit: int = 50, offset: int = 0) -> Optional[LabMemberPage]:
+def list_members(lab_id: str, limit: int = 50, offset: int = 0,
+                 exclude_pis: bool = False) -> Optional[LabMemberPage]:
+    if exclude_pis:
+        # Filter before counting/pagination; PI and membership records stay independent.
+        # Two bounded queries avoid fetching every member or issuing per-author requests.
+        lab = get_lab(lab_id)
+        if lab is None:
+            return None
+        query = (get_client().table("lab_member_details")
+                 .select("author_id,name,orcid", count="exact").eq("lab_id", lab_id))
+        pi_ids = [pi.author_id for pi in lab.principal_investigators]
+        if pi_ids:
+            query = query.not_.in_("author_id", pi_ids)
+        result = query.order("name").order("author_id").range(offset, offset + limit - 1).execute()
+        return LabMemberPage(items=[LabMember.model_validate(row) for row in result.data],
+                             total=result.count, limit=limit, offset=offset)
     try:
         result = get_client().rpc("get_lab_members_page", {
             "p_lab_id": lab_id, "p_limit": limit, "p_offset": offset,
