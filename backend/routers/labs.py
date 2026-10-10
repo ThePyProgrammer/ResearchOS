@@ -51,6 +51,22 @@ def delete_lab(lab_id: LabId):
         raise HTTPException(404, detail=NOT_FOUND)
 
 
+@router.put("/{lab_id}/pis/{author_id}", response_model=LabDetail)
+def add_pi(lab_id: LabId, author_id: AuthorId):
+    result = lab_service.add_pi(lab_id, author_id)
+    if result is None:
+        raise HTTPException(404, detail=NOT_FOUND)
+    return result
+
+
+@router.delete("/{lab_id}/pis/{author_id}", response_model=LabDetail)
+def remove_pi(lab_id: LabId, author_id: AuthorId):
+    result = lab_service.remove_pi(lab_id, author_id)
+    if result is None:
+        raise HTTPException(404, detail=NOT_FOUND)
+    return result
+
+
 @router.get("/{lab_id}/members", response_model=LabMemberPage)
 def list_members(lab_id: LabId, limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),
                  exclude_pis: bool = Query(False, alias="excludePis")):

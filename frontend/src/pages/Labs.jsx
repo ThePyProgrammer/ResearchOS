@@ -59,10 +59,6 @@ function LabForm({ lab, onClose, onSaved }) {
   const [name, setName] = useState(lab?.name || '')
   const [description, setDescription] = useState(lab?.description || '')
   const [websites, setWebsites] = useState(lab?.websites?.length ? lab.websites : [''])
-  const [pis, setPis] = useState(lab?.principalInvestigators || [])
-  const [piSearch, setPiSearch] = useState('')
-  const piQuery = piSearch.trim()
-  const piOptions = useResource(useCallback(() => piQuery.length < 2 ? Promise.resolve([]) : labsApi.piOptions(piQuery), [piQuery]), 300)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   async function save(event) {
@@ -76,7 +72,7 @@ function LabForm({ lab, onClose, onSaved }) {
         try { const url = new URL(value); return !['https:', 'http:'].includes(url.protocol) || !!url.username || !!url.password }
         catch { return true }
       })) throw new Error('Enter valid HTTP or HTTPS website URLs without credentials.')
-      const data = { name: name.trim(), description: description.trim() || null, websites: urls, piAuthorIds: pis.map(pi => pi.authorId) }
+      const data = { name: name.trim(), description: description.trim() || null, websites: urls }
       const saved = lab ? await labsApi.update(lab.id, data) : await labsApi.create(data)
       onSaved(saved)
       onClose()
@@ -102,24 +98,7 @@ function LabForm({ lab, onClose, onSaved }) {
         </div>)}
         <button type="button" className={BUTTON} disabled={websites.length >= 20} onClick={() => setWebsites(previous => [...previous, ''])}>Add website</button>
       </section>
-      <section aria-label="Select principal investigators" className="space-y-2">
-        <h3 className="text-sm font-medium text-slate-700">Principal investigators (PIs)</h3>
-        <p className="text-xs text-slate-500">Select existing authors. PI assignments are independent of members and papers.</p>
-        <ul className="flex flex-wrap gap-2">{pis.map(pi => <li key={pi.authorId} className="flex items-center gap-1 rounded-lg bg-blue-50 px-2 py-1 text-sm text-blue-700">{pi.name}<button type="button" className="inline-flex rounded p-1 hover:bg-blue-100" aria-label={`Remove PI ${pi.name}`} onClick={() => setPis(previous => previous.filter(item => item.authorId !== pi.authorId))}><Icon name="close" className="text-[16px]" /></button></li>)}</ul>
-        <label className="block text-sm text-slate-700">Search PI authors
-          <input maxLength={200} value={piSearch} onChange={event => setPiSearch(event.target.value)} className={`${INPUT} mt-1`} placeholder="Type at least 2 characters" />
-        </label>
-        {piQuery.length >= 2 && (piOptions.loading ? <p className="text-xs text-slate-500">Searching authors…</p> : piOptions.error ? <div role="alert" className="text-sm text-red-600">{piOptions.error} <button type="button" className="underline" onClick={piOptions.retry}>Retry author search</button></div> : <>
-          <ul className="max-h-48 divide-y divide-slate-100 overflow-auto">{piOptions.data?.map(author => <li key={author.authorId} className="flex items-center justify-between gap-2 py-2">
-            <span className="min-w-0 text-sm text-slate-700">{author.name}<span className="block text-xs text-slate-500">{author.orcid || author.authorId}</span></span>
-            <button type="button" className={BUTTON} disabled={pis.length >= 50 || pis.some(pi => pi.authorId === author.authorId)} aria-label={`Select PI ${author.name}`} onClick={() => setPis(previous => [...previous, author])}>{pis.some(pi => pi.authorId === author.authorId) ? 'Selected' : 'Select'}</button>
-          </li>)}</ul>
-          {!piOptions.data?.length && <p className="text-xs text-slate-500">No matching authors. Create an author on the Authors page first.</p>}
-          {piOptions.data?.length === 20 && <p className="text-xs text-slate-500">Showing the first 20 matches. Refine your search for more.</p>}
-        </>)}
-        {pis.length >= 50 && <p className="text-xs text-slate-500">You can select up to 50 PIs.</p>}
-      </section>
-      <p className="text-xs text-slate-500">Add members and choose papers independently. A lab can track papers without any members.</p>
+      <p className="text-xs text-slate-500">Manage PIs, members, and papers from the lab page.</p>
       </fieldset>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">
@@ -130,7 +109,7 @@ function LabForm({ lab, onClose, onSaved }) {
   </WindowModal>
 }
 
-function PaperPicker({ labId, author = null, memberJustAdded = false, onSaved, onClose }) {
+function PaperPicker({ labId, author = null, addedRole = null, onSaved, onClose }) {
   const [search, setSearch] = useState('')
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState(new Map())
@@ -163,7 +142,7 @@ function PaperPicker({ labId, author = null, memberJustAdded = false, onSaved, o
     }
   }
   return <WindowModal open title={author ? `Select papers by ${author.name}` : 'Add papers'} iconName="article" onClose={onClose} disableClose={saving} allowMinimize={!saving} normalPanelClassName="w-full max-w-2xl rounded-2xl" bodyClassName="overflow-auto max-h-[75vh] p-5">
-    {memberJustAdded && <p role="status" className="mb-2 text-sm text-green-700">{author.name} added as a member.</p>}
+    {addedRole && <p role="status" className="mb-2 text-sm text-green-700">{author.name} added as {addedRole === 'pi' ? 'a PI and member' : 'a member'}.</p>}
     <p className="mb-3 text-sm text-slate-500">{author ? 'Optionally select this author’s existing papers to associate with the lab.' : 'Select saved papers from any library. Lab members are not required.'} Papers already in the lab are excluded.</p>
     <input aria-label="Search papers to add" className={INPUT} maxLength={200} value={search} disabled={saving} onChange={event => { setSearch(event.target.value); setOffset(0) }} placeholder="Search paper titles…" />
     <div className="my-3 flex items-center justify-between gap-2 text-xs text-slate-500"><span>{selected.size} selected (up to 100). Selection stays across pages and searches.</span><button className="shrink-0 text-blue-600 disabled:opacity-40" disabled={saving || !selected.size} onClick={() => setSelected(new Map())}>Clear selection</button></div>
@@ -177,11 +156,11 @@ function PaperPicker({ labId, author = null, memberJustAdded = false, onSaved, o
       {!options.data.items.length && <p className="py-5 text-sm text-slate-500">{search ? 'No available papers match this search.' : author ? 'No additional papers linked to this author. You can add other papers directly from the lab.' : 'No available papers. Save a paper to a library first, or adjust your search.'}</p>}
       <Pagination page={options.data} onChange={setOffset} label="Available papers" />
     </>}
-    <div className="mt-5 flex flex-wrap justify-end gap-2"><button className={BUTTON} disabled={saving} onClick={onClose}>{memberJustAdded ? 'Done without adding papers' : 'Cancel'}</button><button className={PRIMARY} disabled={saving || !selected.size} onClick={save}>{saving ? 'Adding…' : `Add selected papers (${selected.size})`}</button></div>
+    <div className="mt-5 flex flex-wrap justify-end gap-2"><button className={BUTTON} disabled={saving} onClick={onClose}>{addedRole ? 'Done without adding papers' : 'Cancel'}</button><button className={PRIMARY} disabled={saving || !selected.size} onClick={save}>{saving ? 'Adding…' : `Add selected papers (${selected.size})`}</button></div>
   </WindowModal>
 }
 
-function AddMembers({ labId, onChanged, onPapersChanged, onClose }) {
+function AddLabPeople({ labId, isPi = false, pis = [], onChanged, onPapersChanged, onClose }) {
   const [search, setSearch] = useState('')
   const [revision, setRevision] = useState(0)
   const [saving, setSaving] = useState(null)
@@ -189,25 +168,25 @@ function AddMembers({ labId, onChanged, onPapersChanged, onClose }) {
   const [notice, setNotice] = useState('')
   const [addedAuthor, setAddedAuthor] = useState(null)
   const query = search.trim()
-  const load = useCallback(() => query.length < 2 ? Promise.resolve([]) : labsApi.memberOptions(labId, query), [labId, query, revision])
+  const load = useCallback(() => query.length < 2 ? Promise.resolve([]) : isPi ? labsApi.piOptions(query) : labsApi.memberOptions(labId, query), [labId, query, revision, isPi])
   const options = useResource(load, 300)
   async function add(author) {
     setSaving(author.authorId)
     setError(null)
     setNotice('')
     try {
-      await labsApi.addMember(labId, author.authorId)
+      const saved = isPi ? await labsApi.addPi(labId, author.authorId) : await labsApi.addMember(labId, author.authorId)
       setNotice(`${author.name} added.`)
       setAddedAuthor(author)
-      onChanged()
+      onChanged(saved)
     } catch (err) {
       setError(err.message)
     } finally {
       setSaving(null)
     }
   }
-  if (addedAuthor) return <PaperPicker labId={labId} author={addedAuthor} memberJustAdded onSaved={onPapersChanged} onClose={() => { setAddedAuthor(null); setRevision(value => value + 1) }} />
-  return <WindowModal open title="Add members" iconName="group_add" onClose={onClose} disableClose={!!saving} bodyClassName="overflow-auto p-5">
+  if (addedAuthor) return <PaperPicker labId={labId} author={addedAuthor} addedRole={isPi ? 'pi' : 'member'} onSaved={onPapersChanged} onClose={() => { setAddedAuthor(null); setRevision(value => value + 1) }} />
+  return <WindowModal open title={isPi ? "Add PIs" : "Add members"} iconName="group_add" onClose={onClose} disableClose={!!saving} bodyClassName="overflow-auto p-5">
     <p className="mb-3 text-sm text-slate-500">Search existing authors. An author can belong to several labs.</p>
     <label className="block text-sm font-medium text-slate-700">Search authors
       <input autoFocus maxLength={200} value={search} onChange={event => setSearch(event.target.value)} className={`${INPUT} mt-1`} placeholder="Type at least 2 characters" />
@@ -218,12 +197,13 @@ function AddMembers({ labId, onChanged, onPapersChanged, onClose }) {
       <ul className="mt-3 max-h-72 divide-y divide-slate-100 overflow-auto">
         {options.data?.map(author => <li key={author.authorId} className="flex items-center justify-between gap-3 py-3">
           <div className="min-w-0"><p className="break-words text-sm font-medium text-slate-700">{author.name}</p><p className="text-xs text-slate-500">{author.orcid ? `ORCID ${author.orcid}` : author.authorId}</p></div>
-          <button className={BUTTON} disabled={!!saving} aria-label={`Add ${author.name}`} onClick={() => add(author)}>{saving === author.authorId ? 'Adding…' : 'Add'}</button>
+          <button className={BUTTON} disabled={!!saving || isPi && (pis.length >= 50 || pis.some(pi => pi.authorId === author.authorId))} aria-label={`Add ${isPi ? 'PI ' : ''}${author.name}`} onClick={() => add(author)}>{saving === author.authorId ? 'Adding…' : 'Add'}</button>
         </li>)}
       </ul>
-      {!options.data?.length && <p className="mt-4 text-sm text-slate-500">No matching authors available to add. Existing members are excluded.</p>}
+      {!options.data?.length && <p className="mt-4 text-sm text-slate-500">{isPi ? 'No matching authors. Try another name.' : 'No matching authors available to add. Existing members are excluded.'}</p>}
       {options.data?.length === 20 && <p className="mt-2 text-xs text-slate-500">Showing the first 20 matches. Refine your search to find another author.</p>}
     </>)}
+    {isPi && pis.length >= 50 && <p className="mt-3 text-xs text-slate-500">This lab already has 50 PIs. Remove a PI before adding another.</p>}
     <p className="mt-4 text-xs text-slate-500">Missing an author? Create their profile on the <Link className="text-blue-600 underline" to="/authors">Authors page</Link>.</p>
     <div className="mt-4 flex justify-end"><button className={BUTTON} onClick={onClose} disabled={!!saving}>Done</button></div>
   </WindowModal>
@@ -244,6 +224,7 @@ function LabDetail({ id, onDeleted, backTo }) {
   const [paperRevision, setPaperRevision] = useState(0)
   const [editing, setEditing] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [addingPis, setAddingPis] = useState(false)
   const [paperPicker, setPaperPicker] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [busy, setBusy] = useState(null)
@@ -277,9 +258,7 @@ function LabDetail({ id, onDeleted, backTo }) {
     setBusy(authorId)
     setError(null)
     try {
-      const saved = await labsApi.update(id, {
-        piAuthorIds: lab.data.principalInvestigators.filter(pi => pi.authorId !== authorId).map(pi => pi.authorId),
-      })
+      const saved = await labsApi.removePi(id, authorId)
       lab.setData(saved)
       membershipChanged()
     } catch (err) {
@@ -333,8 +312,8 @@ function LabDetail({ id, onDeleted, backTo }) {
     <div className="mt-6 grid items-start gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
       <aside aria-label="Lab people" className="min-w-0 space-y-5">
         <section aria-label="Principal investigators" className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="mb-4 flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500"><Icon name="school" className="text-[15px]" /></span><h2 className="text-xs font-semibold text-slate-800">Principal investigators (PIs)</h2></div>
-          {lab.data.principalInvestigators?.length ? <ul className="divide-y divide-slate-100">{lab.data.principalInvestigators.map(pi => <LabPersonRow key={pi.authorId} person={pi} isPi busy={busy} onChoosePapers={author => setPaperPicker({ author })} onRemove={removePi} />)}</ul> : <p className="text-xs leading-5 text-slate-400">No PIs selected. Use Edit lab to choose authors.</p>}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="text-xs font-semibold text-slate-800">PIs ({lab.data.principalInvestigators?.length || 0})</h2><button className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-40" disabled={!!busy} onClick={() => setAddingPis(true)}><Icon name="add" className="text-[15px]" />Add PIs</button></div>
+          {lab.data.principalInvestigators?.length ? <ul className="divide-y divide-slate-100">{lab.data.principalInvestigators.map(pi => <LabPersonRow key={pi.authorId} person={pi} isPi busy={busy} onChoosePapers={author => setPaperPicker({ author })} onRemove={removePi} />)}</ul> : <p className="text-xs leading-5 text-slate-400">No PIs yet. Use Add PIs to choose authors.</p>}
         </section>
         <section aria-label="Lab members" className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="text-xs font-semibold text-slate-800">Members{!members.loading && !members.error && ` (${members.data.total})`}</h2><button className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-40" disabled={!!busy} onClick={() => setAdding(true)}><Icon name="add" className="text-[15px]" />Add members</button></div>
@@ -364,12 +343,9 @@ function LabDetail({ id, onDeleted, backTo }) {
         </>}
       </section>
     </div>
-    {editing && <LabForm lab={lab.data} onClose={() => setEditing(false)} onSaved={saved => {
-      const piIds = value => (value.principalInvestigators || []).map(pi => pi.authorId).sort().join(',')
-      if (piIds(saved) !== piIds(lab.data)) membershipChanged()
-      lab.setData(saved)
-    }} />}
-    {adding && <AddMembers labId={id} onClose={() => setAdding(false)} onChanged={membershipChanged} onPapersChanged={papersChanged} />}
+    {editing && <LabForm lab={lab.data} onClose={() => setEditing(false)} onSaved={saved => lab.setData(saved)} />}
+    {addingPis && <AddLabPeople labId={id} isPi pis={lab.data.principalInvestigators || []} onClose={() => setAddingPis(false)} onChanged={saved => { lab.setData(saved); membershipChanged() }} onPapersChanged={papersChanged} />}
+    {adding && <AddLabPeople labId={id} onClose={() => setAdding(false)} onChanged={membershipChanged} onPapersChanged={papersChanged} />}
     {paperPicker && <PaperPicker key={paperPicker.author?.authorId || 'all-papers'} labId={id} author={paperPicker.author} onClose={() => setPaperPicker(null)} onSaved={papersChanged} />}
     {deleting && <WindowModal open title="Delete lab" onClose={() => setDeleting(false)} disableClose={!!busy} bodyClassName="p-5">
       <p className="text-sm text-slate-600">Delete {lab.data.name} and its PI, member, and paper associations? Author profiles and papers will be kept.</p>

@@ -87,6 +87,32 @@ def pi_options(search: str, limit: int = 20) -> list[LabMember]:
     return [LabMember.model_validate(row) for row in result.data]
 
 
+def _change_pi(lab_id: str, author_id: str, rpc: str) -> Optional[LabDetail]:
+    try:
+        result = get_client().rpc(rpc, {
+            "p_lab_id": lab_id, "p_author_id": author_id,
+        }).execute()
+    except APIError as exc:
+        if exc.code == "PGRST202":
+            logger.warning("PI membership schema unavailable; apply 028_pi_membership.sql")
+            raise HTTPException(503, detail="Labs needs migration 028_pi_membership.sql. Apply it in Supabase and retry.") from exc
+        if exc.code in ("P0002", "23503"):
+            raise HTTPException(404, detail={"error": "not_found", "detail": "Author not found"}) from exc
+        if exc.code == "22023":
+            raise HTTPException(422, detail="Select up to 50 PIs.") from exc
+        raise
+    logger.info("Lab PI change %s: lab=%s author=%s", rpc, lab_id, author_id)
+    return LabDetail.model_validate(result.data) if result.data is not None else None
+
+
+def add_pi(lab_id: str, author_id: str) -> Optional[LabDetail]:
+    return _change_pi(lab_id, author_id, "add_lab_pi")
+
+
+def remove_pi(lab_id: str, author_id: str) -> Optional[LabDetail]:
+    return _change_pi(lab_id, author_id, "remove_lab_pi")
+
+
 def delete_lab(lab_id: str) -> bool:
     result = get_client().table("labs").delete().eq("id", lab_id).execute()
     if not result.data:

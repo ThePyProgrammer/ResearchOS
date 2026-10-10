@@ -427,3 +427,30 @@ def test_lab_directory_returns_pi_bylines_in_one_query(client, database):
     db.table.assert_called_once_with("lab_details")
     query.execute.assert_called_once()
     db.rpc.assert_not_called()
+
+
+@pytest.mark.parametrize("method,function,rpc", [("put", "add_pi", "add_lab_pi"), ("delete", "remove_pi", "remove_lab_pi")])
+def test_pi_changes_use_atomic_rpc(client, database, method, function, rpc):
+    db, query = database
+    query.execute.return_value.data = {**LAB, "principal_investigators": [{"author_id": "a1", "name": "Ada"}]}
+    response = client.request(method, "/api/labs/lab_1/pis/a1")
+    assert response.status_code == 200
+    assert response.json()["principalInvestigators"][0]["authorId"] == "a1"
+    db.rpc.assert_called_once_with(rpc, {"p_lab_id": "lab_1", "p_author_id": "a1"})
+    query.execute.assert_called_once()
+    db.table.assert_not_called()
+    query.execute.return_value.data = None
+    response = client.request(method, "/api/labs/missing/pis/a1")
+    assert response.status_code == 404
+    assert response.json() == {"error": "not_found", "detail": "Lab not found"}
+
+
+@pytest.mark.parametrize("code,status", [("PGRST202", 503), ("P0002", 404), ("22023", 422)])
+def test_pi_change_errors(client, database, code, status):
+    db, query = database
+    query.execute.side_effect = APIError({"code": code, "message": "internal message", "details": None, "hint": None})
+    response = client.put("/api/labs/lab_1/pis/a1")
+    assert response.status_code == status
+    assert "internal message" not in response.text
+    if code == "PGRST202":
+        assert "028_pi_membership.sql" in response.text
