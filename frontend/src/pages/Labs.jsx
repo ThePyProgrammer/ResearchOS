@@ -229,6 +229,13 @@ function AddMembers({ labId, onChanged, onPapersChanged, onClose }) {
   </WindowModal>
 }
 
+function LabPersonRow({ person, isPi = false, busy, onChoosePapers, onRemove }) {
+  return <li className="flex items-center justify-between gap-2 py-3 first:pt-0">
+    <Link to={`/authors/${encodeURIComponent(person.authorId)}`} className="flex min-w-0 items-center gap-2.5 text-xs text-slate-700 hover:text-blue-600"><span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">{initials(person.name)}</span><span className="min-w-0 break-words font-medium">{person.name}</span></Link>
+    <div className="flex shrink-0 gap-0.5"><button className="rounded p-1 text-slate-400 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-40" aria-label={`Choose papers by ${person.name}`} title={`Choose papers by ${person.name}`} disabled={!!busy} onClick={() => onChoosePapers(person)}><Icon name="article" className="text-[15px]" /></button><button className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40" aria-label={`Remove ${person.name}${isPi ? ' as PI' : ''}`} title={`Remove ${person.name} ${isPi ? 'as PI' : 'from lab'}`} disabled={!!busy} onClick={() => onRemove(person.authorId)}><Icon name="person_remove" className="text-[15px]" /></button></div>
+  </li>
+}
+
 function LabDetail({ id, onDeleted, backTo }) {
   const [memberOffset, setMemberOffset] = useState(0)
   const [paperOffset, setPaperOffset] = useState(0)
@@ -259,6 +266,21 @@ function LabDetail({ id, onDeleted, backTo }) {
     setError(null)
     try {
       await labsApi.removeMember(id, authorId)
+      membershipChanged()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+  async function removePi(authorId) {
+    setBusy(authorId)
+    setError(null)
+    try {
+      const saved = await labsApi.update(id, {
+        piAuthorIds: lab.data.principalInvestigators.filter(pi => pi.authorId !== authorId).map(pi => pi.authorId),
+      })
+      lab.setData(saved)
       membershipChanged()
     } catch (err) {
       setError(err.message)
@@ -312,16 +334,13 @@ function LabDetail({ id, onDeleted, backTo }) {
       <aside aria-label="Lab people" className="min-w-0 space-y-5">
         <section aria-label="Principal investigators" className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="mb-4 flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500"><Icon name="school" className="text-[15px]" /></span><h2 className="text-xs font-semibold text-slate-800">Principal investigators (PIs)</h2></div>
-          {lab.data.principalInvestigators?.length ? <ul className="space-y-2">{lab.data.principalInvestigators.map(pi => <li key={pi.authorId}><Link to={`/authors/${encodeURIComponent(pi.authorId)}`} className="group flex items-center gap-2 rounded-lg py-1 text-xs text-slate-700 hover:text-blue-600"><span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold text-indigo-500">{initials(pi.name)}</span><span className="min-w-0 flex-1 break-words font-medium">{pi.name}</span><Icon name="arrow_outward" className="shrink-0 text-[15px] text-slate-300 group-hover:text-blue-500" /></Link></li>)}</ul> : <p className="text-xs leading-5 text-slate-400">No PIs selected. Use Edit lab to choose authors.</p>}
+          {lab.data.principalInvestigators?.length ? <ul className="divide-y divide-slate-100">{lab.data.principalInvestigators.map(pi => <LabPersonRow key={pi.authorId} person={pi} isPi busy={busy} onChoosePapers={author => setPaperPicker({ author })} onRemove={removePi} />)}</ul> : <p className="text-xs leading-5 text-slate-400">No PIs selected. Use Edit lab to choose authors.</p>}
         </section>
         <section aria-label="Lab members" className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="text-xs font-semibold text-slate-800">Members{!members.loading && !members.error && ` (${members.data.total})`}</h2><button className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-40" disabled={!!busy} onClick={() => setAdding(true)}><Icon name="add" className="text-[15px]" />Add members</button></div>
           {members.loading ? <p className="py-3 text-xs text-slate-400">Loading members…</p> : members.error ? <LoadError resource={members} /> : <>
             {!members.data.items.length && <p className="py-2 text-xs leading-5 text-slate-400">No members yet. You can still add papers directly.</p>}
-            <ul className="divide-y divide-slate-100">{members.data.items.map(member => <li key={member.authorId} className="flex items-center justify-between gap-2 py-3 first:pt-0">
-              <Link to={`/authors/${encodeURIComponent(member.authorId)}`} className="flex min-w-0 items-center gap-2.5 text-xs text-slate-700 hover:text-blue-600"><span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">{initials(member.name)}</span><span className="min-w-0 break-words font-medium">{member.name}</span></Link>
-              <div className="flex shrink-0 gap-0.5"><button className="rounded p-1 text-slate-400 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-40" aria-label={`Choose papers by ${member.name}`} title={`Choose papers by ${member.name}`} disabled={!!busy} onClick={() => setPaperPicker({ author: member })}><Icon name="article" className="text-[15px]" /></button><button className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40" aria-label={`Remove ${member.name}`} title={`Remove ${member.name} from lab`} disabled={!!busy} onClick={() => removeMember(member.authorId)}><Icon name="person_remove" className="text-[15px]" /></button></div>
-            </li>)}</ul>
+            <ul className="divide-y divide-slate-100">{members.data.items.map(member => <LabPersonRow key={member.authorId} person={member} busy={busy} onChoosePapers={author => setPaperPicker({ author })} onRemove={removeMember} />)}</ul>
             <Pagination page={members.data} onChange={setMemberOffset} label="Members" />
           </>}
         </section>

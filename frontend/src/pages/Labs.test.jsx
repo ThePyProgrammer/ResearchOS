@@ -179,6 +179,33 @@ describe('Labs', () => {
     expect(labsApi.list).not.toHaveBeenCalled()
   })
 
+  it('lets a PI choose papers without membership and removes only their PI assignment with retry', async () => {
+    const otherPi = { authorId: 'pi_2', name: 'Alex Lee' }
+    labsApi.get.mockResolvedValue({ ...lab, principalInvestigators: [member, otherPi] })
+    labsApi.members.mockResolvedValueOnce(page([], 50)).mockResolvedValue(page([member], 50))
+    labsApi.update.mockRejectedValueOnce(new Error('Unable to remove PI')).mockResolvedValue({ ...lab, principalInvestigators: [otherPi] })
+    mount()
+    const piSection = within(await screen.findByRole('region', { name: 'Principal investigators' }))
+    fireEvent.click(piSection.getByRole('button', { name: 'Choose papers by Jane Smith' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Available paper' }))
+    expect(labsApi.paperOptions).toHaveBeenCalledWith('lab_1', { search: '', author_id: 'a_1', offset: 0, limit: 25 })
+    fireEvent.click(screen.getByRole('button', { name: 'Add selected papers (1)' }))
+    await waitFor(() => expect(labsApi.papers).toHaveBeenCalledTimes(2))
+    expect(labsApi.addPapers).toHaveBeenCalledWith('lab_1', ['p_2'], 'a_1')
+    expect(labsApi.addMember).not.toHaveBeenCalled()
+    fireEvent.click(piSection.getByRole('button', { name: 'Remove Jane Smith as PI' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to remove PI')
+    expect(piSection.getByRole('link', { name: 'Jane Smith' })).toBeInTheDocument()
+    fireEvent.click(piSection.getByRole('button', { name: 'Remove Jane Smith as PI' }))
+    await waitFor(() => expect(piSection.queryByRole('link', { name: 'Jane Smith' })).not.toBeInTheDocument())
+    expect(piSection.getByRole('link', { name: 'Alex Lee' })).toBeInTheDocument()
+    expect(labsApi.update).toHaveBeenLastCalledWith('lab_1', { piAuthorIds: ['pi_2'] })
+    expect(await within(screen.getByRole('region', { name: 'Lab members' })).findByRole('link', { name: 'Jane Smith' })).toBeInTheDocument()
+    expect(labsApi.removeMember).not.toHaveBeenCalled()
+    expect(labsApi.removePaper).not.toHaveBeenCalled()
+    expect(labsApi.papers).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps the paper page after member removal and resets only after unlinking a paper', async () => {
     labsApi.papers.mockResolvedValueOnce(page([paper], 25, 26)).mockResolvedValueOnce(page([paper], 25, 26, 25)).mockResolvedValue(page([], 25))
     mount()

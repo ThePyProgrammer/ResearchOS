@@ -175,3 +175,10 @@ Directory cards show a muted, comma-separated PI byline beneath the lab name.
 Labs without PIs omit the byline. The paginated list reads the existing
 `lab_details` view in one database request, including current PI names;
 there are no per-card detail requests and no new migration.
+
+
+PI and member entries share the same compact row and icon controls. The paper
+icon opens the author's existing-paper picker, including for PIs who are not
+members. Removing a PI clears only their PI assignment, preserves other PIs
+and paper associations, and refreshes the member list to reveal any separate
+membership they already held. Errors leave the PI visible for retry.
