@@ -58,8 +58,12 @@ class LabDetail(Lab):
     principal_investigators: list[LabMember] = Field(default_factory=list)
 
 
+class LabSummary(LabDetail):
+    paper_count: int = Field(ge=0)
+
+
 class LabPage(CamelModel):
-    items: list[LabDetail]
+    items: list[LabSummary]
     total: int
     limit: int
     offset: int

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import WindowModal from '../components/WindowModal'
+import AuthorChip from '../components/AuthorChip'
 import { labsApi } from '../services/api'
 
 const INPUT = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30'
@@ -211,7 +212,7 @@ function AddLabPeople({ labId, isPi = false, pis = [], onChanged, onPapersChange
 
 function LabPersonRow({ person, isPi = false, busy, onChoosePapers, onRemove }) {
   return <li className="flex items-center justify-between gap-2 py-3 first:pt-0">
-    <Link to={`/authors/${encodeURIComponent(person.authorId)}`} className="flex min-w-0 items-center gap-2.5 text-xs text-slate-700 hover:text-blue-600"><span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">{initials(person.name)}</span><span className="min-w-0 break-words font-medium">{person.name}</span></Link>
+    <AuthorChip author={person} />
     <div className="flex shrink-0 gap-0.5"><button className="rounded p-1 text-slate-400 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-40" aria-label={`Choose papers by ${person.name}`} title={`Choose papers by ${person.name}`} disabled={!!busy} onClick={() => onChoosePapers(person)}><Icon name="article" className="text-[15px]" /></button><button className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40" aria-label={`Remove ${person.name}${isPi ? ' as PI' : ''}`} title={`Remove ${person.name} ${isPi ? 'as PI' : 'from lab'}`} disabled={!!busy} onClick={() => onRemove(person.authorId)}><Icon name="person_remove" className="text-[15px]" /></button></div>
   </li>
 }
@@ -355,10 +356,6 @@ function LabDetail({ id, onDeleted, backTo }) {
   </div>
 }
 
-function initials(name) {
-  return name.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase()
-}
-
 export function LabDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -400,12 +397,15 @@ function LabsDirectory() {
       </div>
       {labs.loading ? <div role="status"><span className="sr-only">Loading labs…</span><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map(i => <div key={i} className="h-32 animate-pulse rounded-lg border border-slate-200 bg-white" />)}</div></div> : labs.error ? <LoadError resource={labs} /> : <>
         <ul aria-label="Labs directory" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{labs.data.items.map(lab => <li key={lab.id} className="min-w-0">
-          <Link to={`/labs/${encodeURIComponent(lab.id)}`} state={{ from: listPath }} aria-label={`Open ${lab.name}`} className="group flex h-full flex-col rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-slate-400 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500">
-            <h2 className="break-words text-sm font-semibold leading-5 text-slate-800">{lab.name}</h2>
-            {!!lab.principalInvestigators?.length && <p aria-label="Principal investigators" className="mt-1 break-words text-xs leading-5 text-slate-500">{lab.principalInvestigators.map(pi => pi.name).join(', ')}</p>}
+          <div className="group relative flex h-full flex-col rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-slate-400 hover:bg-slate-50">
+            <h2 className="break-words text-sm font-semibold leading-5 text-slate-800"><Link to={`/labs/${encodeURIComponent(lab.id)}`} state={{ from: listPath }} aria-label={`Open ${lab.name}`} className="after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:outline focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-slate-500">{lab.name}</Link></h2>
+            {!!lab.principalInvestigators?.length && <ul aria-label="Principal investigators" className="mt-2 flex flex-wrap gap-1.5">{lab.principalInvestigators.map(pi => <li key={pi.authorId} className="min-w-0 max-w-full"><AuthorChip author={pi} className="relative z-10" /></li>)}</ul>}
             {lab.description && <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-slate-500">{lab.description}</p>}
-            {!!lab.websites?.length && <p className="mt-auto truncate pt-3 text-[11px] text-slate-400">{lab.websites[0].replace(/^https?:\/\//, '').replace(/\/$/, '')}</p>}
-          </Link>
+            <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-3 text-[11px] text-slate-400">
+              {!!lab.websites?.length && <span className="min-w-0 truncate">{lab.websites[0].replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>}
+              <span className="shrink-0 tabular-nums text-slate-500">{lab.paperCount ?? 0} {lab.paperCount === 1 ? 'paper' : 'papers'}</span>
+            </div>
+          </div>
         </li>)}</ul>
         {!labs.data.items.length && <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-8 text-center"><h2 className="text-sm font-semibold text-slate-800">{search ? 'No matching labs.' : 'Build your research directory'}</h2><p className="mt-2 text-sm text-slate-500">{search ? 'Try a different name or clear your search.' : 'No labs yet. Create your first lab to get started.'}</p>{search && <button className={`${BUTTON} mt-5`} onClick={() => changeSearch('')}>Clear search</button>}</div>}
         <Pagination page={labs.data} onChange={changePage} label="Labs" />

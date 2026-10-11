@@ -2,10 +2,14 @@
 
 ## Setup
 
-Apply [028_pi_membership.sql](../../backend/migrations/028_pi_membership.sql)
-after migration 027 in the Supabase SQL editor. On fresh installations, apply
-the base schema and migrations in order through 028. PostgreSQL 15+ is required.
+Apply [029_lab_directory_counts.sql](../../backend/migrations/029_lab_directory_counts.sql)
+after migration 028 in the Supabase SQL editor. On fresh installations, apply
+the base schema and migrations in order through 029. PostgreSQL 15+ is required.
 The application does not automatically apply migrations.
+
+Migration 029 adds a directory view with live counts of explicitly linked papers.
+It changes no stored records. Counts use the indexed lab-paper links and are
+returned with the paginated directory in one request, including labs with zero papers.
 
 Migration 028 adds membership to existing PIs, makes future PI assignments
 create memberships atomically, and adds direct PI management functions.
@@ -20,8 +24,9 @@ Missing required functions return an actionable 503 with the migration name.
 ## User flow
 
 1. Open **Labs**, directly below **Authors**. The searchable directory shows
-   compact, neutral cards with lab names, PI bylines, and available description
-   and website. Desktop uses three columns, tablets two, and small screens one.
+   compact, neutral cards with lab names, clickable PI chips, available description and website, and an indexed-paper
+   count. PI and member names on the detail page use the same chip style as
+   lab labels on Authors. Desktop uses three columns, tablets two, and small screens one.
 2. Create a lab with its name, optional description and up to 20 HTTP/HTTPS
    websites. **Edit lab** changes this metadata only. PI management lives on the
    dedicated lab page, not in the create/edit form.
@@ -62,7 +67,7 @@ errors use the sanitized global 500 response.
 
 | Action | API | Database round trips |
 | --- | --- | --- |
-| Directory/search | GET /api/labs | 1 counted, paginated lab_details view query including PIs |
+| Directory/search | GET /api/labs | 1 counted, paginated lab_directory view query including PIs and paper counts |
 | Lab details | GET /api/labs/{id} | 1 view query |
 | PI search | GET /api/labs/pi-options?search=... | 1 bounded author projection |
 | Add/remove PI | PUT/DELETE /api/labs/{id}/pis/{authorId} | 1 atomic RPC returning current detail |
@@ -117,3 +122,7 @@ for large results; there are no extra frontend requests or per-author reads.
 - [explicit_lab_papers.sql](../../backend/tests/sql/explicit_lab_papers.sql) tests
   explicit selections after 026; [labs.sql](../../backend/tests/sql/labs.sql)
   covers the original 024/025 behavior before upgrading.
+
+- Run [lab_directory_counts.sql](../../backend/tests/sql/lab_directory_counts.sql)
+  after 029 in disposable PostgreSQL to check empty labs, deduplicated links,
+  per-lab counts, unlinking and source deletion. Fixtures roll back.

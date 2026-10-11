@@ -110,6 +110,7 @@ def test_page_reads_use_one_round_trip_including_empty_and_missing(database, fun
 
 def test_lab_list_has_database_search_count_and_stable_pagination(database):
     db, query = database
+    query.execute.return_value.data = [{**LAB, "paper_count": 0}]
     result = lab_service.list_labs(search="50%_lab", limit=30, offset=30)
     assert result.total == 1
     query.select.assert_called_once_with("*", count="exact")
@@ -414,7 +415,7 @@ def test_filtered_members_missing_lab(client, mocker):
 
 def test_lab_directory_returns_pi_bylines_in_one_query(client, database):
     db, query = database
-    query.execute.return_value.data = [{**LAB, "principal_investigators": [
+    query.execute.return_value.data = [{**LAB, "paper_count": 1205, "principal_investigators": [
         {"author_id": "pi_1", "name": "Ada Smith", "orcid": None},
         {"author_id": "pi_2", "name": "Bea Smith", "orcid": None},
     ]}]
@@ -424,7 +425,8 @@ def test_lab_directory_returns_pi_bylines_in_one_query(client, database):
         {"authorId": "pi_1", "name": "Ada Smith", "orcid": None},
         {"authorId": "pi_2", "name": "Bea Smith", "orcid": None},
     ]
-    db.table.assert_called_once_with("lab_details")
+    db.table.assert_called_once_with("lab_directory")
+    assert response.json()["items"][0]["paperCount"] == 1205
     query.execute.assert_called_once()
     db.rpc.assert_not_called()
 
@@ -454,3 +456,11 @@ def test_pi_change_errors(client, database, code, status):
     assert "internal message" not in response.text
     if code == "PGRST202":
         assert "028_pi_membership.sql" in response.text
+
+
+def test_missing_directory_count_view_is_actionable(client, database):
+    _, query = database
+    query.execute.side_effect = APIError({"code": "PGRST205", "message": "missing view", "details": None, "hint": None})
+    response = client.get("/api/labs")
+    assert response.status_code == 503
+    assert "029_lab_directory_counts.sql" in response.text

@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from postgrest.exceptions import APIError
 
 from models.lab import (
-    Lab, LabCreate, LabDetail, LabMember, LabMemberPage, LabPage,
+    Lab, LabCreate, LabDetail, LabMember, LabMemberPage, LabPage, LabSummary,
     LabPaper, LabPaperAddResult, LabPaperPage, LabPaperSelection, LabUpdate,
 )
 from services.db import get_client
@@ -25,16 +25,17 @@ def _contains(value: str) -> str:
 
 
 def list_labs(search: str = "", limit: int = 30, offset: int = 0) -> LabPage:
-    query = get_client().table("lab_details").select("*", count="exact")
+    query = get_client().table("lab_directory").select("*", count="exact")
     if search.strip():
         query = query.ilike("name", _contains(search))
     try:
         result = query.order("name").order("id").range(offset, offset + limit - 1).execute()
     except APIError as exc:
         if exc.code in ("PGRST205", "42P01"):
-            _details_migration_required()
+            logger.warning("Lab directory counts unavailable; apply 029_lab_directory_counts.sql")
+            raise HTTPException(503, detail="Labs needs migration 029_lab_directory_counts.sql. Apply it in Supabase and retry.") from exc
         raise
-    return LabPage(items=[LabDetail.model_validate(row) for row in result.data],
+    return LabPage(items=[LabSummary.model_validate(row) for row in result.data],
                    total=result.count, limit=limit, offset=offset)
 
 

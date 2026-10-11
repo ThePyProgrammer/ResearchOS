@@ -11,7 +11,7 @@ vi.mock('../services/api', () => ({ labsApi: {
   piOptions: vi.fn(), addPi: vi.fn(), removePi: vi.fn(),
 } }))
 
-const lab = { id: 'lab_1', name: 'Language Lab', description: 'Language research', createdAt: '2026-10-07' }
+const lab = { id: 'lab_1', name: 'Language Lab', description: 'Language research', paperCount: 12, createdAt: '2026-10-07' }
 const member = { authorId: 'a_1', name: 'Jane Smith', orcid: null }
 const paper = { id: 'p_1', title: 'Shared research', authors: ['Jane Smith'], year: 2026, venue: 'ICLR', status: 'read', libraryName: 'Research' }
 const page = (items, limit = 25, total = items.length, offset = 0) => ({ items, limit, total, offset })
@@ -38,7 +38,10 @@ describe('Labs', () => {
     mount('/labs')
     const card = await screen.findByRole('link', { name: 'Open Language Lab' })
     expect(card).toHaveAttribute('href', '/labs/lab_1')
-    expect(within(card).getByLabelText('Principal investigators')).toHaveTextContent('Jane Smith, John Smith')
+    const cardContent = within(card.closest('li'))
+    expect(cardContent.getByRole('link', { name: 'Jane Smith' })).toHaveAttribute('href', '/authors/a_1')
+    expect(cardContent.getByRole('link', { name: 'John Smith' })).toHaveAttribute('href', '/authors/a_2')
+    expect(cardContent.getByText('12 papers indexed')).toBeInTheDocument()
     expect(screen.getByText('Language research')).toBeInTheDocument()
     expect(labsApi.list).toHaveBeenCalledTimes(1)
     for (const method of ['get', 'members', 'papers']) expect(labsApi[method]).not.toHaveBeenCalled()
@@ -65,6 +68,20 @@ describe('Labs', () => {
     }
     expect(screen.getByRole('button', { name: 'Edit lab' })).toHaveTextContent(/^edit$/)
     expect(screen.getByRole('button', { name: 'Delete lab' })).toHaveTextContent(/^delete$/)
+  })
+
+  it('shows zero and singular counts and lets PI chips open author profiles', async () => {
+    labsApi.list.mockResolvedValue(page([
+      { ...lab, paperCount: 0, principalInvestigators: [member] },
+      { ...lab, id: 'lab_2', name: 'Vision Lab', paperCount: 1 },
+    ], 30))
+    render(<MemoryRouter initialEntries={['/labs']}><Routes><Route path="/labs" element={<Labs />} /><Route path="/authors/:id" element={<p>Author profile destination</p>} /></Routes></MemoryRouter>)
+    expect(await screen.findByText('0 papers indexed')).toBeInTheDocument()
+    expect(screen.getByText('1 paper indexed')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: member.name }))
+    expect(await screen.findByText('Author profile destination')).toBeInTheDocument()
+    expect(labsApi.get).not.toHaveBeenCalled()
+    expect(labsApi.list).toHaveBeenCalledTimes(1)
   })
 
   it('keeps old lab bookmarks working without fetching the directory', async () => {

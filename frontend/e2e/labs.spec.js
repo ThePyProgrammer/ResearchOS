@@ -193,6 +193,8 @@ test('Labs directory opens a dedicated workspace without loading every card deta
     ['Open Systems Research', 'Reproducible tools and shared infrastructure for open-ended research.', ''],
   ].map(([name, description, website], index) => ({ id: `design_${index}`, name, description, websites: website ? [website] : [], createdAt: '2026-10-09' }))
   const pis = [{ authorId: 'pi_1', name: 'Maya Chen' }, { authorId: 'pi_2', name: 'Daniel Park' }]
+  labs[0].principalInvestigators = pis
+  labs[0].paperCount = 3
   const members = [{ authorId: 'a1', name: 'Sofia Martinez' }, { authorId: 'a2', name: 'Arjun Patel' }, { authorId: 'a3', name: 'Emma Wilson' }]
   const papers = [
     { id: 'p1', title: 'Learning to reason through language: a framework for compositional generalization', authors: ['Maya Chen', 'Sofia Martinez', 'Daniel Park'], year: 2026 },
@@ -211,14 +213,16 @@ test('Labs directory opens a dedicated workspace without loading every card deta
     return route.fulfill({ json: [] })
   })
   await page.goto('/labs')
-  await expect(page.getByRole('list', { name: 'Labs directory' }).getByRole('link')).toHaveCount(6)
+  await expect(page.getByRole('list', { name: 'Labs directory' }).getByRole('link', { name: /^Open / })).toHaveCount(6)
   expect(calls.filter(path => path.startsWith('/api/labs'))).toEqual(['/api/labs'])
-  const cards = page.getByRole('list', { name: 'Labs directory' }).getByRole('link')
-  const boxes = await Promise.all([0, 1, 2, 3].map(index => cards.nth(index).boundingBox()))
+  const cards = page.getByRole('list', { name: 'Labs directory' }).getByRole('link', { name: /^Open / })
+  const boxes = await Promise.all([0, 1, 2, 3].map(index => cards.nth(index).locator('../..').boundingBox()))
   expect(boxes[0].y).toBe(boxes[1].y)
   expect(boxes[1].y).toBe(boxes[2].y)
   expect(boxes[3].y).toBeGreaterThan(boxes[0].y)
   expect(boxes[0].height).toBeLessThan(180)
+  await expect(page.getByText('3 papers indexed')).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Labs directory' }).getByRole('link', { name: 'Maya Chen' })).toHaveAttribute('href', '/authors/pi_1')
   await page.screenshot({ path: 'test-results/labs-directory-desktop.png', fullPage: true, animations: 'disabled' })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByTitle('Collapse sidebar').click()
@@ -244,5 +248,5 @@ test('Labs directory opens a dedicated workspace without loading every card deta
   expect(calls.filter(path => path === '/api/labs')).toHaveLength(1)
   await page.getByRole('link', { name: 'All labs' }).click()
   await expect(page).toHaveURL(/\/labs$/)
-  await expect(page.getByRole('list', { name: 'Labs directory' }).getByRole('link')).toHaveCount(6)
+  await expect(page.getByRole('list', { name: 'Labs directory' }).getByRole('link', { name: /^Open / })).toHaveCount(6)
 })
