@@ -4,6 +4,7 @@ import { authorsApi, papersApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import AuthorLabLinks from '../components/AuthorLabLinks'
 import AuthorLabManager from '../components/AuthorLabManager'
+import AuthorEditModal, { PROFILE_FIELDS } from '../components/AuthorEditModal'
 import WindowModal from '../components/WindowModal'
 
 const INPUT = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
@@ -12,99 +13,6 @@ const PRIMARY = 'rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-whit
 
 function Icon({ name, className = '' }) {
   return <span aria-hidden="true" className={'material-symbols-outlined inline-block w-[1em] shrink-0 overflow-hidden align-middle ' + className}>{name}</span>
-}
-
-function EmailChips({ emails = [], onSave, saving }) {
-  const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState('')
-  async function addEmail(event) {
-    event.preventDefault()
-    const email = draft.trim()
-    if (!email || saving) return
-    if (await onSave([...emails, email])) { setDraft(''); setAdding(false) }
-  }
-  return <div>
-    <ul className="space-y-2">{emails.map((email, i) => <li key={i} className="flex items-start gap-2">
-      <a href={'mailto:' + email} className="min-w-0 flex-1 break-all text-xs leading-5 text-blue-600 hover:underline">{email}</a>
-      <button disabled={saving} onClick={() => onSave(emails.filter((_, index) => index !== i))} aria-label={'Remove email ' + email} className="rounded p-1 text-slate-400 hover:text-red-600 disabled:opacity-40"><Icon name="close" className="text-[13px]" /></button>
-    </li>)}</ul>
-    {adding ? <form onSubmit={addEmail} className="mt-2 space-y-2">
-      <input autoFocus required type="email" aria-label="Email address" value={draft} disabled={saving} onChange={event => setDraft(event.target.value)} placeholder="email@example.com" className={INPUT} />
-      <div className="flex gap-2"><button disabled={saving} className={BUTTON}>Save</button><button type="button" disabled={saving} onClick={() => setAdding(false)} className={BUTTON}>Cancel</button></div>
-    </form> : <button disabled={saving} onClick={() => setAdding(true)} className="mt-2 text-xs text-slate-400 hover:text-blue-600">Add email</button>}
-  </div>
-}
-
-function AffiliationTimeline({ affiliations = [], onSave, saving }) {
-  const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState({ institution: '', role: '' })
-  async function addAffiliation(event) {
-    event.preventDefault()
-    if (!draft.institution.trim() || saving) return
-    if (await onSave([...affiliations, { institution: draft.institution.trim(), role: draft.role.trim() || null }])) {
-      setDraft({ institution: '', role: '' }); setAdding(false)
-    }
-  }
-  function move(index, direction) {
-    const reordered = [...affiliations]
-    ;[reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]]
-    onSave(reordered)
-  }
-  return <div>
-    {affiliations.length > 1 && <p className="mb-2 text-xs leading-5 text-slate-400">Use the arrows to set the display order.</p>}
-    <ol className="divide-y divide-slate-100">{affiliations.map((aff, i) => <li key={i} className="py-3">
-      <p className="break-words text-xs font-medium leading-5 text-slate-700">{aff.institution}</p>
-      {aff.role && <p className="mt-0.5 break-words text-xs text-slate-500">{aff.role}</p>}
-      {(aff.startDate || aff.endDate) && <p className="mt-1 text-[11px] text-slate-400">{aff.startDate || '…'} – {aff.endDate || 'Present'}</p>}
-      <div className="mt-1 flex items-center gap-1">
-        <button disabled={saving || i === 0} onClick={() => move(i, -1)} aria-label={'Move ' + aff.institution + ' up'} title="Move up" className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-25"><Icon name="arrow_upward" className="text-[14px]" /></button>
-        <button disabled={saving || i === affiliations.length - 1} onClick={() => move(i, 1)} aria-label={'Move ' + aff.institution + ' down'} title="Move down" className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-25"><Icon name="arrow_downward" className="text-[14px]" /></button>
-        <button disabled={saving} onClick={() => onSave(affiliations.filter((_, index) => index !== i))} aria-label={'Remove affiliation ' + aff.institution} title="Remove affiliation" className="ml-auto rounded p-1 text-slate-400 hover:text-red-600 disabled:opacity-40"><Icon name="close" className="text-[14px]" /></button>
-      </div>
-    </li>)}</ol>
-    {!affiliations.length && <p className="mb-3 text-xs text-slate-400">No affiliations added.</p>}
-    {adding ? <form onSubmit={addAffiliation} className="mt-2 space-y-2">
-      <input autoFocus required aria-label="Institution" value={draft.institution} disabled={saving} onChange={event => setDraft(value => ({ ...value, institution: event.target.value }))} placeholder="Institution" className={INPUT} />
-      <input aria-label="Role" value={draft.role} disabled={saving} onChange={event => setDraft(value => ({ ...value, role: event.target.value }))} placeholder="Role (optional)" className={INPUT} />
-      <div className="flex gap-2"><button disabled={saving || !draft.institution.trim()} className={BUTTON}>Add</button><button type="button" disabled={saving} onClick={() => setAdding(false)} className={BUTTON}>Cancel</button></div>
-    </form> : <button disabled={saving} onClick={() => setAdding(true)} className="mt-2 text-xs text-blue-600 hover:underline">Add affiliation</button>}
-  </div>
-}
-
-const PROFILE_FIELDS = [
-  { key: 'orcid', icon: 'badge', label: 'ORCID', placeholder: '0000-0000-0000-0000', toUrl: v => `https://orcid.org/${v}`, display: v => v },
-  { key: 'googleScholarUrl', icon: 'school', label: 'Google Scholar', placeholder: 'https://scholar.google.com/...', toUrl: v => v, display: v => v.replace(/^https?:\/\//, '').replace(/\/$/, '') },
-  { key: 'githubUsername', icon: 'code', label: 'GitHub', placeholder: 'username', toUrl: v => `https://github.com/${v}`, display: v => v },
-  { key: 'openreviewUrl', icon: 'rate_review', label: 'OpenReview', placeholder: 'https://openreview.net/...', toUrl: v => v, display: v => v.replace(/^https?:\/\//, '').replace(/\/$/, '') },
-  { key: 'websiteUrl', icon: 'language', label: 'Website', placeholder: 'https://...', toUrl: v => v, display: v => v.replace(/^https?:\/\//, '').replace(/\/$/, '') },
-]
-
-function ProfileLinkRow({ field, value, onSave, saving }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(value || '')
-  async function save(event) {
-    event.preventDefault()
-    if (!saving && await onSave(draft.trim() || null)) setEditing(false)
-  }
-  return <div>
-    <div className="mb-1 flex items-center justify-between gap-2">
-      <h3 className="text-[11px] font-medium text-slate-500">{field.label}</h3>
-      {!editing && value && <button disabled={saving} aria-label={'Edit ' + field.label} title={'Edit ' + field.label} onClick={() => { setDraft(value); setEditing(true) }} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><Icon name="edit" className="text-[13px]" /></button>}
-    </div>
-    {editing ? <form onSubmit={save} className="space-y-2">
-      <input autoFocus aria-label={field.label} disabled={saving} value={draft} onChange={event => setDraft(event.target.value)} placeholder={field.placeholder} className={INPUT} />
-      <div className="flex flex-wrap gap-2"><button disabled={saving} className={BUTTON}>Save</button><button type="button" disabled={saving} onClick={() => setEditing(false)} className={BUTTON}>Cancel</button>{value && <button type="button" disabled={saving} onClick={async () => { if (await onSave(null)) setEditing(false) }} className={BUTTON + ' text-red-600'}>Remove</button>}</div>
-    </form> : value ? <a href={field.toUrl(value)} target="_blank" rel="noopener noreferrer" className="block break-all text-xs leading-5 text-blue-600 hover:underline">{field.toUrl(value).replace(/^https?:\/\//, '').replace(/\/$/, '')}</a> : <button disabled={saving} onClick={() => { setDraft(''); setEditing(true) }} className="text-xs text-slate-400 hover:text-blue-600">Add link</button>}
-  </div>
-}
-
-function ProfileLinksCard({ author, onSave, saving }) {
-  return <section aria-label="Author profile" className="rounded-xl border border-slate-200 bg-white p-4">
-    <h2 className="mb-4 text-xs font-semibold text-slate-800">Profile</h2>
-    <div className="space-y-4">{PROFILE_FIELDS.map(field => <ProfileLinkRow key={field.key} field={field} value={author[field.key]} saving={saving} onSave={value => onSave(field.key, value)} />)}
-      <div><h3 className="mb-2 text-[11px] font-medium text-slate-500">Email</h3><EmailChips emails={author.emails || []} saving={saving} onSave={value => onSave('emails', value)} /></div>
-    </div>
-  </section>
 }
 
 export default function AuthorDetail() {
@@ -123,6 +31,7 @@ function AuthorProfile({ id }) {
   const [enrichResult, setEnrichResult] = useState(null)
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState(null)
+  const [editing, setEditing] = useState(false)
   const [managingLabs, setManagingLabs] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
@@ -205,21 +114,6 @@ function AuthorProfile({ id }) {
     }
   }
 
-  async function handleFieldSave(field, value) {
-    setSaving(true)
-    setActionError(null)
-    try {
-      const updated = await authorsApi.update(id, { [field]: value })
-      setAuthor(current => ({ ...current, [field]: updated[field] }))
-      return true
-    } catch (err) {
-      setActionError(err.message)
-      return false
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function handleEnrich() {
     setEnriching(true)
     setEnrichResult(null)
@@ -235,7 +129,7 @@ function AuthorProfile({ id }) {
   }
 
   async function applyEnrichment(suggestions) {
-    if (saving) return
+    if (saving || editing) return
     const updates = {}
     if (suggestions.affiliations?.length) updates.affiliations = suggestions.affiliations
     if (suggestions.orcid) updates.orcid = suggestions.orcid
@@ -312,10 +206,17 @@ function AuthorProfile({ id }) {
         <header className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <h1 className="break-words text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{author.name}</h1>
-            <p className="mt-2 text-xs text-slate-500">{papers.length} {papers.length === 1 ? 'linked paper' : 'linked papers'}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <p className="text-xs text-slate-500">{papers.length} {papers.length === 1 ? 'linked paper' : 'linked papers'}</p>
+              {(PROFILE_FIELDS.some(field => author[field.key]) || author.emails?.length > 0) && <nav aria-label="Author profile links" className="flex flex-wrap items-center gap-1 border-l border-slate-200 pl-2">
+                {PROFILE_FIELDS.filter(field => author[field.key]).map(field => <a key={field.key} href={field.toUrl(author[field.key])} target="_blank" rel="noopener noreferrer" aria-label={field.label} title={field.label} className="inline-flex rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><Icon name={field.icon} className="text-[17px]" /></a>)}
+                {(author.emails || []).map(email => <a key={email} href={'mailto:' + email} aria-label={'Email ' + email} title={email} className="inline-flex rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><Icon name="mail" className="text-[17px]" /></a>)}
+              </nav>}
+            </div>
           </div>
           <div className="flex shrink-0 gap-1">
-            <button onClick={handleEnrich} disabled={enriching || saving} aria-label="Enrich author with AI" title="Enrich author with AI" className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-600 disabled:opacity-40"><Icon name="auto_awesome" className={'text-[18px]' + (enriching ? ' animate-pulse' : '')} /></button>
+            <button onClick={() => setEditing(true)} disabled={saving || editing} aria-label="Edit author" title="Edit author" className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-600 disabled:opacity-40"><Icon name="edit" className="text-[18px]" /></button>
+            <button onClick={handleEnrich} disabled={enriching || saving || editing} aria-label="Enrich author with AI" title="Enrich author with AI" className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-600 disabled:opacity-40"><Icon name="auto_awesome" className={'text-[18px]' + (enriching ? ' animate-pulse' : '')} /></button>
             <button onClick={() => { setActionError(null); setDeleting(true) }} aria-label="Delete author" title="Delete author" className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"><Icon name="delete" className="text-[18px]" /></button>
           </div>
         </header>
@@ -410,7 +311,7 @@ function AuthorProfile({ id }) {
             )}
             <div className="flex gap-2">
               <button
-                disabled={saving}
+                disabled={saving || editing}
                 onClick={() => applyEnrichment(enrichResult.suggestions)}
                 className="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700"
               >
@@ -428,14 +329,17 @@ function AuthorProfile({ id }) {
 
         <div className="grid items-start gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
           <aside aria-label="Author details" className="min-w-0 space-y-5">
-            <ProfileLinksCard author={author} onSave={handleFieldSave} saving={saving} />
             <section aria-label="Author labs" className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-xs font-semibold text-slate-800">Labs</h2><button onClick={() => setManagingLabs(true)} className="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50">Manage labs</button></div>
               <AuthorLabLinks labs={author.labs} emptyText="No labs associated." />
             </section>
             <section aria-label="Author affiliations" className="rounded-xl border border-slate-200 bg-white p-4">
               <h2 className="mb-3 text-xs font-semibold text-slate-800">Affiliations</h2>
-              <AffiliationTimeline affiliations={author.affiliations || []} saving={saving} onSave={value => handleFieldSave('affiliations', value)} />
+              {author.affiliations?.length ? <ol className="divide-y divide-slate-100">{author.affiliations.map((affiliation, index) => <li key={index} className="py-3 first:pt-0 last:pb-0">
+                <p className="break-words text-xs font-medium leading-5 text-slate-700">{affiliation.institution}</p>
+                {affiliation.role && <p className="mt-0.5 break-words text-xs text-slate-500">{affiliation.role}</p>}
+                {(affiliation.startDate || affiliation.endDate) && <p className="mt-1 text-[11px] text-slate-400">{affiliation.startDate || '…'} – {affiliation.endDate || 'Present'}</p>}
+              </li>)}</ol> : <p className="text-xs text-slate-400">No affiliations added.</p>}
             </section>
           </aside>
           <section aria-label="Author papers" className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -481,6 +385,7 @@ function AuthorProfile({ id }) {
         </div>}
         <div className="mt-5 flex justify-end"><button disabled={Object.values(linking).some(Boolean)} className={BUTTON} onClick={() => setPotentialOpen(false)}>Done</button></div>
       </WindowModal>}
+      {editing && <AuthorEditModal author={author} onClose={() => setEditing(false)} onSaved={(saved, fields) => setAuthor(current => ({ ...current, ...Object.fromEntries(fields.map(field => [field, saved[field]])) }))} />}
       {managingLabs && <AuthorLabManager author={author} onChange={labs => setAuthor(current => ({ ...current, labs }))} onClose={() => setManagingLabs(false)} />}
       {deleting && <WindowModal open title="Delete author" onClose={() => setDeleting(false)} disableClose={deleteBusy} bodyClassName="p-5">
         <p className="text-sm text-slate-600">Delete {author.name} and their paper links and lab memberships? Papers and labs will be kept.</p>

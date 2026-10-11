@@ -19,13 +19,17 @@ async function mockAuthor(page) {
   const candidate = { paper: { id: 'p3', title: 'A shared foundation for reliable scientific discovery', authors: ['Alex Chen', 'J. Smith'], year: 2026 }, rawName: 'J. Smith', confidence: 'likely' }
   let linked = [...papers]
   let failLink = true
+  let failSave = true
   await page.route('**/api/**', async route => {
     const request = route.request()
     const path = new URL(request.url()).pathname
     const method = request.method()
     if (path === '/api/libraries') return route.fulfill({ json: [{ id: 'lib1', name: 'Research' }] })
     if (path === '/api/authors/a1') {
-      if (method === 'PATCH') author = { ...author, ...request.postDataJSON() }
+      if (method === 'PATCH') {
+        if (failSave) { failSave = false; return route.fulfill({ status: 502, json: { detail: 'Could not save author. Try again.' } }) }
+        author = { ...author, ...request.postDataJSON() }
+      }
       return route.fulfill({ json: author })
     }
     if (path === '/api/authors/a1/papers') return route.fulfill({ json: linked })
@@ -60,7 +64,18 @@ test('author detail manages papers, affiliations, and labs with persisted state'
   await expect(page.getByRole('heading', { name: 'Jane Smith', exact: true })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('author-desktop.png'), fullPage: true })
   const affiliations = page.getByRole('region', { name: 'Author affiliations' })
-  await affiliations.getByRole('button', { name: 'Move University of Washington up' }).click()
+  await expect(page.getByRole('navigation', { name: 'Author profile links' }).getByRole('link', { name: 'Website' })).toHaveAttribute('href', 'https://janesmith.example/research')
+  await page.getByRole('button', { name: 'Edit author', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Author name' }).fill('Jane M. Smith')
+  await page.getByRole('textbox', { name: 'Website' }).fill('https://janesmith.example/about')
+  await page.getByRole('button', { name: 'Move University of Washington up' }).click()
+  await page.getByRole('textbox', { name: 'Role 1', exact: true }).fill('Visiting researcher')
+  await page.screenshot({ path: testInfo.outputPath('author-edit-desktop.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveText('Could not save author. Try again.')
+  await expect(page.getByRole('textbox', { name: 'Author name' })).toHaveValue('Jane M. Smith')
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Jane M. Smith', exact: true })).toBeVisible()
   await expect(affiliations.getByRole('listitem').first()).toContainText('University of Washington')
   await page.getByRole('button', { name: 'Link paper', exact: true }).click()
   await expect(page.getByText('As “J. Smith”')).toBeVisible()
@@ -79,6 +94,9 @@ test('author detail manages papers, affiliations, and labs with persisted state'
   await expect(page.getByRole('link', { name: 'Human-Centered AI Lab Member' })).toBeVisible()
   await page.getByRole('button', { name: 'Done', exact: true }).click()
   await page.reload()
+  await expect(page.getByRole('heading', { name: 'Jane M. Smith', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Website', exact: true })).toHaveAttribute('href', 'https://janesmith.example/about')
+  await expect(affiliations.getByRole('listitem').first()).toContainText('Visiting researcher')
   await expect(page.getByRole('heading', { name: 'Papers (3)' })).toBeVisible()
   await expect(affiliations.getByRole('listitem').first()).toContainText('University of Washington')
   await expect(page.getByRole('link', { name: 'Human-Centered AI Lab Member' })).toBeVisible()
@@ -93,6 +111,15 @@ test('author profile and paper modal remain usable at mobile width', async ({ pa
   await page.getByTitle('Collapse sidebar').click()
   await expect(page.getByRole('heading', { name: 'Jane Smith', exact: true })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('author-mobile.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Edit author', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: 'Author name' })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Author name' }).fill('Unsaved name')
+  await page.screenshot({ path: testInfo.outputPath('author-edit-mobile.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Move University of Washington up' }).click()
+  await expect(page.getByRole('textbox', { name: 'Institution 1', exact: true })).toHaveValue('University of Washington')
+  await page.getByRole('textbox', { name: 'End date 2', exact: true }).fill('2026')
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Jane Smith', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Link paper', exact: true }).click()
   await expect(page.getByRole('textbox', { name: 'Search potential papers' })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('author-modal-mobile.png'), fullPage: true })
