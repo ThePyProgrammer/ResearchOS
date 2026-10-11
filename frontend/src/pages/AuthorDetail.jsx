@@ -1,228 +1,118 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { authorsApi, papersApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import AuthorLabLinks from '../components/AuthorLabLinks'
+import AuthorLabManager from '../components/AuthorLabManager'
+import WindowModal from '../components/WindowModal'
+
+const INPUT = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
+const BUTTON = 'rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40'
+const PRIMARY = 'rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-40'
 
 function Icon({ name, className = '' }) {
-  return <span className={`material-symbols-outlined ${className}`}>{name}</span>
+  return <span aria-hidden="true" className={'material-symbols-outlined inline-block w-[1em] shrink-0 overflow-hidden align-middle ' + className}>{name}</span>
 }
 
-function EmailChips({ emails = [], onSave }) {
+function EmailChips({ emails = [], onSave, saving }) {
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
-
-  async function addEmail() {
+  async function addEmail(event) {
+    event.preventDefault()
     const email = draft.trim()
-    if (!email) return
-    await onSave([...emails, email])
-    setDraft('')
-    setAdding(false)
+    if (!email || saving) return
+    if (await onSave([...emails, email])) { setDraft(''); setAdding(false) }
   }
-
-  async function removeEmail(idx) {
-    await onSave(emails.filter((_, i) => i !== idx))
-  }
-
-  return (
-    <div>
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {emails.map((email, i) => (
-          <span key={i} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 group">
-            <Icon name="mail" className="text-[11px] text-slate-400" />
-            {email}
-            <button onClick={() => removeEmail(i)} className="text-slate-400 hover:text-red-500 transition-colors ml-0.5">
-              <Icon name="close" className="text-[11px]" />
-            </button>
-          </span>
-        ))}
-        {emails.length === 0 && !adding && <span className="text-xs text-slate-400 italic">No emails</span>}
-      </div>
-      {adding ? (
-        <div className="flex gap-1.5 items-center">
-          <input
-            autoFocus
-            type="email"
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') addEmail(); if (e.key === 'Escape') { setAdding(false); setDraft('') } }}
-            onBlur={() => { if (draft.trim()) addEmail(); else setAdding(false) }}
-            placeholder="email@example.com"
-            className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 font-mono"
-          />
-        </div>
-      ) : (
-        <button onClick={() => setAdding(true)} className="text-xs text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1">
-          <Icon name="add" className="text-[12px]" />
-          Add email
-        </button>
-      )}
-    </div>
-  )
+  return <div>
+    <ul className="space-y-2">{emails.map((email, i) => <li key={i} className="flex items-start gap-2">
+      <a href={'mailto:' + email} className="min-w-0 flex-1 break-all text-xs leading-5 text-blue-600 hover:underline">{email}</a>
+      <button disabled={saving} onClick={() => onSave(emails.filter((_, index) => index !== i))} aria-label={'Remove email ' + email} className="rounded p-1 text-slate-400 hover:text-red-600 disabled:opacity-40"><Icon name="close" className="text-[13px]" /></button>
+    </li>)}</ul>
+    {adding ? <form onSubmit={addEmail} className="mt-2 space-y-2">
+      <input autoFocus required type="email" aria-label="Email address" value={draft} disabled={saving} onChange={event => setDraft(event.target.value)} placeholder="email@example.com" className={INPUT} />
+      <div className="flex gap-2"><button disabled={saving} className={BUTTON}>Save</button><button type="button" disabled={saving} onClick={() => setAdding(false)} className={BUTTON}>Cancel</button></div>
+    </form> : <button disabled={saving} onClick={() => setAdding(true)} className="mt-2 text-xs text-slate-400 hover:text-blue-600">Add email</button>}
+  </div>
 }
 
-function AffiliationTimeline({ affiliations = [], onSave }) {
+function AffiliationTimeline({ affiliations = [], onSave, saving }) {
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ institution: '', role: '' })
-
-  async function addAffiliation() {
-    if (!draft.institution.trim()) return
-    const newAff = { institution: draft.institution.trim(), role: draft.role.trim() || null }
-    await onSave([...affiliations, newAff])
-    setDraft({ institution: '', role: '' })
-    setAdding(false)
+  async function addAffiliation(event) {
+    event.preventDefault()
+    if (!draft.institution.trim() || saving) return
+    if (await onSave([...affiliations, { institution: draft.institution.trim(), role: draft.role.trim() || null }])) {
+      setDraft({ institution: '', role: '' }); setAdding(false)
+    }
   }
-
-  async function removeAffiliation(idx) {
-    await onSave(affiliations.filter((_, i) => i !== idx))
+  function move(index, direction) {
+    const reordered = [...affiliations]
+    ;[reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]]
+    onSave(reordered)
   }
-
-  return (
-    <div>
-      {affiliations.map((aff, i) => (
-        <div key={i} className="flex items-start gap-3 py-2 group">
-          <div className="mt-1 w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-700">{aff.institution}</p>
-            {aff.role && <p className="text-xs text-slate-500">{aff.role}</p>}
-          </div>
-          <button
-            onClick={() => removeAffiliation(i)}
-            className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 flex-shrink-0 transition-opacity"
-          >
-            <Icon name="close" className="text-[14px]" />
-          </button>
-        </div>
-      ))}
-      {affiliations.length === 0 && !adding && (
-        <p className="text-xs text-slate-400 italic mb-2">No affiliations</p>
-      )}
-      {adding ? (
-        <div className="space-y-2 p-3 bg-slate-50 rounded-lg">
-          <input
-            autoFocus
-            type="text"
-            value={draft.institution}
-            onChange={e => setDraft(d => ({ ...d, institution: e.target.value }))}
-            placeholder="Institution"
-            className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-          />
-          <input
-            type="text"
-            value={draft.role}
-            onChange={e => setDraft(d => ({ ...d, role: e.target.value }))}
-            onKeyDown={e => { if (e.key === 'Enter') addAffiliation(); if (e.key === 'Escape') setAdding(false) }}
-            placeholder="Role (optional)"
-            className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-          />
-          <div className="flex gap-2">
-            <button onClick={addAffiliation} disabled={!draft.institution.trim()} className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50">Add</button>
-            <button onClick={() => setAdding(false)} className="px-3 py-1.5 text-slate-400 text-xs rounded-lg hover:bg-slate-100">Cancel</button>
-          </div>
-        </div>
-      ) : (
-        <button onClick={() => setAdding(true)} className="text-xs text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1">
-          <Icon name="add" className="text-[12px]" />
-          Add affiliation
-        </button>
-      )}
-    </div>
-  )
+  return <div>
+    {affiliations.length > 1 && <p className="mb-2 text-xs leading-5 text-slate-400">Use the arrows to set the display order.</p>}
+    <ol className="divide-y divide-slate-100">{affiliations.map((aff, i) => <li key={i} className="py-3">
+      <p className="break-words text-xs font-medium leading-5 text-slate-700">{aff.institution}</p>
+      {aff.role && <p className="mt-0.5 break-words text-xs text-slate-500">{aff.role}</p>}
+      {(aff.startDate || aff.endDate) && <p className="mt-1 text-[11px] text-slate-400">{aff.startDate || '…'} – {aff.endDate || 'Present'}</p>}
+      <div className="mt-1 flex items-center gap-1">
+        <button disabled={saving || i === 0} onClick={() => move(i, -1)} aria-label={'Move ' + aff.institution + ' up'} title="Move up" className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-25"><Icon name="arrow_upward" className="text-[14px]" /></button>
+        <button disabled={saving || i === affiliations.length - 1} onClick={() => move(i, 1)} aria-label={'Move ' + aff.institution + ' down'} title="Move down" className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-25"><Icon name="arrow_downward" className="text-[14px]" /></button>
+        <button disabled={saving} onClick={() => onSave(affiliations.filter((_, index) => index !== i))} aria-label={'Remove affiliation ' + aff.institution} title="Remove affiliation" className="ml-auto rounded p-1 text-slate-400 hover:text-red-600 disabled:opacity-40"><Icon name="close" className="text-[14px]" /></button>
+      </div>
+    </li>)}</ol>
+    {!affiliations.length && <p className="mb-3 text-xs text-slate-400">No affiliations added.</p>}
+    {adding ? <form onSubmit={addAffiliation} className="mt-2 space-y-2">
+      <input autoFocus required aria-label="Institution" value={draft.institution} disabled={saving} onChange={event => setDraft(value => ({ ...value, institution: event.target.value }))} placeholder="Institution" className={INPUT} />
+      <input aria-label="Role" value={draft.role} disabled={saving} onChange={event => setDraft(value => ({ ...value, role: event.target.value }))} placeholder="Role (optional)" className={INPUT} />
+      <div className="flex gap-2"><button disabled={saving || !draft.institution.trim()} className={BUTTON}>Add</button><button type="button" disabled={saving} onClick={() => setAdding(false)} className={BUTTON}>Cancel</button></div>
+    </form> : <button disabled={saving} onClick={() => setAdding(true)} className="mt-2 text-xs text-blue-600 hover:underline">Add affiliation</button>}
+  </div>
 }
 
 const PROFILE_FIELDS = [
   { key: 'orcid', icon: 'badge', label: 'ORCID', placeholder: '0000-0000-0000-0000', toUrl: v => `https://orcid.org/${v}`, display: v => v },
-  { key: 'googleScholarUrl', icon: 'school', label: 'Scholar', placeholder: 'https://scholar.google.com/...', toUrl: v => v, display: v => v.replace(/^https?:\/\//, '').replace(/\/$/, '') },
+  { key: 'googleScholarUrl', icon: 'school', label: 'Google Scholar', placeholder: 'https://scholar.google.com/...', toUrl: v => v, display: v => v.replace(/^https?:\/\//, '').replace(/\/$/, '') },
   { key: 'githubUsername', icon: 'code', label: 'GitHub', placeholder: 'username', toUrl: v => `https://github.com/${v}`, display: v => v },
   { key: 'openreviewUrl', icon: 'rate_review', label: 'OpenReview', placeholder: 'https://openreview.net/...', toUrl: v => v, display: v => v.replace(/^https?:\/\//, '').replace(/\/$/, '') },
   { key: 'websiteUrl', icon: 'language', label: 'Website', placeholder: 'https://...', toUrl: v => v, display: v => v.replace(/^https?:\/\//, '').replace(/\/$/, '') },
 ]
 
-function ProfileLinkRow({ field, value, onSave }) {
+function ProfileLinkRow({ field, value, onSave, saving }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value || '')
-
-  function startEdit() { setDraft(value || ''); setEditing(true) }
-  function cancel() { setEditing(false) }
-  async function save() { await onSave(draft.trim() || null); setEditing(false) }
-
-  if (editing) {
-    return (
-      <div className="flex items-center gap-2">
-        <Icon name={field.icon} className="text-[15px] text-slate-400 flex-shrink-0" />
-        <input
-          autoFocus
-          type="text"
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
-          onBlur={save}
-          placeholder={field.placeholder}
-          className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 font-mono"
-        />
-        <button onClick={save} className="px-2 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 flex-shrink-0">Save</button>
-        <button onClick={cancel} className="px-2 py-1 text-slate-400 text-xs rounded-lg hover:bg-slate-100 flex-shrink-0">&times;</button>
-      </div>
-    )
+  async function save(event) {
+    event.preventDefault()
+    if (!saving && await onSave(draft.trim() || null)) setEditing(false)
   }
-
-  return (
-    <div className="flex items-center gap-2 group">
-      <Icon name={field.icon} className="text-[15px] text-slate-400 flex-shrink-0" />
-      <span className="text-slate-400 text-xs w-16 flex-shrink-0">{field.label}</span>
-      {value ? (
-        <>
-          <a
-            href={field.toUrl(value)}
-            target="_blank"
-            rel="noreferrer"
-            className="flex-1 text-xs text-blue-600 hover:underline truncate font-mono"
-            title={value}
-          >
-            {field.display(value)}
-          </a>
-          <button onClick={startEdit} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-slate-500 flex-shrink-0 transition-opacity">
-            <Icon name="edit" className="text-[13px]" />
-          </button>
-          <button onClick={() => onSave(null)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 flex-shrink-0 transition-opacity">
-            <Icon name="close" className="text-[13px]" />
-          </button>
-        </>
-      ) : (
-        <button onClick={startEdit} className="text-xs text-slate-400 hover:text-blue-600 transition-colors italic">
-          Add {field.label.toLowerCase()}…
-        </button>
-      )}
+  return <div>
+    <div className="mb-1 flex items-center justify-between gap-2">
+      <h3 className="text-[11px] font-medium text-slate-500">{field.label}</h3>
+      {!editing && value && <button disabled={saving} aria-label={'Edit ' + field.label} title={'Edit ' + field.label} onClick={() => { setDraft(value); setEditing(true) }} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><Icon name="edit" className="text-[13px]" /></button>}
     </div>
-  )
+    {editing ? <form onSubmit={save} className="space-y-2">
+      <input autoFocus aria-label={field.label} disabled={saving} value={draft} onChange={event => setDraft(event.target.value)} placeholder={field.placeholder} className={INPUT} />
+      <div className="flex flex-wrap gap-2"><button disabled={saving} className={BUTTON}>Save</button><button type="button" disabled={saving} onClick={() => setEditing(false)} className={BUTTON}>Cancel</button>{value && <button type="button" disabled={saving} onClick={async () => { if (await onSave(null)) setEditing(false) }} className={BUTTON + ' text-red-600'}>Remove</button>}</div>
+    </form> : value ? <a href={field.toUrl(value)} target="_blank" rel="noopener noreferrer" className="block break-all text-xs leading-5 text-blue-600 hover:underline">{field.toUrl(value).replace(/^https?:\/\//, '').replace(/\/$/, '')}</a> : <button disabled={saving} onClick={() => { setDraft(''); setEditing(true) }} className="text-xs text-slate-400 hover:text-blue-600">Add link</button>}
+  </div>
 }
 
-function ProfileLinksCard({ author, onSave }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-      <h2 className="text-sm font-semibold text-slate-800">Profile</h2>
-
-      <div className="space-y-2.5">
-        {PROFILE_FIELDS.map(field => (
-          <ProfileLinkRow
-            key={field.key}
-            field={field}
-            value={author[field.key]}
-            onSave={v => onSave(field.key, v)}
-          />
-        ))}
-      </div>
-
-      <div>
-        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Emails</p>
-        <EmailChips emails={author.emails || []} onSave={v => onSave('emails', v)} />
-      </div>
+function ProfileLinksCard({ author, onSave, saving }) {
+  return <section aria-label="Author profile" className="rounded-xl border border-slate-200 bg-white p-4">
+    <h2 className="mb-4 text-xs font-semibold text-slate-800">Profile</h2>
+    <div className="space-y-4">{PROFILE_FIELDS.map(field => <ProfileLinkRow key={field.key} field={field} value={author[field.key]} saving={saving} onSave={value => onSave(field.key, value)} />)}
+      <div><h3 className="mb-2 text-[11px] font-medium text-slate-500">Email</h3><EmailChips emails={author.emails || []} saving={saving} onSave={value => onSave('emails', value)} /></div>
     </div>
-  )
+  </section>
 }
 
 export default function AuthorDetail() {
   const { id } = useParams()
+  return <AuthorProfile key={id} id={id} />
+}
+
+function AuthorProfile({ id }) {
   const navigate = useNavigate()
   const { libraries, switchLibrary } = useLibrary()
   const [author, setAuthor] = useState(null)
@@ -231,6 +121,15 @@ export default function AuthorDetail() {
   const [error, setError] = useState(null)
   const [enriching, setEnriching] = useState(false)
   const [enrichResult, setEnrichResult] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [actionError, setActionError] = useState(null)
+  const [managingLabs, setManagingLabs] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [paperSearch, setPaperSearch] = useState('')
+  const [potentialSearch, setPotentialSearch] = useState('')
+  const [potentialError, setPotentialError] = useState(null)
+  const [linkNotice, setLinkNotice] = useState(null)
   const [potentialPapers, setPotentialPapers] = useState([])
   const [potentialOpen, setPotentialOpen] = useState(false)
   const [potentialLoading, setPotentialLoading] = useState(false)
@@ -259,62 +158,84 @@ export default function AuthorDetail() {
 
   async function loadPotentialPapers() {
     setPotentialLoading(true)
+    setPotentialError(null)
     try {
-      const data = await authorsApi.potentialPapers(id)
-      setPotentialPapers(data)
+      setPotentialPapers(await authorsApi.potentialPapers(id))
     } catch (err) {
-      console.error('Failed to load potential papers:', err)
+      setPotentialError(err.message)
     } finally {
       setPotentialLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (potentialOpen && potentialPapers.length === 0 && !potentialLoading) {
-      loadPotentialPapers()
-    }
-  }, [potentialOpen])
+  function openPaperPicker() {
+    setPotentialOpen(true)
+    setPotentialSearch('')
+    setLinkNotice(null)
+    loadPotentialPapers()
+  }
 
-  async function handleLinkPaper(paperId, rawName) {
-    setLinking(prev => ({ ...prev, [paperId]: true }))
+  async function handleLinkPaper(paper, rawName) {
+    setLinking(prev => ({ ...prev, [paper.id]: true }))
+    setPotentialError(null)
+    setLinkNotice(null)
     try {
-      const authorNames = potentialPapers.find(p => p.paper.id === paperId)?.paper?.authors || []
-      const position = authorNames.indexOf(rawName)
-      await papersApi.linkAuthor(paperId, id, position >= 0 ? position : 0, rawName)
-      // Move from potential to linked
-      setPotentialPapers(prev => prev.filter(p => p.paper.id !== paperId))
-      const papersData = await authorsApi.papers(id)
-      setPapers(papersData)
+      const position = (paper.authors || []).indexOf(rawName)
+      await papersApi.linkAuthor(paper.id, id, Math.max(0, position), rawName)
+      setPotentialPapers(prev => prev.filter(item => item.paper.id !== paper.id))
+      setPapers(prev => prev.some(item => item.id === paper.id) ? prev : [...prev, paper])
+      setLinkNotice('Linked “' + paper.title + '”.')
     } catch (err) {
-      alert(`Failed to link: ${err.message}`)
+      setPotentialError(err.message)
+    } finally {
+      setLinking(prev => ({ ...prev, [paper.id]: false }))
+    }
+  }
+
+  async function handleUnlinkPaper(paperId) {
+    setLinking(prev => ({ ...prev, [paperId]: true }))
+    setActionError(null)
+    try {
+      await papersApi.unlinkAuthor(paperId, id)
+      setPapers(prev => prev.filter(paper => paper.id !== paperId))
+    } catch (err) {
+      setActionError(err.message)
     } finally {
       setLinking(prev => ({ ...prev, [paperId]: false }))
     }
   }
 
   async function handleFieldSave(field, value) {
+    setSaving(true)
+    setActionError(null)
     try {
       const updated = await authorsApi.update(id, { [field]: value })
-      setAuthor(updated)
+      setAuthor(current => ({ ...current, [field]: updated[field] }))
+      return true
     } catch (err) {
-      console.error('Failed to update author:', err)
+      setActionError(err.message)
+      return false
+    } finally {
+      setSaving(false)
     }
   }
 
   async function handleEnrich() {
     setEnriching(true)
     setEnrichResult(null)
+    setActionError(null)
     try {
       const result = await authorsApi.enrich(id)
       setEnrichResult(result)
     } catch (err) {
-      alert(`Enrichment failed: ${err.message}`)
+      setActionError(err.message)
     } finally {
       setEnriching(false)
     }
   }
 
   async function applyEnrichment(suggestions) {
+    if (saving) return
     const updates = {}
     if (suggestions.affiliations?.length) updates.affiliations = suggestions.affiliations
     if (suggestions.orcid) updates.orcid = suggestions.orcid
@@ -324,30 +245,39 @@ export default function AuthorDetail() {
     if (suggestions.emails?.length) updates.emails = suggestions.emails
 
     if (Object.keys(updates).length > 0) {
+      setSaving(true)
+      setActionError(null)
       try {
         const updated = await authorsApi.update(id, updates)
-        setAuthor(updated)
+        setAuthor(current => ({ ...current, ...Object.fromEntries(Object.keys(updates).map(field => [field, updated[field]])) }))
         setEnrichResult(null)
       } catch (err) {
-        alert(`Failed to apply: ${err.message}`)
+        setActionError(err.message)
+      } finally {
+        setSaving(false)
       }
     }
   }
 
   async function handleDelete() {
-    if (!confirm('Delete this author? This will remove all paper links.')) return
+    setDeleteBusy(true)
+    setActionError(null)
     try {
       await authorsApi.remove(id)
       navigate('/authors')
     } catch (err) {
-      alert(`Failed to delete: ${err.message}`)
+      setActionError(err.message)
+      setDeleteBusy(false)
     }
   }
 
+  const visiblePapers = papers.filter(paper => paper.title.toLowerCase().includes(paperSearch.trim().toLowerCase()))
+  const visiblePotential = potentialPapers.filter(({ paper }) => paper.title.toLowerCase().includes(potentialSearch.trim().toLowerCase()))
+
   if (loading) {
     return (
-      <div className="flex-1 overflow-auto">
-        <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="min-w-0 flex-1 overflow-auto bg-slate-50">
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="h-8 w-64 bg-slate-100 rounded animate-pulse mb-4" />
           <div className="h-96 bg-slate-100 rounded-xl animate-pulse" />
         </div>
@@ -357,8 +287,8 @@ export default function AuthorDetail() {
 
   if (error || !author) {
     return (
-      <div className="flex-1 overflow-auto">
-        <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="min-w-0 flex-1 overflow-auto bg-slate-50">
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
             {error || 'Author not found'}
           </div>
@@ -368,8 +298,8 @@ export default function AuthorDetail() {
   }
 
   return (
-    <div className="flex-1 overflow-auto">
-      <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="min-w-0 flex-1 overflow-auto bg-slate-50">
+      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {/* Back */}
         <button
           onClick={() => navigate('/authors')}
@@ -379,49 +309,18 @@ export default function AuthorDetail() {
           All Authors
         </button>
 
-        {/* Header */}
-        <div className="flex items-start justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center text-slate-500">
-              <Icon name="person" className="text-[32px]" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800">{author.name}</h1>
-              <div className="flex items-center gap-3 mt-1">
-                {PROFILE_FIELDS.filter(l => author[l.key]).map(link => (
-                  <a
-                    key={link.key}
-                    href={link.toUrl(author[link.key])}
-                    target="_blank"
-                    rel="noreferrer"
-                    title={link.label}
-                    className="text-slate-400 hover:text-blue-600 transition-colors"
-                  >
-                    <Icon name={link.icon} className="text-[18px]" />
-                  </a>
-                ))}
-                <span className="text-sm text-slate-500">{author.paperCount} paper{author.paperCount !== 1 ? 's' : ''}</span>
-              </div>
-            </div>
+        <header className="mb-6 flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="break-words text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{author.name}</h1>
+            <p className="mt-2 text-xs text-slate-500">{papers.length} {papers.length === 1 ? 'linked paper' : 'linked papers'}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleEnrich}
-              disabled={enriching}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
-            >
-              <Icon name="auto_awesome" className="text-[16px]" />
-              {enriching ? 'Enriching...' : 'Enrich with AI'}
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-            >
-              <Icon name="delete" className="text-[16px]" />
-              Delete
-            </button>
+          <div className="flex shrink-0 gap-1">
+            <button onClick={handleEnrich} disabled={enriching || saving} aria-label="Enrich author with AI" title="Enrich author with AI" className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-600 disabled:opacity-40"><Icon name="auto_awesome" className={'text-[18px]' + (enriching ? ' animate-pulse' : '')} /></button>
+            <button onClick={() => { setActionError(null); setDeleting(true) }} aria-label="Delete author" title="Delete author" className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"><Icon name="delete" className="text-[18px]" /></button>
           </div>
-        </div>
+        </header>
+        {enriching && <p role="status" className="mb-4 text-xs text-slate-500">Finding profile suggestions…</p>}
+        {actionError && !deleting && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">{actionError}</p>}
 
         {/* Enrichment result */}
         {enrichResult?.suggestions && (
@@ -511,6 +410,7 @@ export default function AuthorDetail() {
             )}
             <div className="flex gap-2">
               <button
+                disabled={saving}
                 onClick={() => applyEnrichment(enrichResult.suggestions)}
                 className="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700"
               >
@@ -526,152 +426,67 @@ export default function AuthorDetail() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Profile */}
-          <div className="lg:col-span-1 space-y-6">
-            <ProfileLinksCard author={author} onSave={handleFieldSave} />
-
-            <section aria-label="Author labs" className="bg-white rounded-xl border border-slate-200 p-5">
-              <h2 className="text-sm font-semibold text-slate-800 mb-3">Labs</h2>
+        <div className="grid items-start gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <aside aria-label="Author details" className="min-w-0 space-y-5">
+            <ProfileLinksCard author={author} onSave={handleFieldSave} saving={saving} />
+            <section aria-label="Author labs" className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-xs font-semibold text-slate-800">Labs</h2><button onClick={() => setManagingLabs(true)} className="rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50">Manage labs</button></div>
               <AuthorLabLinks labs={author.labs} emptyText="No labs associated." />
-              <p className="mt-3 text-xs text-slate-500">Membership and principal investigator (PI) assignments are managed on the Labs page.</p>
             </section>
-
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <h2 className="text-sm font-semibold text-slate-800 mb-3">Affiliations</h2>
-              <AffiliationTimeline
-                affiliations={author.affiliations || []}
-                onSave={v => handleFieldSave('affiliations', v)}
-              />
+            <section aria-label="Author affiliations" className="rounded-xl border border-slate-200 bg-white p-4">
+              <h2 className="mb-3 text-xs font-semibold text-slate-800">Affiliations</h2>
+              <AffiliationTimeline affiliations={author.affiliations || []} saving={saving} onSave={value => handleFieldSave('affiliations', value)} />
+            </section>
+          </aside>
+          <section aria-label="Author papers" className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5">
+              <h2 className="font-semibold text-slate-800">Papers ({papers.length})</h2>
+              <button onClick={openPaperPicker} className={PRIMARY + ' inline-flex items-center gap-1.5'}><Icon name="add" className="text-[17px]" />Link paper</button>
             </div>
-          </div>
-
-          {/* Papers */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <h2 className="text-sm font-semibold text-slate-800 mb-4">
-                Linked Papers ({papers.length})
-              </h2>
-              {papers.length === 0 ? (
-                <p className="text-sm text-slate-400 italic py-4 text-center">
-                  No papers linked yet. Link papers from the paper detail view.
-                </p>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {papers.map(paper => (
-                    <a
-                      key={paper.id}
-                      href={`/library/paper/${paper.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block py-3 px-2 hover:bg-blue-50/50 rounded-lg cursor-pointer transition-colors -mx-2"
-                    >
-                      <p className="text-sm font-medium text-slate-800 mb-1">{paper.title}</p>
-                      <div className="flex items-center gap-3 text-xs text-slate-500">
-                        <span>{paper.year}</span>
-                        {paper.venue && <span>{paper.venue}</span>}
-                        <span>{(paper.authors || []).slice(0, 3).join(', ')}{paper.authors?.length > 3 ? ' et al.' : ''}</span>
-                        {paper.libraryId && (() => {
-                          const lib = libraries.find(l => l.id === paper.libraryId)
-                          return lib ? (
-                            <button
-                              onClick={e => { e.stopPropagation(); switchLibrary(lib.id); navigate('/library') }}
-                              className="inline-flex items-center gap-0.5 px-1.5 py-0 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full hover:bg-emerald-100 transition-colors"
-                              title={`Go to ${lib.name}`}
-                            >
-                              <Icon name="local_library" className="text-[11px]" />
-                              {lib.name}
-                            </button>
-                          ) : null
-                        })()}
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Potential Papers */}
-            <div className="bg-white rounded-xl border border-slate-200 mt-6">
-              <button
-                onClick={() => setPotentialOpen(o => !o)}
-                className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50/50 transition-colors rounded-xl"
-              >
-                <div className="flex items-center gap-2">
-                  <Icon name="person_search" className="text-[18px] text-amber-500" />
-                  <h2 className="text-sm font-semibold text-slate-800">
-                    Potential Papers
-                    {potentialPapers.length > 0 && (
-                      <span className="ml-1.5 text-xs font-normal text-slate-400">({potentialPapers.length})</span>
-                    )}
-                  </h2>
-                </div>
-                <Icon name={potentialOpen ? 'expand_less' : 'expand_more'} className="text-[20px] text-slate-400" />
-              </button>
-
-              {potentialOpen && (
-                <div className="px-5 pb-5 border-t border-slate-100">
-                  {potentialLoading ? (
-                    <div className="py-6 text-center text-sm text-slate-400">Searching papers...</div>
-                  ) : potentialPapers.length === 0 ? (
-                    <div className="py-6 text-center text-sm text-slate-400 italic">
-                      No potential matches found.
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100">
-                      {potentialPapers.map(({ paper, rawName, confidence }) => (
-                        <div key={paper.id} className="py-3 flex items-start gap-3">
-                          <a
-                            className="flex-1 min-w-0 cursor-pointer hover:bg-blue-50/50 rounded-lg px-2 py-1 -mx-2 -my-1 transition-colors"
-                            href={`/library/paper/${paper.id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <p className="text-sm font-medium text-slate-800 mb-1">{paper.title}</p>
-                            <div className="flex items-center gap-3 text-xs text-slate-500">
-                              <span>{paper.year}</span>
-                              {paper.venue && <span>{paper.venue}</span>}
-                              <span className="italic">as "{rawName}"</span>
-                              <span className={`px-1.5 py-0 rounded-full text-[10px] font-medium ${
-                                confidence === 'exact' ? 'bg-green-100 text-green-700' :
-                                confidence === 'likely' ? 'bg-blue-100 text-blue-700' :
-                                'bg-amber-100 text-amber-700'
-                              }`}>
-                                {confidence}
-                              </span>
-                              {paper.libraryId && (() => {
-                                const lib = libraries.find(l => l.id === paper.libraryId)
-                                return lib ? (
-                                  <button
-                                    onClick={e => { e.stopPropagation(); switchLibrary(lib.id); navigate('/library') }}
-                                    className="inline-flex items-center gap-0.5 px-1.5 py-0 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full hover:bg-emerald-100 transition-colors"
-                                    title={`Go to ${lib.name}`}
-                                  >
-                                    <Icon name="local_library" className="text-[11px]" />
-                                    {lib.name}
-                                  </button>
-                                ) : null
-                              })()}
-                            </div>
-                          </a>
-                          <button
-                            onClick={() => handleLinkPaper(paper.id, rawName)}
-                            disabled={linking[paper.id]}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex-shrink-0 mt-0.5"
-                          >
-                            <Icon name="link" className="text-[14px]" />
-                            {linking[paper.id] ? 'Linking...' : 'Link'}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+            <div className="relative m-5"><Icon name="search" className="pointer-events-none absolute left-3 top-2.5 text-[18px] text-slate-400" /><input aria-label="Search author papers" value={paperSearch} onChange={event => setPaperSearch(event.target.value)} placeholder="Search paper titles…" className={INPUT + ' pl-10'} /></div>
+            {!visiblePapers.length ? <div className="border-t border-slate-100 px-6 py-14 text-center"><Icon name={paperSearch ? 'search_off' : 'article'} className="text-[34px] text-slate-200" /><p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-slate-500">{paperSearch ? 'No papers match this search.' : 'No papers linked yet. Use Link paper to review potential matches.'}</p></div> : <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="border-y border-slate-200 bg-slate-50"><tr><th scope="col" className="px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Title</th><th scope="col" className="w-20 px-2 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Year</th><th scope="col" className="w-10"><span className="sr-only">Actions</span></th></tr></thead>
+                <tbody className="divide-y divide-slate-100">{visiblePapers.map(paper => {
+                  const library = libraries.find(item => item.id === paper.libraryId)
+                  return <tr key={paper.id} className="transition-colors hover:bg-blue-50">
+                    <td className="min-w-[180px] px-5 py-3.5">
+                      <Link to={'/library/paper/' + encodeURIComponent(paper.id)} className="text-[13px] font-medium leading-5 text-slate-800 hover:text-blue-600 hover:underline">{paper.title}</Link>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{(paper.authors || []).join(', ') || 'No authors listed'}</p>
+                      {library && <button onClick={() => { switchLibrary(library.id); navigate('/library') }} className="mt-1 text-[11px] text-slate-400 hover:text-blue-600" title={'Go to ' + library.name}>{library.name}</button>}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-3.5 align-top text-[13px] tabular-nums text-slate-500">{paper.year || '—'}</td>
+                    <td className="py-3.5 pr-3 align-top"><button disabled={linking[paper.id]} onClick={() => handleUnlinkPaper(paper.id)} aria-label={'Unlink paper ' + paper.title} title="Unlink paper from author" className="inline-flex rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"><Icon name="link_off" className="text-[17px]" /></button></td>
+                  </tr>
+                })}</tbody>
+              </table>
+            </div>}
+          </section>
         </div>
       </div>
+      {potentialOpen && <WindowModal open title="Link papers" iconName="article" onClose={() => setPotentialOpen(false)} disableClose={Object.values(linking).some(Boolean)} normalPanelClassName="w-full max-w-3xl rounded-2xl" bodyClassName="max-h-[75vh] overflow-y-auto p-5">
+        <p className="text-sm text-slate-500">Potential matches for {author.name}. Review the author name before linking a paper.</p>
+        <input autoFocus aria-label="Search potential papers" value={potentialSearch} onChange={event => setPotentialSearch(event.target.value)} placeholder="Search potential paper titles…" className={INPUT + ' mt-4'} />
+        {potentialError && <div className="mt-3"><p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{potentialError}</p><button className={BUTTON + ' mt-2'} disabled={potentialLoading || Object.values(linking).some(Boolean)} onClick={loadPotentialPapers}>Retry loading matches</button></div>}
+        {linkNotice && <p role="status" className="mt-3 text-xs text-emerald-700">{linkNotice}</p>}
+        {potentialLoading ? <p className="py-10 text-center text-sm text-slate-400">Searching papers…</p> : !visiblePotential.length ? <p className="py-10 text-center text-sm text-slate-400">{potentialSearch ? 'No papers match this search.' : potentialError ? 'Potential matches could not be loaded.' : 'No potential matches found.'}</p> : <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full text-left">
+            <thead className="border-b border-slate-200 bg-slate-50"><tr><th scope="col" className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Title / match</th><th scope="col" className="px-2 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Year</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+            <tbody className="divide-y divide-slate-100">{visiblePotential.map(({ paper, rawName, confidence }) => <tr key={paper.id} className="hover:bg-blue-50">
+              <td className="min-w-[180px] px-4 py-3.5"><a href={'/library/paper/' + encodeURIComponent(paper.id)} target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium leading-5 text-slate-800 hover:text-blue-600 hover:underline">{paper.title}</a><p className="mt-1 text-xs leading-5 text-slate-500">{(paper.authors || []).join(', ')}</p><p className="mt-1 text-xs text-slate-500">As “{rawName}” <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{confidence} match</span></p></td>
+              <td className="px-2 py-3.5 align-top text-[13px] tabular-nums text-slate-500">{paper.year || '—'}</td>
+              <td className="py-3.5 pr-4 align-top"><button disabled={linking[paper.id]} onClick={() => handleLinkPaper(paper, rawName)} aria-label={'Link ' + paper.title} className={PRIMARY}>{linking[paper.id] ? 'Linking…' : 'Link'}</button></td>
+            </tr>)}</tbody>
+          </table>
+        </div>}
+        <div className="mt-5 flex justify-end"><button disabled={Object.values(linking).some(Boolean)} className={BUTTON} onClick={() => setPotentialOpen(false)}>Done</button></div>
+      </WindowModal>}
+      {managingLabs && <AuthorLabManager author={author} onChange={labs => setAuthor(current => ({ ...current, labs }))} onClose={() => setManagingLabs(false)} />}
+      {deleting && <WindowModal open title="Delete author" onClose={() => setDeleting(false)} disableClose={deleteBusy} bodyClassName="p-5">
+        <p className="text-sm text-slate-600">Delete {author.name} and their paper links and lab memberships? Papers and labs will be kept.</p>
+        {actionError && <p role="alert" className="mt-3 text-sm text-red-600">{actionError}</p>}
+        <div className="mt-5 flex justify-end gap-2"><button disabled={deleteBusy} className={BUTTON} onClick={() => setDeleting(false)}>Cancel</button><button disabled={deleteBusy} onClick={handleDelete} className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white disabled:opacity-40">{deleteBusy ? 'Deleting…' : 'Confirm delete'}</button></div>
+      </WindowModal>}
     </div>
   )
 }
