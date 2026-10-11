@@ -399,8 +399,8 @@ function LabsDirectory() {
         <ul aria-label="Labs directory" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{labs.data.items.map(lab => <li key={lab.id} className="min-w-0">
           <div className="group relative flex h-full flex-col rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-slate-400 hover:bg-slate-50">
             <h2 className="break-words text-sm font-semibold leading-5 text-slate-800"><Link to={`/labs/${encodeURIComponent(lab.id)}`} state={{ from: listPath }} aria-label={`Open ${lab.name}`} className="after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:outline focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-slate-500">{lab.name}</Link></h2>
-            {!!lab.principalInvestigators?.length && <ul aria-label="Principal investigators" className="mt-2 flex flex-wrap gap-1.5">{lab.principalInvestigators.map(pi => <li key={pi.authorId} className="min-w-0 max-w-full"><AuthorChip author={pi} className="relative z-10" /></li>)}</ul>}
             {lab.description && <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-slate-500">{lab.description}</p>}
+            {!!lab.principalInvestigators?.length && <ul aria-label="Principal investigators" className="mt-2 flex flex-wrap gap-1.5">{lab.principalInvestigators.map(pi => <li key={pi.authorId} className="min-w-0 max-w-full"><AuthorChip author={pi} className="relative z-10" /></li>)}</ul>}
             <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-3 text-[11px] text-slate-400">
               <span className="shrink-0 tabular-nums text-slate-500">{lab.paperCount ?? 0} {lab.paperCount === 1 ? 'paper' : 'papers'}</span>
               {!!lab.websites?.length && <a href={lab.websites[0]} target="_blank" rel="noopener noreferrer" title="Website" aria-label={`Website for ${lab.name}`}
