@@ -23,7 +23,8 @@ export default function AuthorEditModal({ author, onSaved, onClose }) {
   const [links, setLinks] = useState(() => Object.fromEntries(PROFILE_FIELDS.map(field => [field.key, author[field.key] || ''])))
   const nextKey = useRef(0)
   const [emails, setEmails] = useState(() => (author.emails || []).map(value => ({ key: nextKey.current++, value })))
-  const [affiliations, setAffiliations] = useState(() => (author.affiliations || []).map(value => ({ key: nextKey.current++, value: { ...value } })))
+  // Show the last stored affiliation first; convert back to storage order on save.
+  const [affiliations, setAffiliations] = useState(() => [...(author.affiliations || [])].reverse().map(value => ({ key: nextKey.current++, value: { ...value } })))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -50,7 +51,7 @@ export default function AuthorEditModal({ author, onSaved, onClose }) {
       name: name.trim(),
       ...Object.fromEntries(PROFILE_FIELDS.map(field => [field.key, links[field.key].trim() || null])),
       emails: emails.map(item => item.value.trim()),
-      affiliations: affiliations.map(({ value }) => ({
+      affiliations: [...affiliations].reverse().map(({ value }) => ({
         ...value,
         institution: value.institution.trim(),
         role: value.role?.trim() || null,

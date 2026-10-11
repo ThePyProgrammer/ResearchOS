@@ -335,7 +335,8 @@ function AuthorProfile({ id }) {
             </section>
             <section aria-label="Author affiliations" className="rounded-xl border border-slate-200 bg-white p-4">
               <h2 className="mb-3 text-xs font-semibold text-slate-800">Affiliations</h2>
-              {author.affiliations?.length ? <ol className="divide-y divide-slate-100">{author.affiliations.map((affiliation, index) => <li key={index} className="py-3 first:pt-0 last:pb-0">
+              {author.affiliations?.length ? <ol className="divide-y divide-slate-100">{[...author.affiliations].reverse().map((affiliation, index) => <li key={index} className="py-3 first:pt-0 last:pb-0">
+                <p className="mb-1 text-[11px] text-slate-400">Affiliation {index + 1}</p>
                 <p className="break-words text-xs font-medium leading-5 text-slate-700">{affiliation.institution}</p>
                 {affiliation.role && <p className="mt-0.5 break-words text-xs text-slate-500">{affiliation.role}</p>}
                 {(affiliation.startDate || affiliation.endDate) && <p className="mt-1 text-[11px] text-slate-400">{affiliation.startDate || '…'} – {affiliation.endDate || 'Present'}</p>}

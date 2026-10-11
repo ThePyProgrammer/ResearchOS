@@ -65,10 +65,12 @@ it('saves affiliation edits and order together and retains drafts after a failur
   const first = { institution: 'First University', role: 'Professor', startDate: '2020', endDate: null }
   const second = { institution: 'Second University', role: 'Researcher', startDate: '2016', endDate: '2020' }
   const edited = { ...second, institution: 'Updated University', role: 'Visiting researcher' }
-  authorsApi.get.mockResolvedValue({ id: 'a1', name: 'Jane', labs: [], affiliations: [first, second] })
-  authorsApi.update.mockRejectedValueOnce(new Error('Save failed')).mockResolvedValueOnce({ affiliations: [edited, first] })
+  authorsApi.get.mockResolvedValue({ id: 'a1', name: 'Jane', labs: [], affiliations: [second, first] })
+  authorsApi.update.mockRejectedValueOnce(new Error('Save failed')).mockResolvedValueOnce({ affiliations: [first, edited] })
   mount()
   fireEvent.click(await screen.findByRole('button', { name: 'Edit author' }))
+  expect(screen.getByRole('textbox', { name: 'Institution 1' })).toHaveValue('First University')
+  expect(screen.getByRole('textbox', { name: 'Institution 2' })).toHaveValue('Second University')
   fireEvent.click(screen.getByRole('button', { name: 'Move Second University up' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Institution 1' }), { target: { value: edited.institution } })
   fireEvent.change(screen.getByRole('textbox', { name: 'Role 1' }), { target: { value: edited.role } })
@@ -80,9 +82,13 @@ it('saves affiliation edits and order together and retains drafts after a failur
   expect(screen.getByRole('textbox', { name: 'Institution 1' })).toHaveValue('Updated University')
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
   await waitFor(() => expect(affiliations.getAllByRole('listitem')[0]).toHaveTextContent('Updated University'))
-  expect(authorsApi.update).toHaveBeenLastCalledWith('a1', { affiliations: [edited, first] })
+  expect(authorsApi.update).toHaveBeenLastCalledWith('a1', { affiliations: [first, edited] })
   expect(screen.queryByRole('form', { name: 'Edit author' })).not.toBeInTheDocument()
   expect(affiliations.queryByRole('button')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Edit author' }))
+  expect(screen.getByRole('textbox', { name: 'Institution 1' })).toHaveValue('Updated University')
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+  expect(authorsApi.update).toHaveBeenCalledTimes(2)
 })
 
 it('edits the name and links in one save and exposes profile links as header icons', async () => {

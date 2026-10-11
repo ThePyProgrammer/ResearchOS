@@ -6,8 +6,8 @@ async function mockAuthor(page) {
     websiteUrl: 'https://janesmith.example/research', googleScholarUrl: 'https://scholar.google.com/citations?user=janesmith',
     githubUsername: 'janesmith', emails: ['jane@university.example'],
     affiliations: [
-      { institution: 'Stanford University', role: 'Associate Professor', startDate: '2021', endDate: null },
       { institution: 'University of Washington', role: 'Postdoctoral Researcher', startDate: '2018', endDate: '2021' },
+      { institution: 'Stanford University', role: 'Associate Professor', startDate: '2021', endDate: null },
     ],
     labs: [{ id: 'l1', name: 'Language and Learning Lab', isPi: true, isMember: true }],
   }
@@ -64,6 +64,7 @@ test('author detail manages papers, affiliations, and labs with persisted state'
   await expect(page.getByRole('heading', { name: 'Jane Smith', exact: true })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('author-desktop.png'), fullPage: true })
   const affiliations = page.getByRole('region', { name: 'Author affiliations' })
+  await expect(affiliations.getByRole('listitem').first()).toContainText('Affiliation 1Stanford University')
   await expect(page.getByRole('navigation', { name: 'Author profile links' }).getByRole('link', { name: 'Website' })).toHaveAttribute('href', 'https://janesmith.example/research')
   await page.getByRole('button', { name: 'Edit author', exact: true }).click()
   await page.getByRole('textbox', { name: 'Author name' }).fill('Jane M. Smith')
