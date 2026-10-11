@@ -858,11 +858,13 @@ export default function Sidebar({ collapsed, onToggle }) {
       <LibrarySwitcher collapsed={collapsed} />
 
       <nav className={`flex-1 space-y-1 ${collapsed ? 'p-2 pt-3' : 'p-3'}`}>
-        {/* Dashboard */}
+        {/* Main navigation */}
         <div className="space-y-0.5">
           <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" collapsed={collapsed} />
           <SidebarLink to="/library/notes" icon="edit_note" label="Notes" collapsed={collapsed} />
           <SidebarLink to="/library/map" icon="scatter_plot" label="Library Map" collapsed={collapsed} />
+          <SidebarLink to="/authors" icon="groups" label="Authors" collapsed={collapsed} />
+          <SidebarLink to="/labs" icon="science" label="Labs" collapsed={collapsed} />
         </div>
 
         {/* Library tree (Quick Access + Collections) */}
@@ -875,12 +877,6 @@ export default function Sidebar({ collapsed, onToggle }) {
         {/* Projects */}
         <div className="space-y-0.5">
           <ProjectsTree collapsed={collapsed} />
-        </div>
-
-        {/* Authors */}
-        <div className="pt-3 space-y-0.5">
-          <SidebarLink to="/authors" icon="groups" label="Authors" collapsed={collapsed} />
-          <SidebarLink to="/labs" icon="science" label="Labs" collapsed={collapsed} />
         </div>
 
         {/* Agent Workflows */}
