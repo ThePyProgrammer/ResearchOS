@@ -402,8 +402,11 @@ function LabsDirectory() {
             {!!lab.principalInvestigators?.length && <ul aria-label="Principal investigators" className="mt-2 flex flex-wrap gap-1.5">{lab.principalInvestigators.map(pi => <li key={pi.authorId} className="min-w-0 max-w-full"><AuthorChip author={pi} className="relative z-10" /></li>)}</ul>}
             {lab.description && <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-slate-500">{lab.description}</p>}
             <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-3 text-[11px] text-slate-400">
-              {!!lab.websites?.length && <span className="min-w-0 truncate">{lab.websites[0].replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>}
               <span className="shrink-0 tabular-nums text-slate-500">{lab.paperCount ?? 0} {lab.paperCount === 1 ? 'paper' : 'papers'}</span>
+              {!!lab.websites?.length && <a href={lab.websites[0]} target="_blank" rel="noopener noreferrer" title="Website" aria-label={`Website for ${lab.name}`}
+                className="relative z-10 inline-flex rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-slate-500">
+                <Icon name="language" className="text-[16px]" />
+              </a>}
             </div>
           </div>
         </li>)}</ul>
