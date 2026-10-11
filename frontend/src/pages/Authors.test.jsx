@@ -37,7 +37,7 @@ it('shows request failures', async () => {
 })
 
 
-it('shows lab roles and opens the lab without triggering author row navigation', async () => {
+it('shows lab roles and opens the lab without triggering author card navigation', async () => {
   authorsApi.list.mockResolvedValue([{ ...author('Jane'), labs: [
     { id: 'lab 1', name: 'Language Lab', isMember: true, isPi: true },
     { id: 'lab_2', name: 'Vision Lab', isMember: false, isPi: true },
@@ -48,7 +48,8 @@ it('shows lab roles and opens the lab without triggering author row navigation',
     <Route path="/authors/:id" element={<p>Author destination</p>} />
   </Routes></MemoryRouter>)
   await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-  expect(screen.getByRole('columnheader', { name: 'Labs' })).toBeInTheDocument()
+  expect(screen.getByRole('list', { name: 'Authors directory' })).toBeInTheDocument()
+  expect(screen.queryByRole('table')).not.toBeInTheDocument()
   const link = screen.getByRole('link', { name: 'Language Lab PI' })
   expect(link).toHaveAttribute('href', '/labs/lab%201')
   expect(screen.getByRole('link', { name: 'Vision Lab PI' })).toBeInTheDocument()
@@ -56,4 +57,44 @@ it('shows lab roles and opens the lab without triggering author row navigation',
   expect(screen.getByText('Lab destination')).toBeInTheDocument()
   expect(screen.queryByText('Author destination')).not.toBeInTheDocument()
   expect(authorsApi.list).toHaveBeenCalledTimes(1)
+})
+
+
+it('renders compact cards with affiliations, counts and independent profile links', async () => {
+  authorsApi.list.mockResolvedValue([{ ...author('Jane Smith'), id: 'author 1', paperCount: 1,
+    affiliations: [{ institution: 'Old university', endDate: '2020' }, { institution: 'Current university' }],
+    orcid: '0000-0001-2345-6789', websiteUrl: 'https://example.org/',
+  }, author('Alex')])
+  render(<MemoryRouter initialEntries={['/authors']}><Routes>
+    <Route path="/authors" element={<Authors />} />
+    <Route path="/authors/:id" element={<p>Author destination</p>} />
+  </Routes></MemoryRouter>)
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  expect(screen.getByText('Current university')).toBeInTheDocument()
+  expect(screen.queryByText('Old university')).not.toBeInTheDocument()
+  expect(screen.getByText('1 paper')).toBeInTheDocument()
+  expect(screen.getByText('0 papers')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Website for Jane Smith' })).toHaveAttribute('href', 'https://example.org/')
+  expect(screen.getByRole('link', { name: 'ORCID for Jane Smith' })).toHaveAttribute('rel', 'noopener noreferrer')
+  const card = screen.getByRole('link', { name: 'Open Jane Smith' })
+  expect(card).toHaveAttribute('href', '/authors/author%201')
+  fireEvent.click(card)
+  expect(screen.getByText('Author destination')).toBeInTheDocument()
+  expect(authorsApi.list).toHaveBeenCalledTimes(1)
+})
+
+it('retries failed loads and clears an empty search', async () => {
+  authorsApi.list.mockRejectedValueOnce(new Error('Authors unavailable')).mockResolvedValueOnce([]).mockResolvedValue([author('Jane')])
+  render(<MemoryRouter><Authors /></MemoryRouter>)
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  expect(screen.getByText('No authors yet. Add one to get started.')).toBeInTheDocument()
+  authorsApi.list.mockResolvedValueOnce([])
+  fireEvent.change(screen.getByRole('textbox', { name: 'Search authors' }), { target: { value: 'Missing' } })
+  await act(async () => { await vi.advanceTimersByTimeAsync(300) })
+  expect(screen.getByText('No authors match your search')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  expect(screen.getByRole('link', { name: 'Open Jane' })).toBeInTheDocument()
 })

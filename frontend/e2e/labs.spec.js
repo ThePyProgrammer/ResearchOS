@@ -221,7 +221,7 @@ test('Labs directory opens a dedicated workspace without loading every card deta
   expect(boxes[1].y).toBe(boxes[2].y)
   expect(boxes[3].y).toBeGreaterThan(boxes[0].y)
   expect(boxes[0].height).toBeLessThan(180)
-  await expect(page.getByText('3 papers indexed')).toBeVisible()
+  await expect(page.getByText('3 papers')).toBeVisible()
   await expect(page.getByRole('list', { name: 'Labs directory' }).getByRole('link', { name: 'Maya Chen' })).toHaveAttribute('href', '/authors/pi_1')
   await page.screenshot({ path: 'test-results/labs-directory-desktop.png', fullPage: true, animations: 'disabled' })
   await page.setViewportSize({ width: 390, height: 844 })

@@ -335,7 +335,7 @@ test('authors search batches typing, opens profiles, and surfaces errors', async
   await expect(page.getByText('Jane Smith', { exact: true })).toBeVisible()
   await page.getByPlaceholder('Search authors...').pressSequentially('Jane', { delay: 30 })
   await expect.poll(() => searches.filter(Boolean)).toEqual(['Jane'])
-  await expect(page.getByRole('columnheader', { name: 'Labs' })).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Authors directory' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Vision Lab PI' })).toBeVisible()
   await page.screenshot({ path: 'test-results/authors-labs-table.png', fullPage: true, animations: 'disabled' })
   await page.getByRole('link', { name: 'Language Lab PI' }).click()
@@ -352,4 +352,56 @@ test('authors search batches typing, opens profiles, and surfaces errors', async
   await page.getByRole('button', { name: 'All Authors' }).click()
   await page.getByPlaceholder('Search authors...').fill('failure')
   await expect(page.getByText('Author lookup unavailable')).toBeVisible()
+})
+
+
+test('authors directory uses compact responsive cards and preserves author creation', async ({ page }) => {
+  await mockApi(page)
+  const authors = [
+    { id: 'a1', name: 'Maya Chen', paperCount: 12, affiliations: [{ institution: 'Stanford University' }], labs: [{ id: 'lab1', name: 'Language and Learning Lab', isPi: true, isMember: true }], websiteUrl: 'https://example.org/' },
+    { id: 'a2', name: 'Daniel Park', paperCount: 8, affiliations: [{ institution: 'University of Toronto' }] },
+    { id: 'a3', name: 'Sofia Martinez', paperCount: 1, labs: [{ id: 'lab1', name: 'Language and Learning Lab', isMember: true, isPi: false }] },
+    { id: 'a4', name: 'Arjun Patel', paperCount: 0 },
+    { id: 'a5', name: 'Emma Wilson', paperCount: 24, affiliations: [{ institution: 'Massachusetts Institute of Technology' }] },
+    { id: 'a6', name: 'Alex Rivera', paperCount: 5 },
+  ]
+  const listCalls = []
+  await page.route('**/api/authors**', async route => {
+    if (route.request().method() === 'POST') {
+      const data = route.request().postDataJSON()
+      const created = { id: 'new', ...data, paperCount: 0 }
+      authors.push(created)
+      return route.fulfill({ status: 201, json: created })
+    }
+    listCalls.push(route.request().url())
+    return route.fulfill({ json: authors })
+  })
+  await page.goto('/authors')
+  const directory = page.getByRole('list', { name: 'Authors directory' })
+  const cards = directory.getByRole('link', { name: /^Open / })
+  await expect(cards).toHaveCount(6)
+  await expect(page.getByRole('table')).toHaveCount(0)
+  const boxes = await Promise.all([0, 1, 2, 3].map(index => cards.nth(index).locator('../..').boundingBox()))
+  expect(boxes[0].y).toBe(boxes[1].y)
+  expect(boxes[1].y).toBe(boxes[2].y)
+  expect(boxes[3].y).toBeGreaterThan(boxes[0].y)
+  expect(boxes[0].height).toBeLessThan(180)
+  await expect(directory.getByText('12 papers')).toBeVisible()
+  await expect(directory.getByRole('link', { name: 'Website for Maya Chen' })).toHaveAttribute('target', '_blank')
+  expect(listCalls).toHaveLength(1)
+  await page.screenshot({ path: 'test-results/authors-cards-desktop.png', fullPage: true, animations: 'disabled' })
+  await page.getByTitle('Collapse sidebar').click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  await expect.poll(() => cards.evaluateAll(links => {
+    const first = links[0].parentElement.parentElement.getBoundingClientRect()
+    const second = links[1].parentElement.parentElement.getBoundingClientRect()
+    return second.top - first.bottom
+  })).toBeGreaterThan(0)
+  await page.screenshot({ path: 'test-results/authors-cards-mobile.png', fullPage: true, animations: 'disabled' })
+  await page.getByRole('button', { name: 'Add Author', exact: true }).click()
+  await page.getByPlaceholder('e.g. John Smith').fill('New Researcher')
+  await page.getByRole('button', { name: 'Create', exact: true }).click()
+  await expect(directory.getByRole('link', { name: 'Open New Researcher' })).toBeAttached()
+  expect(listCalls).toHaveLength(2)
 })

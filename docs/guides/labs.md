@@ -99,7 +99,13 @@ always use explicit links.
 
 ## Labs on authors
 
-The Authors table and each author profile link to associated labs. A PI shows
+The Authors directory uses compact cards matching Labs: three columns on desktop,
+two on tablets, and one on small screens. Cards show available affiliation and
+lab chips, paper counts, and profile links without placeholder avatars. Clicking
+a card opens the author; lab chips and external profile icons open their own
+destinations. Search remains debounced and uses the existing list request.
+
+The Authors directory and each author profile link to associated labs. A PI shows
 only the **PI** label; an ordinary member shows **Member**. API flags remain
 truthful: PIs have both isPi and isMember after migration 028.
 
