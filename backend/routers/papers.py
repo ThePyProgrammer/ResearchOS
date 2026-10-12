@@ -5,7 +5,9 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
+from models.lab import PaperLab, RecordId
 from models.paper import PaperCreate, PaperUpdate
+from services import lab_service
 from services import paper_service
 from services import activity_service
 from services import related_paper_service
@@ -497,6 +499,14 @@ def get_paper(paper_id: str):
     if paper is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
     return JSONResponse(paper.model_dump(by_alias=True))
+
+
+@router.get("/{paper_id}/labs", response_model=list[PaperLab])
+def get_paper_labs(paper_id: RecordId):
+    labs = lab_service.list_paper_labs(paper_id)
+    if labs is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    return labs
 
 
 @router.get("/{paper_id}/related")

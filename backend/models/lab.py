@@ -48,6 +48,11 @@ class Lab(CamelModel):
     websites: list[WebsiteUrl] = Field(default_factory=list)
 
 
+class PaperLab(CamelModel):
+    id: str
+    name: str
+
+
 class LabMember(CamelModel):
     author_id: str
     name: str

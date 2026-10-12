@@ -405,3 +405,32 @@ test('authors directory uses compact responsive cards and preserves author creat
   await expect(directory.getByRole('link', { name: 'Open New Researcher' })).toBeAttached()
   expect(listCalls).toHaveLength(2)
 })
+
+for (const path of ['/library', '/library?col=c_1', '/library/paper/p_1']) {
+  test('paper labs appear in ' + path, async ({ page }) => {
+    await mockApi(page)
+    await page.route('**/api/papers/p_1/labs', route => route.fulfill({
+      json: [{ id: 'lab_1', name: 'Language Lab' }, { id: 'lab_2', name: 'Vision Lab' }],
+    }))
+    await page.goto(path)
+    if (!path.includes('/paper/')) await page.getByText('Paper Alpha', { exact: true }).click()
+    const labs = page.getByRole('region', { name: 'Paper labs' })
+    await expect(labs.getByRole('link', { name: 'Language Lab' })).toHaveAttribute('href', '/labs/lab_1')
+    await expect(labs.getByRole('link', { name: 'Vision Lab' })).toBeVisible()
+  })
+}
+
+test('paper labs recover from a failed lookup', async ({ page }) => {
+  await mockApi(page)
+  let failed = true
+  await page.route('**/api/papers/p_1/labs', route => failed
+    ? route.fulfill({ status: 503, json: { detail: 'Labs temporarily unavailable' } })
+    : route.fulfill({ json: [] }))
+  await page.goto('/library')
+  await page.getByText('Paper Alpha', { exact: true }).click()
+  const labs = page.getByRole('region', { name: 'Paper labs' })
+  await expect(labs.getByRole('alert')).toContainText('Labs temporarily unavailable')
+  failed = false
+  await labs.getByRole('button', { name: 'Retry' }).click()
+  await expect(labs).toContainText('No labs linked to this paper.')
+})

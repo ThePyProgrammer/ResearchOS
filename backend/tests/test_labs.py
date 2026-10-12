@@ -464,3 +464,51 @@ def test_missing_directory_count_view_is_actionable(client, database):
     response = client.get("/api/labs")
     assert response.status_code == 503
     assert "029_lab_directory_counts.sql" in response.text
+
+
+def test_paper_labs_read_explicit_associations(client, database):
+    db, query = database
+    query.execute.side_effect = [
+        SimpleNamespace(data=[{"id": "p_1"}]),
+        SimpleNamespace(data=[
+            {"labs": {"id": "lab_z", "name": "Vision Lab"}},
+            {"labs": {"id": "lab_a", "name": "Language Lab"}},
+        ]),
+    ]
+    response = client.get("/api/papers/p_1/labs")
+    assert response.status_code == 200
+    assert response.json() == [
+        {"id": "lab_a", "name": "Language Lab"},
+        {"id": "lab_z", "name": "Vision Lab"},
+    ]
+    assert [call.args[0] for call in db.table.call_args_list] == ["papers", "lab_paper_links"]
+    query.select.assert_any_call("labs!inner(id,name)")
+    query.eq.assert_any_call("paper_id", "p_1")
+
+
+def test_paper_labs_empty_and_missing(client, database):
+    db, query = database
+    query.execute.side_effect = [
+        SimpleNamespace(data=[{"id": "p_1"}]),
+        SimpleNamespace(data=[]),
+        SimpleNamespace(data=[]),
+    ]
+    response = client.get("/api/papers/p_1/labs")
+    assert response.status_code == 200
+    assert response.json() == []
+    response = client.get("/api/papers/missing/labs")
+    assert response.status_code == 404
+    assert response.json() == {"error": "not_found", "detail": "Paper not found"}
+
+
+def test_paper_labs_missing_schema_is_explicit(client, database):
+    from postgrest.exceptions import APIError
+
+    db, query = database
+    query.execute.side_effect = [
+        SimpleNamespace(data=[{"id": "p_1"}]),
+        APIError({"code": "PGRST205", "message": "missing table", "details": "", "hint": ""}),
+    ]
+    response = client.get("/api/papers/p_1/labs")
+    assert response.status_code == 503
+    assert "026_explicit_lab_papers.sql" in response.json()["detail"]

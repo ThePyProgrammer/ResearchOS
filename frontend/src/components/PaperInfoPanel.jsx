@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import PaperLabs from './PaperLabs'
 import { useNavigate } from 'react-router-dom'
 import { papersApi, authorsApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
@@ -1048,6 +1049,8 @@ export default function PaperInfoPanel({ paper, onStatusChange, onPaperUpdate, a
     <div className="p-4 space-y-5">
       {/* Authors */}
       <AuthorChips authors={paper.authors || []} onSave={v => handleFieldSave('authors', v)} paperId={paper.id} paperAuthorLinks={paperAuthorLinks} />
+
+      <PaperLabs key={paper.id} paperId={paper.id} />
 
       {/* Metadata */}
       <div className="space-y-2">

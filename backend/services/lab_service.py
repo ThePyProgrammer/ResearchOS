@@ -8,7 +8,7 @@ from postgrest.exceptions import APIError
 
 from models.lab import (
     Lab, LabCreate, LabDetail, LabMember, LabMemberPage, LabPage, LabSummary,
-    LabPaper, LabPaperAddResult, LabPaperPage, LabPaperSelection, LabUpdate,
+    LabPaper, LabPaperAddResult, LabPaperPage, LabPaperSelection, LabUpdate, PaperLab,
 )
 from services.db import get_client
 
@@ -37,6 +37,29 @@ def list_labs(search: str = "", limit: int = 30, offset: int = 0) -> LabPage:
         raise
     return LabPage(items=[LabSummary.model_validate(row) for row in result.data],
                    total=result.count, limit=limit, offset=offset)
+
+
+def list_paper_labs(paper_id: str) -> Optional[list[PaperLab]]:
+    client = get_client()
+    if not client.table("papers").select("id").eq("id", paper_id).execute().data:
+        return None
+    labs = []
+    offset = 0
+    page_size = 500
+    while True:
+        try:
+            result = (client.table("lab_paper_links").select("labs!inner(id,name)")
+                      .eq("paper_id", paper_id).order("lab_id")
+                      .range(offset, offset + page_size - 1).execute())
+        except APIError as exc:
+            if exc.code in ("PGRST205", "PGRST200", "42P01"):
+                _explicit_migration_required()
+            raise
+        labs.extend(PaperLab.model_validate(row["labs"]) for row in result.data)
+        if len(result.data) < page_size:
+            break
+        offset += page_size
+    return sorted(labs, key=lambda lab: (lab.name.casefold(), lab.id))
 
 
 def _details_migration_required() -> None:
