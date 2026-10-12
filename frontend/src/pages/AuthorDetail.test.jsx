@@ -5,7 +5,7 @@ import AuthorDetail from './AuthorDetail'
 import { authorsApi, papersApi, labsApi } from '../services/api'
 
 vi.mock('../services/api', () => ({ authorsApi: { get: vi.fn(), papers: vi.fn(), update: vi.fn(), potentialPapers: vi.fn() }, papersApi: { linkAuthor: vi.fn(), unlinkAuthor: vi.fn() }, labsApi: { list: vi.fn(), addMember: vi.fn(), removeMember: vi.fn(), addPi: vi.fn(), removePi: vi.fn() } }))
-vi.mock('../context/LibraryContext', () => ({ useLibrary: () => ({ libraries: [], switchLibrary: vi.fn() }) }))
+vi.mock('../context/LibraryContext', () => ({ useLibrary: () => ({ libraries: [{ id: 'lib1', name: 'Research' }], switchLibrary: vi.fn() }) }))
 beforeEach(() => { vi.clearAllMocks(); authorsApi.papers.mockResolvedValue([]) })
 const mount = () => render(<MemoryRouter initialEntries={['/authors/a1']}><Routes><Route path="/authors/:id" element={<AuthorDetail />} /></Routes></MemoryRouter>)
 
@@ -31,7 +31,7 @@ it('shows an explicit empty state for authors without labs', async () => {
 
 it('links potential papers from the modal with the matched author position and supports unlinking', async () => {
   authorsApi.get.mockResolvedValue({ id: 'a1', name: 'Jane', labs: [] })
-  const paper = { id: 'p1', title: 'Shared research', authors: ['Alex', 'J. Smith'], year: 2026 }
+  const paper = { id: 'p1', title: 'Shared research', authors: ['Alex', 'J. Smith'], year: 2026, labs: [{ id: 'paper-lab', name: 'Paper Lab' }] }
   authorsApi.potentialPapers.mockResolvedValue([{ paper, rawName: 'J. Smith', confidence: 'likely' }])
   papersApi.linkAuthor.mockRejectedValueOnce(new Error('Link failed')).mockResolvedValueOnce({})
   papersApi.unlinkAuthor.mockResolvedValue(undefined)
@@ -46,6 +46,7 @@ it('links potential papers from the modal with the matched author position and s
   const table = within(screen.getByRole('region', { name: 'Author papers' }))
   expect(table.getByRole('link', { name: 'Shared research' })).toHaveAttribute('href', '/library/paper/p1')
   expect(table.getByRole('columnheader', { name: 'Year' })).toBeInTheDocument()
+  expect(table.getByRole('link', { name: 'Paper Lab' })).toHaveAttribute('href', '/labs/paper-lab')
   fireEvent.click(table.getByRole('button', { name: 'Unlink paper Shared research' }))
   await waitFor(() => expect(table.queryByRole('link', { name: 'Shared research' })).not.toBeInTheDocument())
   expect(papersApi.unlinkAuthor).toHaveBeenCalledWith('p1', 'a1')
@@ -175,4 +176,23 @@ it('manages membership and PI roles without replacing other PIs or leaving the a
   fireEvent.click(screen.getByRole('button', { name: 'Remove membership in Language Lab' }))
   await screen.findByRole('button', { name: 'Join Language Lab' })
   expect(labsApi.removeMember).toHaveBeenCalledWith('l1', 'a1')
+})
+
+it('shows each paper’s labs beside its library without using author memberships', async () => {
+  authorsApi.get.mockResolvedValue({ id: 'a1', name: 'Jane', labs: [{ id: 'author-only', name: 'Author Lab', isMember: true }] })
+  authorsApi.papers.mockResolvedValue([
+    { id: 'p1', title: 'Shared research', authors: ['Jane'], libraryId: 'lib1', labs: [{ id: 'l1', name: 'Language Lab' }, { id: 'l2', name: 'Vision Lab' }] },
+    { id: 'p2', title: 'Independent research', authors: ['Jane'], libraryId: 'lib1', labs: [] },
+    { id: 'p3', title: 'Unfiled research', authors: ['Jane'], labs: [{ id: 'l2', name: 'Vision Lab' }] },
+  ])
+  mount()
+  const table = within(await screen.findByRole('region', { name: 'Author papers' }))
+  const row = within(table.getByRole('row', { name: /Shared research/ }))
+  expect(row.getByRole('button', { name: 'Research' })).toBeInTheDocument()
+  expect(row.getByRole('link', { name: 'Language Lab' })).toHaveAttribute('href', '/labs/l1')
+  expect(row.getByRole('link', { name: 'Vision Lab' })).toHaveAttribute('href', '/labs/l2')
+  expect(table.queryByText('Author Lab')).not.toBeInTheDocument()
+  expect(within(table.getByRole('row', { name: /Independent research/ })).queryByText('Labs:')).not.toBeInTheDocument()
+  expect(within(table.getByRole('row', { name: /Unfiled research/ })).getByRole('link', { name: 'Vision Lab' })).toHaveAttribute('href', '/labs/l2')
+  expect(authorsApi.papers).toHaveBeenCalledTimes(1)
 })

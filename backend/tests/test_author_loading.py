@@ -138,3 +138,39 @@ def test_missing_lab_schema_is_actionable_and_other_errors_propagate(mocker):
     with pytest.raises(APIError) as caught:
         author_service._read_author_labs(["a1"])
     assert caught.value is error
+
+
+def test_author_paper_route_includes_sorted_explicit_labs(client, mocker):
+    from models.author import Author
+    mocker.patch.object(author_service, "get_author", return_value=Author.model_validate(author("a1")))
+    paper = dict(id="p1", title="Paper", authors=[], year=2026, venue="", status="inbox",
+                 source="human", created_at="2026-01-01", library_id="lib1",
+                 lab_paper_links=[
+                     {"labs": {"id": "z", "name": "Vision Lab"}},
+                     {"labs": {"id": "a", "name": "Language Lab"}},
+                 ])
+    query = database(mocker, [[{"paper_id": "p1"}, {"paper_id": "p2"}],
+                              [paper, {**paper, "id": "p2", "lab_paper_links": []}]])
+    response = client.get("/api/authors/a1/papers")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0]["labs"] == [{"id": "a", "name": "Language Lab"}, {"id": "z", "name": "Vision Lab"}]
+    assert payload[0]["libraryId"] == "lib1"
+    assert payload[1]["labs"] == []
+    assert "lab_paper_links" not in payload[0]
+    assert "library_id" not in payload[0]
+    query.select.assert_any_call("*,lab_paper_links(labs(id,name))")
+    assert query.execute.call_count == 2
+
+
+def test_potential_papers_include_labs_for_immediate_linking(mocker):
+    from models.author import Author
+    mocker.patch.object(author_service, "get_author", return_value=Author.model_validate(author("Jane")))
+    paper = dict(id="p1", title="Paper", authors=["Jane"], year=2026, venue="", status="inbox",
+                 source="human", created_at="2026-01-01",
+                 lab_paper_links=[{"labs": {"id": "l1", "name": "Paper Lab"}}])
+    query = database(mocker, [[], [paper]])
+    matches = author_service.find_potential_papers("Jane")
+    assert matches[0]["paper"].model_dump(by_alias=True)["labs"] == [{"id": "l1", "name": "Paper Lab"}]
+    query.select.assert_any_call("*,lab_paper_links(labs(id,name))")
+    assert query.execute.call_count == 2

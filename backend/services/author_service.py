@@ -12,12 +12,14 @@ from models.author import (
     AuthorCreate,
     AuthorLibrary,
     AuthorLab,
+    AuthorPaper,
     AuthorSearchResult,
     AuthorUpdate,
     PaperAuthor,
     PaperAuthorReference,
     TopAuthor,
 )
+from models.lab import PaperLab
 from models.paper import Paper
 from services.db import get_client
 
@@ -350,11 +352,20 @@ def get_paper_author_links(paper_id: str) -> list[PaperAuthorReference]:
     return [PaperAuthorReference(link=link, author=by_id.get(link.author_id)) for link in links]
 
 
-def get_author_papers(author_id: str) -> list[Paper]:
+def _paper_with_labs(row: dict) -> AuthorPaper:
+    labs = [PaperLab.model_validate(link["labs"])
+            for link in row.get("lab_paper_links", []) if link.get("labs") is not None]
+    return AuthorPaper.model_validate({
+        **row,
+        "labs": sorted(labs, key=lambda lab: (lab.name.casefold(), lab.id)),
+    })
+
+
+def get_author_papers(author_id: str) -> list[AuthorPaper]:
     links = _read_related(_PAPER_AUTHORS_TABLE, "paper_id", "author_id", [author_id])
     paper_ids = list(dict.fromkeys(row["paper_id"] for row in links))
-    papers = {row["id"]: Paper.model_validate(row) for row in _read_related(
-        "papers", "*", "id", paper_ids,
+    papers = {row["id"]: _paper_with_labs(row) for row in _read_related(
+        "papers", "*,lab_paper_links(labs(id,name))", "id", paper_ids,
     )}
     return [papers[pid] for pid in paper_ids if pid in papers]
 
@@ -419,7 +430,7 @@ def find_potential_papers(author_id: str) -> list[dict]:
     linked_ids = {r["paper_id"] for r in linked.data}
 
     # Scan all papers
-    all_papers = get_client().table("papers").select("*").execute()
+    all_papers = get_client().table("papers").select("*,lab_paper_links(labs(id,name))").execute()
     results = []
 
     for row in all_papers.data:
@@ -450,7 +461,7 @@ def find_potential_papers(author_id: str) -> list[dict]:
                         confidence = "possible"
 
             if confidence:
-                p = Paper.model_validate(row)
+                p = _paper_with_labs(row)
                 results.append({
                     "paper": p,
                     "raw_name": raw_name,

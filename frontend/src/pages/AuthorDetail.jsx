@@ -358,7 +358,14 @@ function AuthorProfile({ id }) {
                     <td className="min-w-[180px] px-5 py-3.5">
                       <Link to={'/library/paper/' + encodeURIComponent(paper.id)} className="text-[13px] font-medium leading-5 text-slate-800 hover:text-blue-600 hover:underline">{paper.title}</Link>
                       <p className="mt-1 text-xs leading-5 text-slate-500">{(paper.authors || []).join(', ') || 'No authors listed'}</p>
-                      {library && <button onClick={() => { switchLibrary(library.id); navigate('/library') }} className="mt-1 text-[11px] text-slate-400 hover:text-blue-600" title={'Go to ' + library.name}>{library.name}</button>}
+                      {(library || paper.labs?.length > 0) && <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                        {library && <button onClick={() => { switchLibrary(library.id); navigate('/library') }} className="text-slate-400 hover:text-blue-600" title={'Go to ' + library.name}>{library.name}</button>}
+                        {paper.labs?.length > 0 && <>
+                          {library && <span aria-hidden="true" className="text-slate-300">·</span>}
+                          <span className="text-slate-400">Labs:</span>
+                          {paper.labs.map(lab => <Link key={lab.id} to={'/labs/' + encodeURIComponent(lab.id)} className="max-w-full break-words rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 hover:bg-blue-100 focus-visible:ring-2 focus-visible:ring-blue-500">{lab.name}</Link>)}
+                        </>}
+                      </div>}
                     </td>
                     <td className="whitespace-nowrap px-2 py-3.5 align-top text-[13px] tabular-nums text-slate-500">{paper.year || '—'}</td>
                     <td className="py-3.5 pr-3 align-top"><button disabled={linking[paper.id]} onClick={() => handleUnlinkPaper(paper.id)} aria-label={'Unlink paper ' + paper.title} title="Unlink paper from author" className="inline-flex rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"><Icon name="link_off" className="text-[17px]" /></button></td>

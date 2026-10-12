@@ -1,6 +1,10 @@
 from typing import Optional
 
+from pydantic import Field
+
 from .base import CamelModel
+from models.lab import PaperLab
+from models.paper import Paper
 
 
 class Affiliation(CamelModel):
@@ -87,3 +91,7 @@ class AuthorSearchResult(CamelModel):
 class PaperAuthorReference(CamelModel):
     link: PaperAuthor
     author: Optional[Author] = None
+
+
+class AuthorPaper(Paper):
+    labs: list[PaperLab] = Field(default_factory=list)

@@ -13,7 +13,7 @@ async function mockAuthor(page) {
   }
   const lab = { id: 'l2', name: 'Human-Centered AI Lab' }
   const papers = [
-    { id: 'p1', title: 'Understanding how language models learn from human feedback', authors: ['Jane Smith', 'Alex Chen', 'Maya Patel'], year: 2026, libraryId: 'lib1' },
+    { id: 'p1', title: 'Understanding how language models learn from human feedback', authors: ['Jane Smith', 'Alex Chen', 'Maya Patel'], year: 2026, libraryId: 'lib1', labs: [{ id: 'l1', name: 'Language and Learning Lab' }, { id: 'l3', name: 'Vision Lab' }] },
     { id: 'p2', title: 'Evaluating collaborative reasoning in research assistants', authors: ['Alex Chen', 'Jane Smith'], year: 2025, libraryId: 'lib1' },
   ]
   const candidate = { paper: { id: 'p3', title: 'A shared foundation for reliable scientific discovery', authors: ['Alex Chen', 'J. Smith'], year: 2026 }, rawName: 'J. Smith', confidence: 'likely' }
@@ -62,6 +62,10 @@ test('author detail manages papers, affiliations, and labs with persisted state'
   await mockAuthor(page)
   await page.goto('/authors/a1')
   await expect(page.getByRole('heading', { name: 'Jane Smith', exact: true })).toBeVisible()
+  const paperRow = page.getByRole('region', { name: 'Author papers' }).getByRole('row', { name: /Understanding how language models/ })
+  await expect(paperRow.getByRole('button', { name: 'Research' })).toBeVisible()
+  await expect(paperRow.getByRole('link', { name: 'Language and Learning Lab' })).toHaveAttribute('href', '/labs/l1')
+  await expect(paperRow.getByRole('link', { name: 'Vision Lab' })).toHaveAttribute('href', '/labs/l3')
   await page.screenshot({ path: testInfo.outputPath('author-desktop.png'), fullPage: true })
   const affiliations = page.getByRole('region', { name: 'Author affiliations' })
   await expect(affiliations.getByRole('listitem').first()).toContainText('Affiliation 1Stanford University')
@@ -111,6 +115,7 @@ test('author profile and paper modal remain usable at mobile width', async ({ pa
   await page.goto('/authors/a1')
   await page.getByTitle('Collapse sidebar').click()
   await expect(page.getByRole('heading', { name: 'Jane Smith', exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Author papers' }).getByRole('link', { name: 'Vision Lab' })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('author-mobile.png'), fullPage: true })
   await page.getByRole('button', { name: 'Edit author', exact: true }).click()
   await expect(page.getByRole('textbox', { name: 'Author name' })).toBeVisible()
