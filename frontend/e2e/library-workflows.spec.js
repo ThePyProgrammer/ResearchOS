@@ -333,7 +333,7 @@ test('authors search batches typing, opens profiles, and surfaces errors', async
   })
   await page.goto('/authors')
   await expect(page.getByText('Jane Smith', { exact: true })).toBeVisible()
-  await page.getByPlaceholder('Search authors...').pressSequentially('Jane', { delay: 30 })
+  await page.getByRole('textbox', { name: 'Search authors' }).pressSequentially('Jane', { delay: 30 })
   await expect.poll(() => searches.filter(Boolean)).toEqual(['Jane'])
   await expect(page.getByRole('list', { name: 'Authors directory' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Vision Lab PI' })).toBeVisible()
@@ -350,7 +350,7 @@ test('authors search batches typing, opens profiles, and surfaces errors', async
   await expect(labSection.getByRole('link', { name: 'Vision Lab PI' })).toHaveAttribute('href', '/labs/l2')
   await page.screenshot({ path: 'test-results/author-labs-profile.png', fullPage: true, animations: 'disabled' })
   await page.getByRole('button', { name: 'All Authors' }).click()
-  await page.getByPlaceholder('Search authors...').fill('failure')
+  await page.getByRole('textbox', { name: 'Search authors' }).fill('failure')
   await expect(page.getByText('Author lookup unavailable')).toBeVisible()
 })
 

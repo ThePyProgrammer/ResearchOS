@@ -18,8 +18,9 @@ NOT_FOUND = {"error": "not_found", "detail": "Author not found"}
 def list_authors(
     search: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
-    authors = author_service.list_authors(search=search, limit=limit)
+    authors = author_service.list_authors(search=search, limit=limit, offset=offset)
     return JSONResponse([a.model_dump(by_alias=True) for a in authors])
 
 

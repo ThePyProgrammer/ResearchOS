@@ -5,6 +5,8 @@ import AuthorLabLinks from '../components/AuthorLabLinks'
 import AuthorProfileLinks from '../components/AuthorProfileLinks'
 import { PROFILE_FIELDS } from '../utils/authorProfiles'
 
+const PAGE_SIZE = 50
+
 function Icon({ name, className = '' }) {
   return <span aria-hidden="true" className={`material-symbols-outlined ${className}`}>{name}</span>
 }
@@ -88,14 +90,20 @@ export default function Authors() {
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [revision, setRevision] = useState(0)
+  const [offset, setOffset] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
 
   useEffect(() => {
     let active = true
     async function loadAuthors() {
       setLoading(true)
       try {
-        const data = await authorsApi.list({ search: search.trim() || undefined })
-        if (active) { setAuthors(data); setError(null) }
+        const data = await authorsApi.list({ search: search.trim() || undefined, limit: PAGE_SIZE + 1, offset })
+        if (active) {
+          setAuthors(data.slice(0, PAGE_SIZE))
+          setHasMore(data.length > PAGE_SIZE)
+          setError(null)
+        }
       } catch (err) {
         if (active) setError(err.message)
       } finally {
@@ -104,7 +112,18 @@ export default function Authors() {
     }
     const timer = setTimeout(loadAuthors, search ? 300 : 0)
     return () => { active = false; clearTimeout(timer) }
-  }, [search, revision])
+  }, [search, revision, offset])
+
+  function changeSearch(value) {
+    setSearch(value)
+    setOffset(0)
+    setLoading(true)
+  }
+
+  function changePage(nextOffset) {
+    setOffset(nextOffset)
+    setLoading(true)
+  }
 
   function currentAffiliation(author) {
     const affs = author.affiliations || []
@@ -125,10 +144,10 @@ export default function Authors() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="relative w-full sm:max-w-sm">
             <Icon name="search" className="pointer-events-none absolute left-3 top-2.5 text-[18px] text-slate-400" />
-            <input aria-label="Search authors" type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search names, affiliations, or labs..."
+            <input aria-label="Search authors" type="text" value={search} onChange={e => changeSearch(e.target.value)} placeholder="Search names, affiliations, or labs..."
               className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
           </div>
-          {!loading && !error && <p className="text-xs text-slate-400">{authors.length} {authors.length === 1 ? 'author' : 'authors'}{search.trim() ? ' found' : ' in your directory'}</p>}
+          {!loading && !error && <p className="text-xs text-slate-400">{authors.length ? `Showing ${offset + 1}–${offset + authors.length} authors` : '0 authors'}{search.trim() ? ' matching your search' : ''}</p>}
         </div>
         {error ? <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}<button className="ml-2 underline" onClick={() => setRevision(value => value + 1)}>Retry</button></div>
           : loading ? <div role="status"><span className="sr-only">Loading authors...</span><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -136,7 +155,7 @@ export default function Authors() {
           </div></div>
           : authors.length === 0 ? <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-8 text-center">
             <p className="text-sm text-slate-500">{search ? 'No authors match your search' : 'No authors yet. Add one to get started.'}</p>
-            {search && <button className="mt-4 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50" onClick={() => setSearch('')}>Clear search</button>}
+            {search && <button className="mt-4 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50" onClick={() => changeSearch('')}>Clear search</button>}
           </div>
           : <ul aria-label="Authors directory" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {authors.map(author => {
@@ -157,12 +176,19 @@ export default function Authors() {
               </li>
             })}
           </ul>}
+        {(offset > 0 || hasMore) && <nav aria-label="Author pages" className="mt-5 flex items-center justify-between gap-3">
+          <button disabled={loading || offset === 0} onClick={() => changePage(Math.max(0, offset - PAGE_SIZE))}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-40">Previous page</button>
+          <span className="text-xs text-slate-500">Page {offset / PAGE_SIZE + 1}</span>
+          <button disabled={loading || !!error || !hasMore} onClick={() => changePage(offset + PAGE_SIZE)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-40">Next page</button>
+        </nav>}
       </div>
 
       {showAdd && (
         <AddAuthorModal
           onClose={() => setShowAdd(false)}
-          onCreate={() => setRevision(value => value + 1)}
+          onCreate={() => { setOffset(0); setRevision(value => value + 1) }}
         />
       )}
     </div>

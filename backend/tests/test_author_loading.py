@@ -39,6 +39,30 @@ def test_empty_list_does_not_enrich(mocker):
     query.execute.assert_called_once()
 
 
+def test_directory_offset_reaches_authors_after_first_fifty(client, mocker):
+    row = {**author("yann"), "name": "Yann LeCun", "name_normalized": "lecun yann"}
+    query = database(mocker, [[row], [], [], []])
+    response = client.get("/api/authors", params={"offset": 50, "limit": 51})
+    assert response.status_code == 200
+    assert response.json()[0]["name"] == "Yann LeCun"
+    query.range.assert_any_call(50, 100)
+    assert [call.args for call in query.order.call_args_list[:2]] == [("name",), ("id",)]
+
+
+def test_directory_rejects_negative_offset(client, mocker):
+    service = mocker.patch.object(author_service, "list_authors")
+    assert client.get("/api/authors?offset=-1").status_code == 422
+    service.assert_not_called()
+
+
+def test_directory_search_passes_offset_to_database(mocker):
+    database(mocker, [[]])
+    assert author_service.list_authors("Vision Lab", limit=51, offset=250) == []
+    author_service.get_client().rpc.assert_called_once_with("search_author_profiles", {
+        "p_search": "Vision Lab", "p_normalized": "lab vision", "p_limit": 51, "p_offset": 250,
+    })
+
+
 def test_paper_references_batch_profiles_and_preserve_positions(mocker):
     links = [dict(id=f"link{i}", paper_id="p1", author_id=f"a{i}", position=9-i,
                   raw_name=f"Name {i}", created_at="2026-01-01") for i in range(10)]

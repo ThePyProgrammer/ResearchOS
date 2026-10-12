@@ -130,11 +130,13 @@ def _enrich_authors(authors: list[Author], *, include_labs: bool = False) -> lis
 def list_authors(
     search: Optional[str] = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[Author]:
     if search and search.strip():
-        return _enrich_authors(_search_author_profiles(search, limit), include_labs=True)
+        return _enrich_authors(_search_author_profiles(search, limit, offset), include_labs=True)
     query = get_client().table(_AUTHORS_TABLE).select("*")
-    result = query.order("name").order("id").limit(limit).execute()
+    query = query.order("name").order("id")
+    result = (query.range(offset, offset + limit - 1) if offset else query.limit(limit)).execute()
     return _enrich_authors([Author.model_validate(row) for row in result.data], include_labs=True)
 
 
@@ -209,18 +211,22 @@ def delete_author(author_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _search_author_profiles(query: str, limit: int) -> list[Author]:
+def _search_author_profiles(query: str, limit: int, offset: int = 0) -> list[Author]:
     """Search names, affiliation institutions, and both lab roles before limiting."""
+    params = {
+        "p_search": query.strip(),
+        "p_normalized": normalize_author_name(query),
+        "p_limit": limit,
+    }
+    if offset:
+        params["p_offset"] = offset
     try:
-        result = get_client().rpc("search_author_profiles", {
-            "p_search": query.strip(),
-            "p_normalized": normalize_author_name(query),
-            "p_limit": limit,
-        }).execute()
+        result = get_client().rpc("search_author_profiles", params).execute()
     except APIError as exc:
         if exc.code == "PGRST202":
-            logger.warning("Author search unavailable; apply 031_author_search.sql")
-            raise HTTPException(503, detail="Author search needs migration 031_author_search.sql. Apply it in Supabase and retry.") from exc
+            migration = "032_author_search_pagination.sql" if offset else "031_author_search.sql"
+            logger.warning("Author search unavailable; apply %s", migration)
+            raise HTTPException(503, detail=f"Author search needs migration {migration}. Apply it in Supabase and retry.") from exc
         raise
     return [Author.model_validate(row) for row in result.data]
 
