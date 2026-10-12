@@ -131,9 +131,9 @@ def list_authors(
     search: Optional[str] = None,
     limit: int = 50,
 ) -> list[Author]:
+    if search and search.strip():
+        return _enrich_authors(_search_author_profiles(search, limit), include_labs=True)
     query = get_client().table(_AUTHORS_TABLE).select("*")
-    if search:
-        query = query.ilike("name_normalized", f"%{normalize_author_name(search)}%")
     result = query.order("name").order("id").limit(limit).execute()
     return _enrich_authors([Author.model_validate(row) for row in result.data], include_labs=True)
 
@@ -209,19 +209,27 @@ def delete_author(author_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _search_author_profiles(query: str, limit: int) -> list[Author]:
+    """Search names, affiliation institutions, and both lab roles before limiting."""
+    try:
+        result = get_client().rpc("search_author_profiles", {
+            "p_search": query.strip(),
+            "p_normalized": normalize_author_name(query),
+            "p_limit": limit,
+        }).execute()
+    except APIError as exc:
+        if exc.code == "PGRST202":
+            logger.warning("Author search unavailable; apply 031_author_search.sql")
+            raise HTTPException(503, detail="Author search needs migration 031_author_search.sql. Apply it in Supabase and retry.") from exc
+        raise
+    return [Author.model_validate(row) for row in result.data]
+
+
 def search_authors(query: str, limit: int = 10) -> list[AuthorSearchResult]:
-    norm = normalize_author_name(query)
-    result = (
-        get_client()
-        .table(_AUTHORS_TABLE)
-        .select("*")
-        .ilike("name_normalized", f"%{norm}%")
-        .limit(limit)
-        .execute()
-    )
+    authors = _search_author_profiles(query, limit)
 
     # Get paper counts
-    author_ids = [r["id"] for r in result.data]
+    author_ids = [author.id for author in authors]
     counts: dict[str, int] = {}
     if author_ids:
         for row in _read_related(_PAPER_AUTHORS_TABLE, "author_id", "author_id", author_ids):
@@ -229,21 +237,21 @@ def search_authors(query: str, limit: int = 10) -> list[AuthorSearchResult]:
             counts[aid] = counts.get(aid, 0) + 1
 
     results = []
-    for r in result.data:
-        affiliations = r.get("affiliations") or []
+    for author in authors:
+        affiliations = author.affiliations
         current = None
         if affiliations:
             # Most recent affiliation without end_date, or last one
-            active = [a for a in affiliations if not a.get("end_date")]
-            current = (active[-1] if active else affiliations[-1]).get("institution")
+            active = [a for a in affiliations if not a.end_date]
+            current = (active[-1] if active else affiliations[-1]).institution
 
         results.append(
             AuthorSearchResult(
-                id=r["id"],
-                name=r["name"],
+                id=author.id,
+                name=author.name,
                 current_affiliation=current,
-                orcid=r.get("orcid"),
-                paper_count=counts.get(r["id"], 0),
+                orcid=author.orcid,
+                paper_count=counts.get(author.id, 0),
             )
         )
     return results

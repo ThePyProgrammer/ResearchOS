@@ -14,6 +14,7 @@ def database(mocker, pages):
     query.execute.side_effect = [SimpleNamespace(data=page) for page in pages]
     db = mocker.Mock()
     db.table.return_value = query
+    db.rpc.return_value = query
     mocker.patch.object(author_service, "get_client", return_value=db)
     return query
 
@@ -63,6 +64,49 @@ def test_search_scopes_counts(mocker):
     query = database(mocker, [[author("a1")], [{"author_id": "a1"}]])
     assert author_service.search_authors("a1")[0].paper_count == 1
     query.in_.assert_called_once_with("author_id", ["a1"])
+
+
+def test_directory_search_uses_shared_matching_before_enrichment(mocker):
+    query = database(mocker, [[author("a1")], [], [], []])
+    assert [a.id for a in author_service.list_authors("  Vision Lab  ", limit=3)] == ["a1"]
+    author_service.get_client().rpc.assert_called_once_with("search_author_profiles", {
+        "p_search": "Vision Lab", "p_normalized": "lab vision", "p_limit": 3,
+    })
+    query.ilike.assert_not_called()
+
+
+def test_search_preserves_summary_contract_for_affiliation_matches(client, mocker):
+    row = {**author("a1"), "affiliations": [
+        {"institution": "Old Institute", "end_date": "2020"},
+        {"institution": "Current University"},
+    ]}
+    database(mocker, [[row], [{"author_id": "a1"}]])
+    response = client.get("/api/authors/search", params={"q": "Old Institute", "limit": 2})
+    assert response.status_code == 200
+    assert response.json() == [{
+        "id": "a1", "name": "a1", "currentAffiliation": "Current University",
+        "orcid": None, "paperCount": 1,
+    }]
+    author_service.get_client().rpc.assert_called_once_with("search_author_profiles", {
+        "p_search": "Old Institute", "p_normalized": "institute old", "p_limit": 2,
+    })
+
+
+def test_search_migration_error_is_actionable_and_other_errors_propagate(mocker):
+    import pytest
+    from fastapi import HTTPException
+    from postgrest.exceptions import APIError
+    query = database(mocker, [])
+    query.execute.side_effect = APIError({"code": "PGRST202", "message": "Missing function", "details": None, "hint": None})
+    with pytest.raises(HTTPException) as caught:
+        author_service.search_authors("Vision")
+    assert caught.value.status_code == 503
+    assert "031_author_search.sql" in caught.value.detail
+    error = APIError({"code": "42501", "message": "Permission denied", "details": None, "hint": None})
+    query.execute.side_effect = error
+    with pytest.raises(APIError) as caught:
+        author_service.search_authors("Vision")
+    assert caught.value is error
 
 
 def test_id_batches_are_bounded(mocker):

@@ -15,7 +15,7 @@ it('debounces typing and ignores an older response', async () => {
     .mockResolvedValue([author('Jane')])
   render(<MemoryRouter><Authors /></MemoryRouter>)
   await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-  const search = screen.getByPlaceholderText('Search authors...')
+  const search = screen.getByRole('textbox', { name: 'Search authors' })
   fireEvent.change(search, { target: { value: 'J' } })
   fireEvent.change(search, { target: { value: 'Jane' } })
   await act(async () => { await vi.advanceTimersByTimeAsync(299) })

@@ -125,7 +125,7 @@ export default function Authors() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="relative w-full sm:max-w-sm">
             <Icon name="search" className="pointer-events-none absolute left-3 top-2.5 text-[18px] text-slate-400" />
-            <input aria-label="Search authors" type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search authors..."
+            <input aria-label="Search authors" type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search names, affiliations, or labs..."
               className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
           </div>
           {!loading && !error && <p className="text-xs text-slate-400">{authors.length} {authors.length === 1 ? 'author' : 'authors'}{search.trim() ? ' found' : ' in your directory'}</p>}
