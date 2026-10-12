@@ -2,13 +2,7 @@ import { useRef, useState } from 'react'
 import { authorsApi } from '../services/api'
 import WindowModal from './WindowModal'
 
-export const PROFILE_FIELDS = [
-  { key: 'orcid', icon: 'badge', label: 'ORCID', placeholder: '0000-0000-0000-0000', toUrl: value => 'https://orcid.org/' + value },
-  { key: 'googleScholarUrl', icon: 'school', label: 'Google Scholar', placeholder: 'https://scholar.google.com/…', toUrl: value => value },
-  { key: 'githubUsername', icon: 'code', label: 'GitHub', placeholder: 'username', toUrl: value => 'https://github.com/' + value },
-  { key: 'openreviewUrl', icon: 'rate_review', label: 'OpenReview', placeholder: 'https://openreview.net/…', toUrl: value => value },
-  { key: 'websiteUrl', icon: 'language', label: 'Website', placeholder: 'https://…', toUrl: value => value },
-]
+import { PROFILE_FIELDS } from '../utils/authorProfiles'
 
 const INPUT = 'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
 const BUTTON = 'rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40'

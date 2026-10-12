@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { authorsApi } from '../services/api'
 import AuthorLabLinks from '../components/AuthorLabLinks'
+import AuthorProfileLinks from '../components/AuthorProfileLinks'
+import { PROFILE_FIELDS } from '../utils/authorProfiles'
 
 function Icon({ name, className = '' }) {
   return <span aria-hidden="true" className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -10,18 +12,21 @@ function Icon({ name, className = '' }) {
 function AddAuthorModal({ onClose, onCreate }) {
   const [name, setName] = useState('')
   const [orcid, setOrcid] = useState('')
+  const [socialLinks, setSocialLinks] = useState({ linkedinUrl: '', twitterUrl: '' })
+  const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!name.trim() || saving) return
     setSaving(true)
+    setError(null)
     try {
-      const author = await authorsApi.create({ name: name.trim(), orcid: orcid.trim() || null })
+      const author = await authorsApi.create({ name: name.trim(), orcid: orcid.trim() || null, ...Object.fromEntries(Object.entries(socialLinks).map(([key, value]) => [key, value.trim() || null])) })
       onCreate(author)
       onClose()
     } catch (err) {
-      alert(`Failed to create author: ${err.message}`)
+      setError(`Failed to create author: ${err.message}`)
       setSaving(false)
     }
   }
@@ -52,6 +57,12 @@ function AddAuthorModal({ onClose, onCreate }) {
               className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 font-mono"
             />
           </div>
+          {PROFILE_FIELDS.filter(field => field.key in socialLinks).map(field => <label key={field.key} className="block text-xs font-medium text-slate-600">
+            {field.label}
+            <input type="url" pattern="https?://.+" value={socialLinks[field.key]} onChange={event => setSocialLinks(current => ({ ...current, [field.key]: event.target.value }))} placeholder={field.placeholder}
+              className="mt-1 w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400" />
+          </label>)}
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-2 justify-end pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-50">
               Cancel
@@ -95,16 +106,6 @@ export default function Authors() {
     return () => { active = false; clearTimeout(timer) }
   }, [search, revision])
 
-  function profileLinks(author) {
-    const links = []
-    if (author.orcid) links.push({ icon: 'badge', url: `https://orcid.org/${author.orcid}`, title: 'ORCID' })
-    if (author.googleScholarUrl) links.push({ icon: 'school', url: author.googleScholarUrl, title: 'Google Scholar' })
-    if (author.githubUsername) links.push({ icon: 'code', url: `https://github.com/${author.githubUsername}`, title: 'GitHub' })
-    if (author.openreviewUrl) links.push({ icon: 'rate_review', url: author.openreviewUrl, title: 'OpenReview' })
-    if (author.websiteUrl) links.push({ icon: 'language', url: author.websiteUrl, title: 'Website' })
-    return links
-  }
-
   function currentAffiliation(author) {
     const affs = author.affiliations || []
     if (!affs.length) return null
@@ -140,7 +141,6 @@ export default function Authors() {
           : <ul aria-label="Authors directory" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {authors.map(author => {
               const affiliation = currentAffiliation(author)
-              const links = profileLinks(author)
               return <li key={author.id} className="min-w-0">
                 <div className="group relative flex h-full flex-col rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-slate-400 hover:bg-slate-50">
                   <h2 className="break-words text-sm font-semibold leading-5 text-slate-800">
@@ -151,12 +151,7 @@ export default function Authors() {
                   {!!author.labs?.length && <div className="relative z-10 mt-2"><AuthorLabLinks labs={author.labs} /></div>}
                   <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-3">
                     <span className="text-[11px] tabular-nums text-slate-500">{author.paperCount ?? 0} {author.paperCount === 1 ? 'paper' : 'papers'}</span>
-                    {!!links.length && <div className="relative z-10 flex flex-wrap items-center gap-1">
-                      {links.map(link => <a key={link.title} href={link.url} target="_blank" rel="noopener noreferrer" title={link.title} aria-label={`${link.title} for ${author.name}`}
-                        className="inline-flex rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-slate-500">
-                        <Icon name={link.icon} className="text-[16px]" />
-                      </a>)}
-                    </div>}
+                    <AuthorProfileLinks author={author} compact />
                   </div>
                 </div>
               </li>

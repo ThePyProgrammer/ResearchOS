@@ -149,6 +149,8 @@ CREATE TABLE IF NOT EXISTS authors (
     orcid               TEXT,
     google_scholar_url  TEXT,
     github_username     TEXT,
+    linkedin_url        TEXT,
+    twitter_url         TEXT,
     openreview_url      TEXT,
     website_url         TEXT,
     emails              JSONB NOT NULL DEFAULT '[]',

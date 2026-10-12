@@ -4,7 +4,9 @@ import { authorsApi, papersApi } from '../services/api'
 import { useLibrary } from '../context/LibraryContext'
 import AuthorLabLinks from '../components/AuthorLabLinks'
 import AuthorLabManager from '../components/AuthorLabManager'
-import AuthorEditModal, { PROFILE_FIELDS } from '../components/AuthorEditModal'
+import AuthorEditModal from '../components/AuthorEditModal'
+import AuthorProfileLinks from '../components/AuthorProfileLinks'
+import { PROFILE_FIELDS } from '../utils/authorProfiles'
 import WindowModal from '../components/WindowModal'
 
 const INPUT = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
@@ -203,13 +205,13 @@ function AuthorProfile({ id }) {
           All Authors
         </button>
 
-        <header className="mb-6 flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
+        <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1 basis-48">
             <h1 className="break-words text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{author.name}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
               <p className="text-xs text-slate-500">{papers.length} {papers.length === 1 ? 'linked paper' : 'linked papers'}</p>
-              {(PROFILE_FIELDS.some(field => author[field.key]) || author.emails?.length > 0) && <nav aria-label="Author profile links" className="flex flex-wrap items-center gap-1 border-l border-slate-200 pl-2">
-                {PROFILE_FIELDS.filter(field => author[field.key]).map(field => <a key={field.key} href={field.toUrl(author[field.key])} target="_blank" rel="noopener noreferrer" aria-label={field.label} title={field.label} className="inline-flex rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><Icon name={field.icon} className="text-[17px]" /></a>)}
+              {(PROFILE_FIELDS.some(field => author[field.key]) || author.emails?.length > 0) && <nav aria-label="Author profile links" className="flex min-w-0 flex-1 basis-40 flex-wrap items-center gap-1 border-l border-slate-200 pl-2">
+                <AuthorProfileLinks author={author} />
                 {(author.emails || []).map(email => <a key={email} href={'mailto:' + email} aria-label={'Email ' + email} title={email} className="inline-flex rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><Icon name="mail" className="text-[17px]" /></a>)}
               </nav>}
             </div>

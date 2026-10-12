@@ -4,6 +4,8 @@ async function mockAuthor(page) {
   let author = {
     id: 'a1', name: 'Jane Smith', paperCount: 2, orcid: '0000-0001-2345-6789',
     websiteUrl: 'https://janesmith.example/research', googleScholarUrl: 'https://scholar.google.com/citations?user=janesmith',
+    linkedinUrl: 'https://www.linkedin.com/in/janesmith', twitterUrl: 'https://twitter.com/janesmith',
+    openreviewUrl: 'https://openreview.net/profile?id=~Jane_Smith1',
     githubUsername: 'janesmith', emails: ['jane@university.example'],
     affiliations: [
       { institution: 'University of Washington', role: 'Postdoctoral Researcher', startDate: '2018', endDate: '2021' },
@@ -25,6 +27,7 @@ async function mockAuthor(page) {
     const path = new URL(request.url()).pathname
     const method = request.method()
     if (path === '/api/libraries') return route.fulfill({ json: [{ id: 'lib1', name: 'Research' }] })
+    if (path === '/api/authors') return route.fulfill({ json: [author] })
     if (path === '/api/authors/a1') {
       if (method === 'PATCH') {
         if (failSave) { failSave = false; return route.fulfill({ status: 502, json: { detail: 'Could not save author. Try again.' } }) }
@@ -73,6 +76,8 @@ test('author detail manages papers, affiliations, and labs with persisted state'
   await page.getByRole('button', { name: 'Edit author', exact: true }).click()
   await page.getByRole('textbox', { name: 'Author name' }).fill('Jane M. Smith')
   await page.getByRole('textbox', { name: 'Website' }).fill('https://janesmith.example/about')
+  await page.getByRole('textbox', { name: 'LinkedIn' }).fill('https://www.linkedin.com/in/janemsmith')
+  await page.getByRole('textbox', { name: 'X / Twitter' }).fill('https://x.com/janemsmith')
   await page.getByRole('button', { name: 'Move University of Washington up' }).click()
   await page.getByRole('textbox', { name: 'Role 1', exact: true }).fill('Visiting researcher')
   await page.screenshot({ path: testInfo.outputPath('author-edit-desktop.png'), fullPage: true })
@@ -101,12 +106,28 @@ test('author detail manages papers, affiliations, and labs with persisted state'
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Jane M. Smith', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Website', exact: true })).toHaveAttribute('href', 'https://janesmith.example/about')
+  await expect(page.getByRole('link', { name: 'LinkedIn', exact: true })).toHaveAttribute('href', 'https://www.linkedin.com/in/janemsmith')
+  await expect(page.getByRole('link', { name: 'X / Twitter', exact: true })).toHaveAttribute('href', 'https://x.com/janemsmith')
   await expect(affiliations.getByRole('listitem').first()).toContainText('Visiting researcher')
   await expect(page.getByRole('heading', { name: 'Papers (3)' })).toBeVisible()
   await expect(affiliations.getByRole('listitem').first()).toContainText('University of Washington')
   await expect(page.getByRole('link', { name: 'Human-Centered AI Lab Member' })).toBeVisible()
   await page.getByRole('button', { name: 'Unlink paper A shared foundation for reliable scientific discovery' }).click()
   await expect(page.getByRole('heading', { name: 'Papers (2)' })).toBeVisible()
+  await page.goto('/authors')
+  await expect(page.getByRole('link', { name: 'LinkedIn for Jane M. Smith' })).toHaveAttribute('href', 'https://www.linkedin.com/in/janemsmith')
+  await expect(page.getByRole('link', { name: 'X / Twitter for Jane M. Smith' })).toHaveAttribute('href', 'https://x.com/janemsmith')
+  await page.screenshot({ path: testInfo.outputPath('author-directory-icons.png'), fullPage: true })
+  await page.getByRole('link', { name: 'Open Jane M. Smith' }).click()
+  await page.getByRole('button', { name: 'Edit author', exact: true }).click()
+  await page.getByRole('textbox', { name: 'LinkedIn' }).fill('')
+  await page.getByRole('textbox', { name: 'X / Twitter' }).fill('')
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await expect(page.getByRole('form', { name: 'Edit author' })).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Jane M. Smith', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'LinkedIn', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'X / Twitter', exact: true })).toHaveCount(0)
 })
 
 test('author profile and paper modal remain usable at mobile width', async ({ page }, testInfo) => {

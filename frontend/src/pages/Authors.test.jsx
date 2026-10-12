@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import Authors from './Authors'
 import { authorsApi } from '../services/api'
 
-vi.mock('../services/api', () => ({ authorsApi: { list: vi.fn() } }))
+vi.mock('../services/api', () => ({ authorsApi: { list: vi.fn(), create: vi.fn() } }))
 beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks() })
 afterEach(() => vi.useRealTimers())
 const author = name => ({ id: name, name, paperCount: 0 })
@@ -97,4 +97,37 @@ it('retries failed loads and clears an empty search', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
   await act(async () => { await vi.advanceTimersByTimeAsync(0) })
   expect(screen.getByRole('link', { name: 'Open Jane' })).toBeInTheDocument()
+})
+
+it('renders branded profile links including LinkedIn and legacy Twitter URLs', async () => {
+  authorsApi.list.mockResolvedValue([{ ...author('Jane'), orcid: '0000-0001-2345-6789', githubUsername: 'jane', googleScholarUrl: 'https://scholar.google.com/citations?user=jane', openreviewUrl: 'https://openreview.net/profile?id=jane', linkedinUrl: 'https://www.linkedin.com/in/jane', twitterUrl: 'https://twitter.com/jane' }])
+  render(<MemoryRouter><Authors /></MemoryRouter>)
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  for (const label of ['ORCID', 'GitHub', 'Google Scholar', 'LinkedIn', 'X / Twitter']) {
+    const link = screen.getByRole('link', { name: label + ' for Jane' })
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(link.querySelector('img')).toHaveAttribute('alt', '')
+    expect(link.querySelector('.material-symbols-outlined')).toBeNull()
+  }
+  expect(screen.getByRole('link', { name: 'OpenReview for Jane' })).toHaveTextContent('rate_review')
+  expect(screen.getByRole('link', { name: 'LinkedIn for Jane' })).toHaveAttribute('href', 'https://www.linkedin.com/in/jane')
+  expect(screen.getByRole('link', { name: 'X / Twitter for Jane' })).toHaveAttribute('href', 'https://twitter.com/jane')
+})
+
+it('creates an author with social profiles and retains values after failure', async () => {
+  authorsApi.list.mockResolvedValue([])
+  authorsApi.create.mockRejectedValueOnce(new Error('Save failed')).mockResolvedValueOnce({ id: 'a1', name: 'Jane' })
+  render(<MemoryRouter><Authors /></MemoryRouter>)
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  fireEvent.click(screen.getByRole('button', { name: 'Add Author' }))
+  fireEvent.change(screen.getByPlaceholderText('e.g. John Smith'), { target: { value: 'Jane' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'LinkedIn' }), { target: { value: 'https://www.linkedin.com/in/jane' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'X / Twitter' }), { target: { value: 'https://x.com/jane' } })
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Create', exact: true })) })
+  expect(screen.getByRole('alert')).toHaveTextContent('Failed to create author: Save failed')
+  expect(screen.getByRole('textbox', { name: 'X / Twitter' })).toHaveValue('https://x.com/jane')
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Create', exact: true })) })
+  expect(authorsApi.create).toHaveBeenLastCalledWith({ name: 'Jane', orcid: null, linkedinUrl: 'https://www.linkedin.com/in/jane', twitterUrl: 'https://x.com/jane' })
+  expect(screen.queryByRole('textbox', { name: 'LinkedIn' })).not.toBeInTheDocument()
 })

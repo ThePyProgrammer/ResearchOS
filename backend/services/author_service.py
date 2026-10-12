@@ -163,6 +163,8 @@ def create_author(data: AuthorCreate) -> Author:
         "orcid": data.orcid,
         "google_scholar_url": data.google_scholar_url,
         "github_username": data.github_username,
+        "linkedin_url": data.linkedin_url,
+        "twitter_url": data.twitter_url,
         "openreview_url": data.openreview_url,
         "website_url": data.website_url,
         "emails": data.emails,

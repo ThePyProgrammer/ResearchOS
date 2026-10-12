@@ -1,10 +1,20 @@
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import Field
+from pydantic import AfterValidator, Field, HttpUrl, TypeAdapter
 
-from .base import CamelModel
+from models.base import CamelModel
 from models.lab import PaperLab
 from models.paper import Paper
+
+
+_PROFILE_URL = TypeAdapter(HttpUrl)
+
+
+def _validate_profile_url(value: str) -> str:
+    return str(_PROFILE_URL.validate_python(value))
+
+
+ProfileUrl = Annotated[str, AfterValidator(_validate_profile_url)]
 
 
 class Affiliation(CamelModel):
@@ -33,6 +43,8 @@ class Author(CamelModel):
     orcid: Optional[str] = None
     google_scholar_url: Optional[str] = None
     github_username: Optional[str] = None
+    linkedin_url: Optional[ProfileUrl] = None
+    twitter_url: Optional[ProfileUrl] = None
     openreview_url: Optional[str] = None
     website_url: Optional[str] = None
     emails: list[str] = []
@@ -48,6 +60,8 @@ class AuthorCreate(CamelModel):
     orcid: Optional[str] = None
     google_scholar_url: Optional[str] = None
     github_username: Optional[str] = None
+    linkedin_url: Optional[ProfileUrl] = None
+    twitter_url: Optional[ProfileUrl] = None
     openreview_url: Optional[str] = None
     website_url: Optional[str] = None
     emails: list[str] = []
@@ -65,6 +79,8 @@ class AuthorUpdate(CamelModel):
     orcid: Optional[str] = None
     google_scholar_url: Optional[str] = None
     github_username: Optional[str] = None
+    linkedin_url: Optional[ProfileUrl] = None
+    twitter_url: Optional[ProfileUrl] = None
     openreview_url: Optional[str] = None
     website_url: Optional[str] = None
     emails: Optional[list[str]] = None
