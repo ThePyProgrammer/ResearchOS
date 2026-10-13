@@ -209,10 +209,12 @@ function AuthorProfile({ id }) {
           <div className="min-w-0 flex-1 basis-48">
             <h1 className="break-words text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{author.name}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <p className="text-xs text-slate-500">{papers.length} {papers.length === 1 ? 'linked paper' : 'linked papers'}</p>
-              {(PROFILE_FIELDS.some(field => author[field.key]) || author.emails?.length > 0) && <nav aria-label="Author profile links" className="flex min-w-0 flex-1 basis-40 flex-wrap items-center gap-1 border-l border-slate-200 pl-2">
+              {!!author.emails?.length && <div className="min-w-0 max-w-full space-y-1">
+                {author.emails.map(email => <a key={email} href={'mailto:' + email} aria-label={'Email ' + email}
+                  className="block break-all rounded text-xs text-slate-600 hover:text-blue-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">{email}</a>)}
+              </div>}
+              {PROFILE_FIELDS.some(field => author[field.key]) && <nav aria-label="Author profile links" className={'flex min-w-0 flex-1 basis-40 flex-wrap items-center gap-1' + (author.emails?.length ? ' border-l border-slate-200 pl-2' : '')}>
                 <AuthorProfileLinks author={author} />
-                {(author.emails || []).map(email => <a key={email} href={'mailto:' + email} aria-label={'Email ' + email} title={email} className="inline-flex rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><Icon name="mail" className="text-[17px]" /></a>)}
               </nav>}
             </div>
           </div>

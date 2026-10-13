@@ -145,6 +145,7 @@ it('adds affiliations and emails, edits dates, and can clear both lists', async 
   await waitFor(() => expect(screen.queryByRole('form', { name: 'Edit author' })).not.toBeInTheDocument())
   expect(authorsApi.update).toHaveBeenLastCalledWith('a1', { emails: ['jane@example.com'], affiliations: [{ institution: 'First University', role: null, startDate: '2024', endDate: '2026' }] })
   expect(screen.getByRole('link', { name: 'Email jane@example.com' })).toHaveAttribute('href', 'mailto:jane@example.com')
+  expect(screen.getByRole('link', { name: 'Email jane@example.com' })).toHaveTextContent('jane@example.com')
   fireEvent.click(screen.getByRole('button', { name: 'Edit author' }))
   fireEvent.click(screen.getByRole('button', { name: 'Remove affiliation 1' }))
   fireEvent.click(screen.getByRole('button', { name: 'Remove email 1' }))
