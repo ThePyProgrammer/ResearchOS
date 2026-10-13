@@ -423,14 +423,35 @@ test('authors directory uses compact responsive cards and preserves author creat
 for (const path of ['/library', '/library?col=c_1', '/library/paper/p_1']) {
   test('paper labs appear in ' + path, async ({ page }) => {
     await mockApi(page)
-    await page.route('**/api/papers/p_1/labs', route => route.fulfill({
-      json: [{ id: 'lab_1', name: 'Language Lab' }, { id: 'lab_2', name: 'Vision Lab' }],
-    }))
+    const linked = [{ id: 'lab_1', name: 'Language Lab' }, { id: 'lab_2', name: 'Vision Lab' }]
+    const available = { id: 'lab_3', name: 'Systems Lab' }
+    let failAdd = true
+    await page.route('**/api/papers/p_1/labs', route => route.fulfill({ json: linked }))
+    await page.route('**/api/labs?*', route => route.fulfill({ json: { items: [...linked, available], total: 3, offset: 0, limit: 10 } }))
+    await page.route('**/api/labs/lab_3/papers', route => {
+      expect(route.request().postDataJSON()).toEqual({ paperIds: ['p_1'], authorId: null })
+      if (failAdd) { failAdd = false; return route.fulfill({ status: 502, json: { detail: 'Unable to link paper' } }) }
+      linked.push(available)
+      return route.fulfill({ json: { addedCount: 1 } })
+    })
     await page.goto(path)
     if (!path.includes('/paper/')) await page.getByText('Paper Alpha', { exact: true }).click()
     const labs = page.getByRole('region', { name: 'Paper labs' })
     await expect(labs.getByRole('link', { name: 'Language Lab' })).toHaveAttribute('href', '/labs/lab_1')
     await expect(labs.getByRole('link', { name: 'Vision Lab' })).toBeVisible()
+    await labs.getByRole('button', { name: 'Add to lab' }).click()
+    await expect(labs.getByText('Already linked')).toHaveCount(2)
+    await labs.getByRole('button', { name: 'Add to Systems Lab' }).click()
+    await expect(labs.getByRole('alert')).toHaveText('Unable to link paper')
+    await expect(labs.getByRole('link', { name: 'Systems Lab' })).toHaveCount(0)
+    await labs.getByRole('button', { name: 'Add to Systems Lab' }).click()
+    await expect(labs.getByRole('link', { name: 'Systems Lab' })).toHaveAttribute('href', '/labs/lab_3')
+    await expect(labs.getByText('Already linked')).toHaveCount(3)
+    if (path.includes('/paper/')) await labs.screenshot({ path: 'test-results/paper-lab-picker.png' })
+    await labs.getByRole('button', { name: 'Done' }).click()
+    await page.reload()
+    if (!path.includes('/paper/')) await page.getByText('Paper Alpha', { exact: true }).click()
+    await expect(labs.getByRole('link', { name: 'Systems Lab' })).toBeVisible()
   })
 }
 
