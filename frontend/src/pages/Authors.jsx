@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { authorsApi } from '../services/api'
+import AuthorNameCombobox from '../components/AuthorNameCombobox'
 import AuthorLabLinks from '../components/AuthorLabLinks'
 import AuthorProfileLinks from '../components/AuthorProfileLinks'
 import { PROFILE_FIELDS } from '../utils/authorProfiles'
@@ -38,17 +39,7 @@ function AddAuthorModal({ onClose, onCreate }) {
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
         <h2 className="text-lg font-semibold text-slate-800 mb-4">Add Author</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Name *</label>
-            <input
-              autoFocus
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="e.g. John Smith"
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-            />
-          </div>
+          <AuthorNameCombobox value={name} onChange={setName} />
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">ORCID</label>
             <input

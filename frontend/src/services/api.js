@@ -310,6 +310,7 @@ export const labsApi = {
 }
 
 export const authorsApi = {
+  suggestions: () => apiFetch('/authors/suggestions'),
   list: (params = {}) => {
     const qs = new URLSearchParams(
       Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))

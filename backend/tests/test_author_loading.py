@@ -242,3 +242,37 @@ def test_potential_papers_include_labs_for_immediate_linking(mocker):
     assert matches[0]["paper"].model_dump(by_alias=True)["labs"] == [{"id": "l1", "name": "Paper Lab"}]
     query.select.assert_any_call("*,lab_paper_links(labs(id,name))")
     assert query.execute.call_count == 2
+
+
+def test_suggestions_count_all_papers_and_preserve_unicode(client, mocker):
+    rows = [{"authors": [" Jane   Smith ", "JANE SMITH", "", "  ", "Only once", "张伟", "Éva"]},
+            {"authors": ["jane smith", "张伟", "Éva"]}]
+    rows.extend({"authors": []} for _ in range(498))
+    query = database(mocker, [rows, [{"authors": ["Jane Smith", "Later Name"]}, {"authors": ["Later Name"]}]])
+    response = client.get("/api/authors/suggestions")
+    assert response.status_code == 200
+    assert response.json() == [
+        {"name": "Jane Smith", "paperCount": 3},
+        {"name": "Later Name", "paperCount": 2},
+        {"name": "Éva", "paperCount": 2},
+        {"name": "张伟", "paperCount": 2},
+    ]
+    assert [call.args for call in query.range.call_args_list] == [(0, 499), (500, 999)]
+    assert all(call.args == ("authors",) for call in query.select.call_args_list)
+    assert all(call.args == ("id",) for call in query.order.call_args_list)
+    assert all(call.args == ("papers",) for call in author_service.get_client().table.call_args_list)
+
+
+def test_suggestions_ignore_single_paper_duplicates_and_empty_library(mocker):
+    database(mocker, [[{"authors": ["Jane", "Jane", " JANE "]}]])
+    assert author_service.suggest_author_names() == []
+    database(mocker, [[]])
+    assert author_service.suggest_author_names() == []
+
+
+def test_suggestions_surface_database_failure(client, mocker):
+    query = database(mocker, [])
+    query.execute.side_effect = RuntimeError("private database details")
+    response = client.get("/api/authors/suggestions")
+    assert response.status_code == 500
+    assert response.json() == {"error": "internal_server_error", "detail": "An unexpected error occurred."}

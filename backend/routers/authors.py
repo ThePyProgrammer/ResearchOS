@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from models.author import AuthorCreate, AuthorUpdate
+from models.author import AuthorCreate, AuthorNameSuggestion, AuthorUpdate
 from services import author_service
 
 logger = logging.getLogger(__name__)
@@ -22,6 +22,11 @@ def list_authors(
 ):
     authors = author_service.list_authors(search=search, limit=limit, offset=offset)
     return JSONResponse([a.model_dump(by_alias=True) for a in authors])
+
+
+@router.get("/suggestions", response_model=list[AuthorNameSuggestion])
+def suggest_author_names() -> list[AuthorNameSuggestion]:
+    return author_service.suggest_author_names()
 
 
 @router.get("/search")

@@ -10,6 +10,8 @@ from postgrest.exceptions import APIError
 from models.author import (
     Author,
     AuthorCreate,
+    AuthorNameSuggestion,
+    PaperAuthorNames,
     AuthorLibrary,
     AuthorLab,
     AuthorPaper,
@@ -488,3 +490,32 @@ def find_potential_papers(author_id: str) -> list[dict]:
     order = {"exact": 0, "likely": 1, "possible": 2}
     results.sort(key=lambda x: order.get(x["confidence"], 9))
     return results
+
+
+def suggest_author_names() -> list[AuthorNameSuggestion]:
+    """Count names across every paper, including papers without profile links."""
+    counts: dict[str, int] = {}
+    display_names: dict[str, str] = {}
+    offset = 0
+    while True:
+        rows = (get_client().table("papers").select("authors").order("id")
+                .range(offset, offset + 499).execute().data)
+        for row in rows:
+            paper = PaperAuthorNames.model_validate(row)
+            seen: set[str] = set()
+            for raw_name in paper.authors:
+                name = " ".join(raw_name.split())
+                key = name.casefold()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                display_names.setdefault(key, name)
+                counts[key] = counts.get(key, 0) + 1
+        if len(rows) < 500:
+            break
+        offset += len(rows)
+    return [
+        AuthorNameSuggestion(name=display_names[key], paper_count=count)
+        for key, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        if count >= 2
+    ]

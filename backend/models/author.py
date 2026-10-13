@@ -111,3 +111,12 @@ class PaperAuthorReference(CamelModel):
 
 class AuthorPaper(Paper):
     labs: list[PaperLab] = Field(default_factory=list)
+
+
+class PaperAuthorNames(CamelModel):
+    authors: list[str] = Field(default_factory=list)
+
+
+class AuthorNameSuggestion(CamelModel):
+    name: str
+    paper_count: int = Field(ge=2)

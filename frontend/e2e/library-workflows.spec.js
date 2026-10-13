@@ -367,6 +367,7 @@ test('authors directory uses compact responsive cards and preserves author creat
   ]
   const listCalls = []
   await page.route('**/api/authors**', async route => {
+    if (new URL(route.request().url()).pathname === '/api/authors/suggestions') return route.fulfill({ json: [] })
     if (route.request().method() === 'POST') {
       const data = route.request().postDataJSON()
       const created = { id: 'new', ...data, paperCount: 0 }
