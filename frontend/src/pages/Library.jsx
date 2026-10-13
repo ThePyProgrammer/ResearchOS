@@ -1416,8 +1416,7 @@ export default function Library() {
   }, [])
   const [yearFrom, setYearFrom] = useState('')
   const [yearTo, setYearTo] = useState('')
-  const [titleFilter, setTitleFilter] = useState('')
-  const [venueFilter, setVenueFilter] = useState('')
+  const [textFilter, setTextFilter] = useState('')
   const [tagFilters, setTagFilters] = useState(new Set())
   const [tagFilterMode, setTagFilterMode] = useState('and') // 'and' | 'or'
   const [sortKey, setSortKey] = useState('date')   // 'title' | 'date' | 'authors' | null
@@ -1780,8 +1779,7 @@ export default function Library() {
   const activeFilterCount = (filterTab !== 'all' && !urlQuery ? 1 : 0)
     + (pdfFilter !== 'all' ? 1 : 0)
     + (yearFrom || yearTo ? 1 : 0)
-    + (titleFilter ? 1 : 0)
-    + (venueFilter ? 1 : 0)
+    + (textFilter.trim() ? 1 : 0)
     + tagFilters.size
     + (authorFilter ? 1 : 0)
 
@@ -1815,13 +1813,18 @@ export default function Library() {
     else if (activeCollection !== 'all') result = result.filter(p => p.collections.includes(activeCollection))
     if (pdfFilter === 'has_pdf') result = result.filter(p => p.pdfUrl?.includes('/storage/v1/object/public/pdfs/'))
     if (pdfFilter === 'no_pdf') result = result.filter(p => !p.pdfUrl || !p.pdfUrl.includes('/storage/v1/object/public/pdfs/'))
-    if (titleFilter) result = result.filter(p => p.title.toLowerCase().includes(titleFilter.toLowerCase()))
-    if (venueFilter) result = result.filter(p => itemVenue(p).toLowerCase().includes(venueFilter.toLowerCase()))
+    const query = textFilter.trim().toLowerCase()
+    if (query) {
+      result = result.filter(p =>
+        p.title.toLowerCase().includes(query)
+        || (p.authors || []).some(author => author.toLowerCase().includes(query))
+      )
+    }
     if (yearFrom) result = result.filter(p => Number(itemYear(p)) >= Number(yearFrom))
     if (yearTo) result = result.filter(p => Number(itemYear(p)) <= Number(yearTo))
     if (authorFilter) result = result.filter(p => (p.authors || []).some(a => a === authorFilter))
     return result
-  }, [items, urlQuery, filterTab, activeCollection, pdfFilter, titleFilter, venueFilter, yearFrom, yearTo, authorFilter])
+  }, [items, urlQuery, filterTab, activeCollection, pdfFilter, textFilter, yearFrom, yearTo, authorFilter])
 
   const filtered = useMemo(() => {
     let result = preTagFiltered
@@ -1881,8 +1884,7 @@ export default function Library() {
     setPdfFilter('all')
     setYearFrom('')
     setYearTo('')
-    setTitleFilter('')
-    setVenueFilter('')
+    setTextFilter('')
     setTagFilters(new Set())
     setAuthorFilter(null)
   }
@@ -2010,40 +2012,21 @@ export default function Library() {
                 </div>
               </div>
 
-              {/* Title */}
+              {/* Text search */}
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-12 flex-shrink-0">Title</span>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-12 flex-shrink-0">Text</span>
                 <div className="relative min-w-0 flex-1">
                   <Icon name="search" className="absolute left-2 top-1/2 -translate-y-1/2 text-[14px] text-slate-400 pointer-events-none" />
                   <input
                     type="text"
-                    value={titleFilter}
-                    onChange={e => setTitleFilter(e.target.value)}
-                    placeholder="Filter by title..."
-                    className="w-full pl-7 pr-2 py-1 text-[11px] border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    value={textFilter}
+                    onChange={e => setTextFilter(e.target.value)}
+                    aria-label="Filter by title or author"
+                    placeholder="Filter by title or author..."
+                    className="w-full pl-7 pr-7 py-1 text-[11px] border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                   />
-                  {titleFilter && (
-                    <button onClick={() => setTitleFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
-                      <Icon name="close" className="text-[13px]" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Venue */}
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider w-12 flex-shrink-0">Venue</span>
-                <div className="relative min-w-0 flex-1">
-                  <Icon name="location_on" className="absolute left-2 top-1/2 -translate-y-1/2 text-[14px] text-slate-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={venueFilter}
-                    onChange={e => setVenueFilter(e.target.value)}
-                    placeholder="e.g. NeurIPS, arXiv..."
-                    className="w-full pl-7 pr-2 py-1 text-[11px] border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                  />
-                  {venueFilter && (
-                    <button onClick={() => setVenueFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
+                  {textFilter && (
+                    <button aria-label="Clear text filter" onClick={() => setTextFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
                       <Icon name="close" className="text-[13px]" />
                     </button>
                   )}
