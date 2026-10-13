@@ -248,7 +248,7 @@ def test_suggestions_count_all_papers_and_preserve_unicode(client, mocker):
     rows = [{"authors": [" Jane   Smith ", "JANE SMITH", "", "  ", "Only once", "张伟", "Éva"]},
             {"authors": ["jane smith", "张伟", "Éva"]}]
     rows.extend({"authors": []} for _ in range(498))
-    query = database(mocker, [rows, [{"authors": ["Jane Smith", "Later Name"]}, {"authors": ["Later Name"]}]])
+    query = database(mocker, [rows, [{"authors": ["Jane Smith", "Later Name"]}, {"authors": ["Later Name"]}], [], []])
     response = client.get("/api/authors/suggestions")
     assert response.status_code == 200
     assert response.json() == [
@@ -257,10 +257,10 @@ def test_suggestions_count_all_papers_and_preserve_unicode(client, mocker):
         {"name": "Éva", "paperCount": 2},
         {"name": "张伟", "paperCount": 2},
     ]
-    assert [call.args for call in query.range.call_args_list] == [(0, 499), (500, 999)]
-    assert all(call.args == ("authors",) for call in query.select.call_args_list)
+    assert [call.args for call in query.range.call_args_list] == [(0, 499), (500, 999), (0, 499), (0, 499)]
+    assert [call.args for call in query.select.call_args_list] == [("authors",), ("authors",), ("id,name",), ("raw_name,position,papers(authors)",)]
     assert all(call.args == ("id",) for call in query.order.call_args_list)
-    assert all(call.args == ("papers",) for call in author_service.get_client().table.call_args_list)
+    assert [call.args for call in author_service.get_client().table.call_args_list] == [("papers",), ("papers",), ("authors",), ("paper_authors",)]
 
 
 def test_suggestions_ignore_single_paper_duplicates_and_empty_library(mocker):
@@ -276,3 +276,59 @@ def test_suggestions_surface_database_failure(client, mocker):
     response = client.get("/api/authors/suggestions")
     assert response.status_code == 500
     assert response.json() == {"error": "internal_server_error", "detail": "An unexpected error occurred."}
+
+
+def test_suggestions_exclude_existing_profiles_across_all_author_pages(client, mocker):
+    names = ["Jane Smith", "张伟", "New Author", "Éva"]
+    profiles = [{"id": str(i), "name": "Other " + str(i)} for i in range(500)]
+    profiles[0] = {"id": "0", "name": "  JANE   SMITH  "}
+    query = database(mocker, [[{"authors": names}, {"authors": names}], profiles,
+                              [{"id": "later", "name": "张伟"}, {"id": "eva", "name": "ÉVA"}], []])
+    response = client.get("/api/authors/suggestions")
+    assert response.status_code == 200
+    assert response.json() == [{"name": "New Author", "paperCount": 2}]
+    assert [call.args for call in query.range.call_args_list] == [(0, 499), (0, 499), (500, 999), (0, 499)]
+
+
+def test_suggestions_refresh_existing_names_after_author_creation(mocker):
+    papers = [{"authors": ["Jane"]}, {"authors": ["Jane"]}]
+    database(mocker, [papers, [], [], papers, [{"id": "a1", "name": "Jane"}], []])
+    assert [item.name for item in author_service.suggest_author_names()] == ["Jane"]
+    assert author_service.suggest_author_names() == []
+
+
+def test_suggestions_exclude_reordered_profiles_and_explicit_aliases_after_first_link_page(client, mocker):
+    names = ["Li Fei-Fei", "Linxi Fan", "Jim 'Linxi' Fan", "Another Alias", "New Person"]
+    papers = [{"authors": names}, {"authors": names}]
+    profiles = [{"id": "fei", "name": "Fei-Fei Li"}, {"id": "jim", "name": "Jim Fan"}]
+    links = [{"raw_name": "", "position": -1, "papers": {"authors": names}} for _ in range(500)]
+    later_links = [
+        {"raw_name": "Fan, Linxi", "position": 4, "papers": {"authors": names}},
+        {"raw_name": "Jim ‘Linxi’ Fan", "position": 4, "papers": {"authors": names}},
+        {"raw_name": "", "position": 3, "papers": {"authors": names}},
+        {"raw_name": "", "position": 100, "papers": {"authors": names}},
+        {"raw_name": "", "position": 0, "papers": None},
+    ]
+    query = database(mocker, [papers, profiles, links, later_links])
+    response = client.get("/api/authors/suggestions")
+    assert response.status_code == 200
+    # Linking one author must not suppress other authors on the same paper.
+    # The explicit raw name takes precedence over an outdated position.
+    assert response.json() == [{"name": "New Person", "paperCount": 2}]
+    assert [call.args for call in query.range.call_args_list] == [(0, 499), (0, 499), (0, 499), (500, 999)]
+
+
+def test_suggestions_combine_name_order_variants_without_collapsing_unicode(mocker):
+    papers = [{"authors": ["New Person", "Person, New", "王伟", "张伟", "Éva", "Eva"]},
+              {"authors": ["Person New", "王伟", "张伟", "Éva", "Eva"]}]
+    database(mocker, [papers, [{"id": "known", "name": "张伟"}], []])
+    result = author_service.suggest_author_names()
+    assert {item.name: item.paper_count for item in result} == {"New Person": 2, "王伟": 2, "Éva": 2, "Eva": 2}
+
+
+def test_suggestions_refresh_linked_aliases_without_changing_profile_name(mocker):
+    papers = [{"authors": ["Linxi Fan"]}, {"authors": ["Linxi Fan"]}]
+    profiles = [{"id": "jim", "name": "Jim Fan"}]
+    database(mocker, [papers, profiles, [], papers, profiles, [{"raw_name": "Linxi Fan"}]])
+    assert [item.name for item in author_service.suggest_author_names()] == ["Linxi Fan"]
+    assert author_service.suggest_author_names() == []

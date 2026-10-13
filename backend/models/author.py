@@ -120,3 +120,9 @@ class PaperAuthorNames(CamelModel):
 class AuthorNameSuggestion(CamelModel):
     name: str
     paper_count: int = Field(ge=2)
+
+
+class LinkedPaperAuthorName(CamelModel):
+    raw_name: str = ""
+    position: int = 0
+    papers: Optional[PaperAuthorNames] = None

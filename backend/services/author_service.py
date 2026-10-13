@@ -1,5 +1,6 @@
 import logging
 import re
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -12,6 +13,7 @@ from models.author import (
     AuthorCreate,
     AuthorNameSuggestion,
     PaperAuthorNames,
+    LinkedPaperAuthorName,
     AuthorLibrary,
     AuthorLab,
     AuthorPaper,
@@ -492,8 +494,15 @@ def find_potential_papers(author_id: str) -> list[dict]:
     return results
 
 
+def _author_suggestion_key(name: str) -> str:
+    """Match reordered names and punctuation without dropping non-Latin letters."""
+    folded = unicodedata.normalize("NFKC", name).casefold()
+    cleaned = "".join(char for char in folded if char.isalnum() or char.isspace())
+    return " ".join(sorted(cleaned.split()))
+
+
 def suggest_author_names() -> list[AuthorNameSuggestion]:
-    """Count names across every paper, including papers without profile links."""
+    """Suggest frequent names not represented by profiles or linked-paper aliases."""
     counts: dict[str, int] = {}
     display_names: dict[str, str] = {}
     offset = 0
@@ -505,7 +514,7 @@ def suggest_author_names() -> list[AuthorNameSuggestion]:
             seen: set[str] = set()
             for raw_name in paper.authors:
                 name = " ".join(raw_name.split())
-                key = name.casefold()
+                key = _author_suggestion_key(name)
                 if not key or key in seen:
                     continue
                 seen.add(key)
@@ -514,8 +523,42 @@ def suggest_author_names() -> list[AuthorNameSuggestion]:
         if len(rows) < 500:
             break
         offset += len(rows)
+    if not any(count >= 2 for count in counts.values()):
+        return []
+
+    existing_names: set[str] = set()
+    offset = 0
+    while True:
+        rows = (get_client().table(_AUTHORS_TABLE).select("id,name").order("id")
+                .range(offset, offset + 499).execute().data)
+        for row in rows:
+            author = AuthorSearchResult.model_validate(row)
+            existing_names.add(_author_suggestion_key(author.name))
+        if len(rows) < 500:
+            break
+        offset += len(rows)
+
+    # Explicit links identify aliases that cannot be inferred from a profile name.
+    # Prefer the recorded name; positions are only a fallback for older blank names.
+    offset = 0
+    while True:
+        rows = (get_client().table(_PAPER_AUTHORS_TABLE)
+                .select("raw_name,position,papers(authors)").order("id")
+                .range(offset, offset + 499).execute().data)
+        for row in rows:
+            link = LinkedPaperAuthorName.model_validate(row)
+            name = link.raw_name
+            if not name.strip() and link.papers and 0 <= link.position < len(link.papers.authors):
+                name = link.papers.authors[link.position]
+            key = _author_suggestion_key(name)
+            if key:
+                existing_names.add(key)
+        if len(rows) < 500:
+            break
+        offset += len(rows)
+
     return [
         AuthorNameSuggestion(name=display_names[key], paper_count=count)
         for key, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
-        if count >= 2
+        if count >= 2 and key not in existing_names
     ]

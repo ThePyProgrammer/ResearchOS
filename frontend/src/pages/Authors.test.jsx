@@ -240,5 +240,5 @@ it('allows manual creation when suggestions fail and can retry suggestions', asy
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Retry suggestions' })) })
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   expect(screen.getByRole('combobox')).toHaveValue('My Author')
-  expect(screen.getByText('No names appear in at least 2 papers yet. Type any name to add an author.')).toBeInTheDocument()
+  expect(screen.getByText('No new author suggestions from your papers. Type any name to add an author.')).toBeInTheDocument()
 })

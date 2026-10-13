@@ -97,7 +97,7 @@ export default function AuthorNameCombobox({ value, onChange }) {
       <p id={id + '-help'} className="mt-1 text-xs text-slate-500">Names appearing in at least 2 papers, most frequent first. You can also type any name.</p>
       {loading && <p role="status" className="mt-1 text-xs text-slate-500">Loading suggestions...</p>}
       {error && <p role="alert" className="mt-1 text-xs text-red-600">Could not load suggestions: {error} <button type="button" onClick={() => setRevision(current => current + 1)} className="underline">Retry suggestions</button></p>}
-      {!loading && !error && !matches.length && <p role="status" className="mt-1 text-xs text-slate-500">{suggestions.length ? 'No matching suggestions. You can use this name.' : 'No names appear in at least 2 papers yet. Type any name to add an author.'}</p>}
+      {!loading && !error && !matches.length && <p role="status" className="mt-1 text-xs text-slate-500">{suggestions.length ? 'No matching suggestions. You can use this name.' : 'No new author suggestions from your papers. Type any name to add an author.'}</p>}
     </div>
   )
 }
