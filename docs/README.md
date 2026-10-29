@@ -10,6 +10,8 @@
 
 - [Getting Started](getting-started.md) — Prerequisites, environment setup, database, running the app
 - [Deployment](deployment.md) — VPS, Docker, Vercel+Railway deployment options
+- [Paper PDF Storage Migration](paper-storage-gcs-migration-plan.md) — GCS configuration, transfer, URL cutover, rollback, and delayed source cleanup
+- [PDF Migration Record](paper-storage-gcs-migration-report.md) — Completed cutover, validation evidence, and recovery-window cleanup
 
 ## Architecture
 

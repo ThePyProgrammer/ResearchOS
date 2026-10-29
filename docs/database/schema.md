@@ -79,7 +79,7 @@ Academic papers and preprints. The primary library item type.
 | `agent_reasoning` | TEXT | YES | — | Agent's explanation of relevance |
 | `rejected` | BOOLEAN | NO | `false` | Whether rejected during agent review |
 | `collections` | JSONB | NO | `[]` | Array of collection IDs this paper belongs to |
-| `pdf_url` | TEXT | YES | — | Public URL to PDF (Supabase storage or external) |
+| `pdf_url` | TEXT | YES | — | Public URL to PDF (configured GCS/Supabase storage or external) |
 | `github_url` | TEXT | YES | — | Related GitHub repository URL |
 | `website_url` | TEXT | YES | — | Related project website URL |
 | `links` | JSONB | NO | `[]` | Array of `{name, url}` named links |

@@ -27,6 +27,12 @@ Query parameters:
 
 Returns an array of Paper objects.
 
+Paper responses include the read-only `hasStoredPdf` boolean. It identifies a URL
+in the configured Supabase PDF bucket or GCS PDF bucket; it does not perform a
+live file-existence check. External publisher URLs return `false`. Clients should
+use this field for stored-PDF filters and controls rather than inspecting URL
+substrings. No database column or paper-ID migration is required.
+
 ### POST /api/papers
 
 Optional query parameter: `?check_duplicates=true`
@@ -120,7 +126,7 @@ Response on duplicate (`200`):
 }
 ```
 
-After creation, if the paper has a `pdf_url`, a background task auto-downloads the PDF to Supabase Storage. If the library has `auto_note_enabled`, AI notes are generated in the background.
+After creation, if the paper has a `pdf_url`, a background task auto-downloads the PDF to the configured PDF storage provider. If the library has `auto_note_enabled`, AI notes are generated in the background.
 
 ---
 
@@ -204,19 +210,19 @@ Upload a PDF file for a paper.
 
 Request: `multipart/form-data` with field `file` (must be `application/pdf` or `application/octet-stream`).
 
-Stores the PDF in Supabase Storage at `{paper_id}.pdf`, updates `papers.pdf_url` to the public storage URL, then queues AI note generation as a background task.
+Stores the PDF in the configured storage provider at `{paper_id}.pdf`, updates `papers.pdf_url` to the public storage URL, invalidates cached extracted text, then queues AI note generation as a background task.
 
 Returns the updated Paper object.
 
 ### DELETE /api/papers/{id}/pdf
 
-Remove the paper's PDF from Supabase Storage, clear `pdf_url`, and delete any cached extracted text.
+Remove the paper's PDF from its recorded managed storage location, clear `pdf_url`, and delete any cached extracted text. Storage failures preserve the database reference for retry.
 
 Returns `204 No Content`.
 
 ### POST /api/papers/{id}/pdf/fetch
 
-Download the paper's existing external `pdf_url` into Supabase Storage.
+Download the paper's existing external `pdf_url` into the configured storage provider. PDFs already in either configured managed bucket are rejected as already stored.
 
 Use this for papers imported via DOI/arXiv where the PDF URL was set but not yet downloaded. Returns `422` if the paper has no `pdf_url` or the PDF is already in storage.
 

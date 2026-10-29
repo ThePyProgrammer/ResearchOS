@@ -37,6 +37,20 @@ The backend reads from `backend/.env`:
 | `SUPABASE_URL` | Yes | Your Supabase project URL (e.g. `https://abc.supabase.co`) |
 | `SUPABASE_KEY` | Yes | Supabase publishable (anon) key |
 | `OPENAI_API_KEY` | No | OpenAI API key. AI features disabled without it. |
+| `PAPER_STORAGE_PROVIDER` | No | `supabase` (default) or `gcs`; controls new PDF uploads only |
+| `GCS_PROJECT_ID` | For GCS | Google Cloud project used by the storage client |
+| `GCS_PDF_BUCKET` | For GCS | Dedicated public-read PDF bucket; also used to recognize managed GCS URLs |
+
+For local GCS access, run `gcloud auth application-default login`. CLI login alone
+does not authenticate the Python client. On a hosted backend, supply an attached
+service account or workload identity with bucket-level Storage Object User access.
+Never expose credentials in frontend configuration. Supabase credentials remain
+required for the database. Follow the [PDF migration runbook](paper-storage-gcs-migration-plan.md)
+for bucket setup, CORS, copying, verified URL updates, rollback, and delayed cleanup.
+
+For a brief storage cutover, create `backend/data/migration/maintenance.flag` to
+return HTTP 503 for API mutations while allowing reads; remove it when finished.
+The marker is local to this checkout, so coordinate every instance before using it.
 
 ## Supabase Setup
 
