@@ -11,6 +11,7 @@ from services import lab_service
 from services import paper_service
 from services import activity_service
 from services import related_paper_service
+from services.pdf_service import managed_location
 from services.arxiv_client import ArxivRateLimitError, ArxivRequestError
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ NOT_FOUND = {"error": "not_found", "detail": "Paper not found"}
 
 
 def _auto_download_pdf(paper_id: str, pdf_url: str) -> None:
-    """Background task: download PDF from external URL and upload to Supabase Storage."""
+    """Download a PDF from an external URL into the configured PDF storage."""
     import httpx
     from services.pdf_service import upload_pdf
 
@@ -45,10 +46,12 @@ def _auto_download_pdf(paper_id: str, pdf_url: str) -> None:
 
 
 def _auto_download_and_process(paper_id: str, library_id: Optional[str], pdf_url: Optional[str]) -> None:
-    """Background task: download PDF to Supabase, then generate notes if enabled."""
+    """Download a PDF to managed storage, then generate notes if enabled."""
     if pdf_url:
         _auto_download_pdf(paper_id, pdf_url)
-    _auto_generate_notes(paper_id, library_id, pdf_url)
+    current = paper_service.get_paper(paper_id)
+    if current:
+        _auto_generate_notes(paper_id, library_id, current.pdf_url)
 
 
 def _auto_generate_notes(paper_id: str, library_id: Optional[str], pdf_url: Optional[str]) -> None:
@@ -545,7 +548,7 @@ def delete_paper(paper_id: str):
 
 @router.post("/{paper_id}/pdf", status_code=200)
 async def upload_pdf(paper_id: str, background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    """Upload a PDF file for a paper and store it in Supabase Storage."""
+    """Upload a PDF file for a paper into the configured PDF storage."""
     paper = paper_service.get_paper(paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
@@ -554,8 +557,12 @@ async def upload_pdf(paper_id: str, background_tasks: BackgroundTasks, file: Upl
 
     from services.pdf_service import upload_pdf as _upload
     file_bytes = await file.read()
+    if not file_bytes.startswith(b"%PDF-"):
+        raise HTTPException(status_code=422, detail="File does not have a PDF header")
     pdf_url = _upload(paper_id, file_bytes)
     paper_service.set_pdf_url(paper_id, pdf_url)
+    from services.pdf_text_service import delete_cached_text
+    delete_cached_text(paper_id)
 
     updated = paper_service.get_paper(paper_id)
 
@@ -567,14 +574,14 @@ async def upload_pdf(paper_id: str, background_tasks: BackgroundTasks, file: Upl
 
 @router.delete("/{paper_id}/pdf", status_code=204)
 async def delete_pdf(paper_id: str):
-    """Remove a paper's PDF from Supabase Storage and clear its url."""
+    """Remove a managed paper PDF and clear its URL."""
     paper = paper_service.get_paper(paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
 
     from services.pdf_service import delete_pdf as _delete
     from services.pdf_text_service import delete_cached_text
-    _delete(paper_id)
+    _delete(paper_id, paper.pdf_url)
     paper_service.set_pdf_url(paper_id, None)
     delete_cached_text(paper_id)
 
@@ -630,13 +637,13 @@ async def unlink_paper_author(paper_id: str, author_id: str):
 
 @router.post("/{paper_id}/pdf/fetch", status_code=200)
 async def fetch_pdf(paper_id: str):
-    """Download a paper's PDF from its external pdf_url and upload to Supabase Storage."""
+    """Download a paper's external PDF into the configured PDF storage."""
     paper = paper_service.get_paper(paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
     if not paper.pdf_url:
         raise HTTPException(status_code=422, detail="Paper has no PDF URL to fetch from")
-    if "/storage/v1/object/public/pdfs/" in paper.pdf_url:
+    if managed_location(paper.pdf_url):
         raise HTTPException(status_code=422, detail="PDF is already in storage")
 
     import httpx

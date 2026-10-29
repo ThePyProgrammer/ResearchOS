@@ -56,7 +56,7 @@ def create_paper(data: PaperCreate) -> Paper:
         created_at=now,
         **data.model_dump(),
     )
-    get_client().table(_TABLE).insert(paper.model_dump(by_alias=False)).execute()
+    get_client().table(_TABLE).insert(paper.model_dump(by_alias=False, exclude={"has_stored_pdf"})).execute()
     logger.info("Created paper %s: %s", paper.id, paper.title)
     return paper
 
@@ -79,8 +79,11 @@ def set_pdf_url(paper_id: str, pdf_url: Optional[str]) -> None:
 
 
 def delete_paper(paper_id: str) -> bool:
-    if get_paper(paper_id) is None:
+    paper = get_paper(paper_id)
+    if paper is None:
         return False
+    from services.pdf_service import delete_pdf
+    delete_pdf(paper_id, paper.pdf_url)
     get_client().table(_TABLE).delete().eq("id", paper_id).execute()
     logger.info("Deleted paper %s", paper_id)
     return True

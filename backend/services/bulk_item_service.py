@@ -55,7 +55,17 @@ def mutate_items(data: BulkItemsRequest) -> BulkItemsResult:
                 query = query.in_('id', ids)
                 if data.library_id:
                     query = query.eq('library_id', data.library_id)
-                succeeded.update(row['id'] for row in query.execute().data)
+                deleted_or_updated = query.execute().data
+                succeeded.update(row['id'] for row in deleted_or_updated)
+                if data.action == 'delete' and item_type == 'paper':
+                    from services.pdf_service import delete_pdf
+                    for row in deleted_or_updated:
+                        try:
+                            delete_pdf(row['id'], row.get('pdf_url'))
+                        except Exception:
+                            # The database deletion already committed; retain its
+                            # successful result and log storage cleanup for retry.
+                            logger.exception('PDF cleanup required for deleted paper %s', row['id'])
             detail = 'Item missing, inaccessible, or changed concurrently. Refresh and retry.'
         except Exception:
             logger.exception('Bulk %s failed for %s (%d items)', data.action, table, len(ids))

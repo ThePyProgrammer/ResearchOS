@@ -1,4 +1,4 @@
-"""Extract text/markdown from PDFs stored in Supabase using pymupdf4llm."""
+"""Extract PDF text with pymupdf4llm and cache it in the Supabase database."""
 
 import logging
 import tempfile
@@ -27,7 +27,7 @@ def get_cached_text(paper_id: str) -> Optional[dict]:
 
 
 def extract_and_cache(paper_id: str, pdf_url: str) -> dict:
-    """Download PDF from Supabase Storage, extract markdown via pymupdf4llm, cache result."""
+    """Download a PDF URL, extract markdown via pymupdf4llm, and cache it."""
     # Check cache first
     cached = get_cached_text(paper_id)
     if cached:

@@ -24,6 +24,17 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ResearchOS API", version="0.1.0")
+STORAGE_MAINTENANCE_FILE = Path(__file__).parent / "data" / "migration" / "maintenance.flag"
+
+
+@app.middleware("http")
+async def storage_migration_maintenance(request: Request, call_next):
+    # A local marker lets an operator pause writes without interrupting reads.
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and STORAGE_MAINTENANCE_FILE.exists():
+        return JSONResponse(status_code=503, content={
+            "detail": "Paper storage migration in progress. Please retry shortly."
+        }, headers={"Retry-After": "60"})
+    return await call_next(request)
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,4 +1,5 @@
 from typing import Optional
+from pydantic import computed_field
 from .base import CamelModel
 
 
@@ -38,6 +39,12 @@ class Paper(CamelModel):
     library_id: Optional[str] = None
     created_at: str
     item_type: str = "paper"
+
+    @computed_field(alias="hasStoredPdf")
+    @property
+    def has_stored_pdf(self) -> bool:
+        from services.pdf_service import managed_location
+        return managed_location(self.pdf_url) is not None
 
 
 class PaperCreate(CamelModel):

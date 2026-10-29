@@ -116,6 +116,7 @@ def test_import_paper_reports_arxiv_timeout_as_rate_limit(client, mocker, caplog
 
 
 def test_fetch_pdf_validation_errors(client, mocker):
+    mocker.patch.dict('os.environ', {'SUPABASE_URL': 'https://x.supabase.co'})
     mocker.patch("app.papers.paper_service.get_paper", return_value=mocker.Mock(pdf_url=None))
     response = client.post("/api/papers/p_1/pdf/fetch")
     assert response.status_code == 422
