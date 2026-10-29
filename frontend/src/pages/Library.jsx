@@ -146,7 +146,7 @@ function PaperRow({ item, selected, checked, onSelect, onCheck, onItemUpdate, on
               {item.title}
             </span>
           )}
-          {!isWebsite && !isGitHubRepo && (!item.pdfUrl || !item.pdfUrl.includes('/storage/v1/object/public/pdfs/')) && (
+          {!isWebsite && !isGitHubRepo && !item.hasStoredPdf && (
             <span className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-medium flex-shrink-0 flex items-center gap-0.5" title="No PDF in storage">
               <Icon name="picture_as_pdf" className="text-[10px]" />
               No PDF
@@ -219,7 +219,7 @@ function PaperDetail({ paper, onClose, onStatusChange, onPaperUpdate, onDelete, 
   const { activeLibrary, activeLibraryId } = useLibrary()
   const navigate = useNavigate()
 
-  const hasPdfInStorage = paper.pdfUrl?.includes('/storage/v1/object/public/pdfs/')
+  const hasPdfInStorage = Boolean(paper.hasStoredPdf)
   const hasExternalPdf = paper.pdfUrl && !hasPdfInStorage
 
   useEffect(() => {
@@ -1582,7 +1582,7 @@ export default function Library() {
     }
     if (operation === 'pdfs') {
       const skipIds = new Set(selected.filter(i =>
-        (i.itemType === 'website' || i.itemType === 'github_repo') || !i.pdfUrl || i.pdfUrl.includes('/storage/v1/object/public/pdfs/')
+        (i.itemType === 'website' || i.itemType === 'github_repo') || !i.pdfUrl || i.hasStoredPdf
       ).map(i => i.id))
       setBulkSkipIds(skipIds)
       return skipIds.size
@@ -1811,8 +1811,8 @@ export default function Library() {
       result = result.filter(i => dupIds.has(i.id))
     }
     else if (activeCollection !== 'all') result = result.filter(p => p.collections.includes(activeCollection))
-    if (pdfFilter === 'has_pdf') result = result.filter(p => p.pdfUrl?.includes('/storage/v1/object/public/pdfs/'))
-    if (pdfFilter === 'no_pdf') result = result.filter(p => !p.pdfUrl || !p.pdfUrl.includes('/storage/v1/object/public/pdfs/'))
+    if (pdfFilter === 'has_pdf') result = result.filter(p => p.hasStoredPdf)
+    if (pdfFilter === 'no_pdf') result = result.filter(p => !p.hasStoredPdf)
     const query = textFilter.trim().toLowerCase()
     if (query) {
       result = result.filter(p =>
@@ -1991,8 +1991,8 @@ export default function Library() {
                 <div className="flex flex-wrap gap-1">
                   {[
                     { id: 'all', label: 'All', count: items.length },
-                    { id: 'has_pdf', label: 'Has PDF', count: items.filter(p => p.pdfUrl?.includes('/storage/v1/object/public/pdfs/')).length },
-                    { id: 'no_pdf', label: 'No PDF', count: items.filter(p => !p.pdfUrl || !p.pdfUrl.includes('/storage/v1/object/public/pdfs/')).length },
+                    { id: 'has_pdf', label: 'Has PDF', count: items.filter(p => p.hasStoredPdf).length },
+                    { id: 'no_pdf', label: 'No PDF', count: items.filter(p => !p.hasStoredPdf).length },
                   ].map(opt => (
                     <button
                       key={opt.id}

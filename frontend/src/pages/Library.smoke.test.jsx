@@ -80,6 +80,26 @@ describe('Library page smoke', () => {
     githubReposApi.list.mockResolvedValue([])
   })
 
+  it('uses managed PDF metadata for GCS badges and PDF filters', async () => {
+    papersApi.list.mockResolvedValue([
+      { id: 'p_gcs', title: 'Stored GCS paper', authors: [], collections: [],
+        pdfUrl: 'https://storage.googleapis.com/researchos-papers/p_gcs.pdf', hasStoredPdf: true },
+      { id: 'p_external', title: 'External arXiv paper', authors: [], collections: [],
+        pdfUrl: 'https://arxiv.org/pdf/1234', hasStoredPdf: false },
+    ])
+    websitesApi.list.mockResolvedValue([])
+    renderLibrary()
+    await screen.findByText('Stored GCS paper')
+    expect(screen.getAllByTitle('No PDF in storage')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Has PDF/ }))
+    expect(screen.getByText('Stored GCS paper')).toBeInTheDocument()
+    expect(screen.queryByText('External arXiv paper')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^No PDF/ }))
+    expect(screen.getByText('External arXiv paper')).toBeInTheDocument()
+    expect(screen.queryByText('Stored GCS paper')).not.toBeInTheDocument()
+  })
+
   it('copies BibTeX from the context menu and reports clipboard failures', async () => {
     papersApi.list.mockResolvedValue([{ id: 'p_1', title: 'Context paper', authors: ['Jane Smith'], year: 2024, collections: [] }])
     websitesApi.list.mockResolvedValue([])
