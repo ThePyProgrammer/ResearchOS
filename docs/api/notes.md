@@ -1,6 +1,6 @@
 # Notes API
 
-Notes implement a file-tree system. Each note is either a `file` (with HTML content) or a `folder`. Notes belong to exactly one parent scope.
+Notes implement a file-tree system. Each entry is a `file` (with HTML content), a `canvas` (with JSON Canvas content), or a `folder`. Notes belong to exactly one parent scope.
 
 ---
 
@@ -90,11 +90,30 @@ Request body (`NoteCreate`):
 }
 ```
 
-- `type`: `"file"` or `"folder"`. Folders have empty `content`.
+- `type`: `"file"`, `"folder"`, or `"canvas"`. Folders have empty `content`.
 - `parentId`: ID of parent note (folder) for nested structure; `null` for root-level.
-- `content`: HTML string (tiptap editor output). Empty string for folders.
+- `content`: HTML string for files, a serialized JSON Canvas 1.0 object for canvases, or an empty string for folders.
 
 Returns the created Note at `201`.
+
+### Canvas documents
+
+The same creation endpoint works in every scope:
+
+```json
+{
+  "name": "Research map.canvas",
+  "parentId": null,
+  "type": "canvas",
+  "content": "{\"nodes\":[],\"edges\":[]}"
+}
+```
+
+Omitting canvas content initializes empty `nodes` and `edges` arrays. Creation and rename append `.canvas` if absent. Save using `PATCH /api/notes/{id}` with the serialized document in `content`. The type of an existing entry is not changed by PATCH.
+
+Canvas creation and content updates validate JSON Canvas node types, geometry, unique IDs, colors, file subpaths, and connection endpoints. Invalid content returns `422` before any database write. Unknown extension fields are retained. Existing HTML note behavior is unchanged. No database migration is needed: the existing `notes.type` and `notes.content` columns store the document.
+
+ResearchOS-created file nodes retain their portable `file` path and add `researchos.noteId` for stable references across renames and moves. Local attachments may include `researchos.mediaData` or `researchos.textContent`; group backgrounds may include `researchos.backgroundData`. These optional extensions do not alter the JSON Canvas schema. See [Canvas guide](../canvas.md) for exports and interoperability.
 
 ---
 
