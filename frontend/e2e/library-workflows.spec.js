@@ -413,7 +413,7 @@ test('authors directory uses compact responsive cards and preserves author creat
     return second.top - first.bottom
   })).toBeGreaterThan(0)
   await page.screenshot({ path: 'test-results/authors-cards-mobile.png', fullPage: true, animations: 'disabled' })
-  await page.getByRole('button', { name: 'Add Author', exact: true }).click()
+  await page.getByRole('button', { name: 'Add author', exact: true }).click()
   await page.getByPlaceholder('e.g. John Smith').fill('New Researcher')
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await expect(directory.getByRole('link', { name: 'Open New Researcher' })).toBeAttached()

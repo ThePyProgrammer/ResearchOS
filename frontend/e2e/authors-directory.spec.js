@@ -59,7 +59,7 @@ test('add author suggests frequent names and still accepts custom names after a 
     return route.fulfill({ json: [] })
   })
   await page.goto('/authors')
-  await page.getByRole('button', { name: 'Add Author' }).click()
+  await page.getByRole('button', { name: 'Add author' }).click()
   const input = page.getByRole('combobox', { name: 'Name *' })
   await expect(page.getByRole('option')).toHaveText(['Jane Smith8 papers', 'Alex Doe2 papers'])
   await page.screenshot({ path: testInfo.outputPath('author-suggestions.png') })
@@ -71,7 +71,7 @@ test('add author suggests frequent names and still accepts custom names after a 
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await expect(page.getByRole('link', { name: 'Open Alex Doe' })).toBeVisible()
   failSuggestions = true
-  await page.getByRole('button', { name: 'Add Author' }).click()
+  await page.getByRole('button', { name: 'Add author' }).click()
   await expect(page.getByRole('alert')).toContainText('Suggestions unavailable')
   await input.fill('My Own Author')
   await page.getByRole('button', { name: 'Create', exact: true }).click()

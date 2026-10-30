@@ -37,7 +37,7 @@ function AddAuthorModal({ onClose, onCreate }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">Add Author</h2>
+        <h2 className="text-lg font-semibold text-slate-800 mb-4">Add author</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           <AuthorNameCombobox value={name} onChange={setName} />
           <div>
@@ -129,7 +129,7 @@ export default function Authors() {
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Authors</h1>
           <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700">
-            <Icon name="add" className="text-[16px]" />Add Author
+            <Icon name="add" className="text-[16px]" />Add author
           </button>
         </div>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
