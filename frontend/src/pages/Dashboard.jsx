@@ -393,11 +393,11 @@ export default function Dashboard() {
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--bg-slate-100))" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'rgb(var(--fg-slate-400))' }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'rgb(var(--fg-slate-400))' }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+                  contentStyle={{ background: 'var(--ui-surface)', color: 'var(--ui-text)', borderColor: 'var(--ui-border)', fontSize: 12, borderRadius: 8, border: '1px solid rgb(var(--line-slate-200))', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
                   formatter={(value, name) => {
                     const nameMap = {
                       papersTotal: 'Papers', reposTotal: 'Repos', websitesTotal: 'Websites',
@@ -406,7 +406,7 @@ export default function Dashboard() {
                     const label = nameMap[name] ?? (chartMode === 'cumulative' ? `Total ${cfg.label}` : `${cfg.label} Added`)
                     return [value, label]
                   }}
-                  labelStyle={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}
+                  labelStyle={{ fontWeight: 600, color: 'rgb(var(--fg-slate-800))', marginBottom: 4 }}
                 />
                 {chartItemType === 'all' && chartSplit === 'separate' ? (
                   <>

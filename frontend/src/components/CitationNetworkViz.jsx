@@ -180,7 +180,7 @@ export default function CitationNetworkViz({
       .attr('class', 'node-circle')
       .attr('r',      d => getNodeSize(d, sizeBy, degreeMap))
       .attr('fill',   d => getNodeColor(d, colorBy, scales))
-      .attr('stroke', '#fff')
+      .attr('stroke', 'var(--ui-surface)')
       .attr('stroke-width', 1.5)
 
     // Label below node
@@ -193,7 +193,7 @@ export default function CitationNetworkViz({
       .attr('y',           d => getNodeSize(d, sizeBy, degreeMap) + 12)
       .attr('font-size',   '9px')
       .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
-      .attr('fill',        '#64748b')
+      .attr('fill',        'rgb(var(--fg-slate-500))')
       .attr('text-anchor', 'middle')
       .attr('pointer-events', 'none')
 
