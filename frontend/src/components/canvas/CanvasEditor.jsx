@@ -429,7 +429,7 @@ function CanvasEditorInner({ initial, note, notes, onChange, onOpen, onCreateNot
           snapToGrid={snap} snapGrid={[20, 20]} minZoom={0.05} maxZoom={4} fitView fitViewOptions={{ padding: 0.15 }} elevateNodesOnSelect={false} proOptions={{ hideAttribution: false }}>
           <Background gap={20} size={1} color="#cbd5e1" />
           <Controls showInteractive={false} />
-          {showMap && <MiniMap pannable zoomable nodeColor={n => canvasColor(n.data.raw.color)} />}
+          {showMap && <MiniMap style={{ width: 120, height: 80 }} pannable zoomable nodeColor={n => canvasColor(n.data.raw.color)} />}
         </ReactFlow>
         {!doc.nodes.length && <div className="canvas-empty"><strong>A canvas for your research</strong><p>Add a thought, connect notes, or drop files here.</p><button disabled={readOnly} onClick={() => add('text')}>Add your first card</button></div>}
       </div>
