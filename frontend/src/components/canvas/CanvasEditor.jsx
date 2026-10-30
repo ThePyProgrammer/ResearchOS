@@ -8,6 +8,7 @@ import { FilePreview, MarkdownCard } from './CanvasPreview'
 import LinkedNoteDialog from './LinkedNoteDialog'
 import { noteMarkdown } from '../../utils/noteMarkdown'
 import './canvas.css'
+import { useTheme } from '../../context/ThemeContext'
 
 const SIDES = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left }
 const MAX_FILE_SIZE = 15 * 1024 * 1024
@@ -56,6 +57,7 @@ function FilePicker({ notes, onPick, onClose }) {
 }
 
 function CanvasEditorInner({ initial, note, notes, onChange, onOpen, onCreateNote, onSave, renderNoteEditor, onFileSaved }) {
+  const { resolvedTheme } = useTheme()
   const [doc, setDoc] = useState(initial)
   const current = useRef(doc)
   const [selected, setSelected] = useState(new Set())
@@ -331,7 +333,7 @@ function CanvasEditorInner({ initial, note, notes, onChange, onOpen, onCreateNot
       if (!doc.nodes.length) throw new Error('Add a card before exporting an image.')
       const width = Math.ceil(viewportOnly ? root.current.clientWidth : box.width + 80), height = Math.ceil(viewportOnly ? root.current.clientHeight : box.height + 80)
       if (width * height * scale * scale > 64_000_000) throw new Error('This canvas is too large for a PNG. Export the viewport or use a lower scale.')
-      const url = await toPng(viewport, { backgroundColor: '#f8fafc', width, height, pixelRatio: scale,
+      const url = await toPng(viewport, { backgroundColor: getComputedStyle(root.current.querySelector('.canvas-flow')).backgroundColor, width, height, pixelRatio: scale,
         style: viewportOnly ? {} : { width: `${width}px`, height: `${height}px`, transform: `translate(${-box.x + 40}px, ${-box.y + 40}px) scale(1)` },
         filter: element => !element.classList?.contains('react-flow__handle') && !element.classList?.contains('react-flow__resize-control') && !(privacy && (element.classList?.contains('canvas-card-content') || element.classList?.contains('canvas-card-title') || element.classList?.contains('react-flow__edge-textwrapper'))),
       })
@@ -414,7 +416,7 @@ function CanvasEditorInner({ initial, note, notes, onChange, onOpen, onCreateNot
         } else if (safeUrl(text)) add('link', { url: text }, position)
         else if (text) add('text', { text }, position)
       }}>
-        <ReactFlow nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} onNodesChange={nodesChange}
+        <ReactFlow colorMode={resolvedTheme} nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} onNodesChange={nodesChange}
           onEdgesChange={changes => setSelectedEdges(prev => { const next = new Set(prev); changes.filter(c => c.type === 'select').forEach(c => c.selected ? next.add(c.id) : next.delete(c.id)); return next })}
           onConnect={connect} onConnectEnd={connectEnd} onNodeDragStart={dragStart} onNodeDragStop={dragStop}
           onReconnectStart={() => { reconnecting.current = { success: false } }} onReconnect={(old, connection) => { reconnecting.current.success = true; patchEdge(old.id, { fromNode: connection.source, toNode: connection.target, fromSide: connection.sourceHandle, toSide: connection.targetHandle }) }}
@@ -427,7 +429,7 @@ function CanvasEditorInner({ initial, note, notes, onChange, onOpen, onCreateNot
           connectionMode={ConnectionMode.Loose} nodesDraggable={!readOnly} nodesConnectable={!readOnly} edgesReconnectable={!readOnly}
           deleteKeyCode={null} selectionOnDrag selectionMode={SelectionMode.Partial} multiSelectionKeyCode="Shift" panOnDrag={[1, 2]} panActivationKeyCode="Space" panOnScroll zoomOnScroll={false} zoomOnPinch zoomOnDoubleClick={false}
           snapToGrid={snap} snapGrid={[20, 20]} minZoom={0.05} maxZoom={4} fitView fitViewOptions={{ padding: 0.15 }} elevateNodesOnSelect={false} proOptions={{ hideAttribution: false }}>
-          <Background gap={20} size={1} color="#cbd5e1" />
+          <Background gap={20} size={1} color="rgb(var(--line-slate-300))" />
           <Controls showInteractive={false} />
           {showMap && <MiniMap style={{ width: 120, height: 80 }} pannable zoomable nodeColor={n => canvasColor(n.data.raw.color)} />}
         </ReactFlow>
