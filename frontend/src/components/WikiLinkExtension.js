@@ -284,11 +284,11 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
             const q = query.toLowerCase().trim()
 
             if (!q) {
-              return notes.filter(n => n.type === 'file').slice(0, 10)
+              return notes.filter(n => n.type !== 'folder').slice(0, 10)
             }
 
             const scored = notes
-              .filter(n => n.type === 'file')
+              .filter(n => n.type !== 'folder')
               .map(n => {
                 const name = n.name.toLowerCase()
                 const src  = (n.sourceName || '').toLowerCase()
@@ -492,7 +492,7 @@ export function extractWikiLinks(htmlContent) {
   const seenIds   = new Set()
   const seenNames = new Set()
 
-  const spanRegex = /<span\b([^>]*)>/g
+  const spanRegex = /<(?:span|div)\b([^>]*)>/g
   let m
   while ((m = spanRegex.exec(htmlContent)) !== null) {
     const attrs = m[1]

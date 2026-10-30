@@ -1,3 +1,6 @@
+import { CanvasEmbed, CanvasEmbedPicker } from '../components/canvas/CanvasEmbed'
+import CanvasDocument from '../components/canvas/CanvasDocument'
+import { EMPTY_CANVAS, canvasName, canvasReferences } from '../utils/jsonCanvas'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -430,7 +433,7 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick,
     () =>
       createWikiLinkExtension({
         getAllNotes: () => getAllNotesRef.current?.() ?? [],
-        onWikiLinkClick: name => onWikiLinkClickRef.current?.(name),
+        onWikiLinkClick: (name, id) => onWikiLinkClickRef.current?.(name, id),
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -448,6 +451,7 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick,
       Typography,
       Mathematics,
       wikiLinkExtension,
+      CanvasEmbed.configure({ getNotes: () => getAllNotesRef.current?.() ?? [], onOpen: (name, id) => onWikiLinkClickRef.current?.(name, id) }),
       TableKit.configure({ resizable: true }),
     ],
     content: content || '',
@@ -527,6 +531,7 @@ function TiptapEditor({ content, onUpdate, onSave, getAllNotes, onWikiLinkClick,
             if (latex) editor.chain().focus().setInlineMath(latex).run()
           }} />
         <TableMenu editor={editor} />
+        <CanvasEmbedPicker editor={editor} notes={getAllNotes?.() ?? []} />
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
         <ToolBtn icon="undo" label="Undo (Ctrl+Z)" onClick={() => editor.chain().focus().undo().run()} />
         <ToolBtn icon="redo" label="Redo (Ctrl+Shift+Z)" onClick={() => editor.chain().focus().redo().run()} />
@@ -577,16 +582,16 @@ function NoteTreeNode({
   const dropKey = `folder:${note.id}`
   const isDropTarget = isFolder && dropHighlight === dropKey
 
-  const dragProps = !isFolder ? {
+  const dragProps = {
     draggable: true,
     onDragStart: e => {
       e.stopPropagation()
-      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.effectAllowed = 'copyMove'
       e.dataTransfer.setData('text/plain', note.id)
       onDragStart?.(note.id, sourceKey)
     },
     onDragEnd: () => onDragEnd?.(),
-  } : {}
+  }
 
   const dropProps = isFolder ? {
     onDragEnter: e => { e.preventDefault(); onDropHighlightChange?.(dropKey) },
@@ -615,7 +620,7 @@ function NoteTreeNode({
           <span className="w-[12px] flex-shrink-0" />
         )}
         <Icon
-          name={isFolder ? (isOpen ? 'folder_open' : 'folder') : 'description'}
+          name={isFolder ? (isOpen ? 'folder_open' : 'folder') : note.type === 'canvas' ? 'dashboard' : 'description'}
           className={`text-[13px] flex-shrink-0 ${isFolder ? 'text-amber-500' : 'text-slate-400'}`}
         />
         <span className="truncate flex-1">{note.name}</span>
@@ -643,7 +648,7 @@ function NoteTreeNode({
       {isFolder && isOpen && children
         .sort((a, b) => {
           if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
-          if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+          if ((a.type === 'folder') !== (b.type === 'folder')) return a.type === 'folder' ? -1 : 1
           return a.name.localeCompare(b.name)
         })
         .map(child => (
@@ -710,7 +715,7 @@ function ItemFolder({
     .filter(n => !n.parentId)
     .sort((a, b) => {
       if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
-      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+      if ((a.type === 'folder') !== (b.type === 'folder')) return a.type === 'folder' ? -1 : 1
       return a.name.localeCompare(b.name)
     })
 
@@ -1337,7 +1342,7 @@ export default function LibraryNotes() {
     if (q.length < 2) return []
     const qLow = q.toLowerCase()
     return allLoadedNotes
-      .filter(n => n.type === 'file')
+      .filter(n => n.type !== 'folder')
       .filter(n => {
         const nameMatch = n.name.toLowerCase().includes(qLow)
         const contentMatch = stripHtml(n.content).toLowerCase().includes(qLow)
@@ -1485,7 +1490,7 @@ export default function LibraryNotes() {
 
     const { noteId, sourceKey } = drag
     const note = getSourceNotes(sourceKey).find(n => n.id === noteId)
-    if (!note) return
+    if (!note || note.type === 'folder') return
 
     // No-op: same location
     const sameSource = targetSourceKey === sourceKey
@@ -1544,7 +1549,7 @@ export default function LibraryNotes() {
       // Name-only fallback: prefer a note in the same source as the current note
       // to avoid cross-paper collisions (e.g. every paper having its own "Summary").
       const nameLower = noteName.toLowerCase()
-      const candidates = allLoadedNotes.filter(n => n.type === 'file' && n.name.toLowerCase() === nameLower)
+      const candidates = allLoadedNotes.filter(n => n.type !== 'folder' && n.name.toLowerCase() === nameLower)
       const currentSourceKey = selected?.source ?? 'library'
       target = candidates.find(n => n.sourceKey === currentSourceKey) ?? candidates[0]
     }
@@ -1599,7 +1604,7 @@ export default function LibraryNotes() {
 
   // ── Auto-save ──────────────────────────────────────────────────────────────
   const save = useCallback(async () => {
-    if (!selected || !dirty) return
+    if (!selected || !dirty || selectedNote?.type === 'canvas') return
     try {
       const updated = await notesApi.update(selected.noteId, { content })
       setSourceNotes(selected.source, prev => prev.map(n => n.id === updated.id ? updated : n))
@@ -1665,7 +1670,7 @@ export default function LibraryNotes() {
 
     // Folder creation proceeds immediately
     try {
-      const data = { name: newName.trim(), type, parentId: parentId || null }
+      const data = { name: type === 'canvas' ? canvasName(newName.trim()) : newName.trim(), type, parentId: parentId || null, ...(type === 'canvas' ? { content: EMPTY_CANVAS } : {}) }
       let note
       if (source === 'library') {
         note = await notesApi.createForLibrary(activeLibraryId, data)
@@ -1676,6 +1681,11 @@ export default function LibraryNotes() {
         else if (itemType === 'website') note = await notesApi.createForWebsite(itemId, data)
         else if (itemType === 'github') note = await notesApi.createForGitHubRepo(itemId, data)
         setItemNotes(prev => ({ ...prev, [source]: [...(prev[source] || []), note] }))
+      }
+      if (type === 'canvas') {
+        setOpenTabs(prev => [...prev, { noteId: note.id, tabType: 'note', source, name: note.name }])
+        setActiveTabId(note.id)
+        setGraphView(false)
       }
       if (parentId) setExpandedNotes(prev => ({ ...prev, [parentId]: true }))
       setCreating(null)
@@ -1854,7 +1864,7 @@ export default function LibraryNotes() {
     .filter(n => !n.parentId)
     .sort((a, b) => {
       if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
-      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
+      if ((a.type === 'folder') !== (b.type === 'folder')) return a.type === 'folder' ? -1 : 1
       return a.name.localeCompare(b.name)
     })
 
@@ -1882,12 +1892,12 @@ export default function LibraryNotes() {
     // How many file-notes share the same name?  Used to short-circuit the
     // same-source check when the name is globally unique.
     const sameNameCount = allLoadedNotes.filter(
-      n => n.type === 'file' && n.name.toLowerCase() === noteName
+      n => n.type !== 'folder' && n.name.toLowerCase() === noteName
     ).length
 
     return allLoadedNotes.filter(n => {
-      if (n.type !== 'file' || n.id === noteId) return false
-      return extractWikiLinks(n.content || '').some(({ name, noteId: linkedId }) => {
+      if (n.type === 'folder' || n.id === noteId) return false
+      return (n.type === 'canvas' ? canvasReferences(n, allLoadedNotes) : extractWikiLinks(n.content || '')).some(({ name, noteId: linkedId }) => {
         if (linkedId) return linkedId === noteId
         if (name.toLowerCase() !== noteName) return false
         // Name-only resolution: this link points to selectedNote when the
@@ -1917,6 +1927,13 @@ export default function LibraryNotes() {
               className="p-0.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
             >
               <Icon name="note_add" className="text-[15px]" />
+            </button>
+            <button
+              onClick={() => { setCreating({ source: 'library', parentId: null, type: 'canvas' }); setNewName('') }}
+              title="New canvas in Library"
+              className="p-0.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+            >
+              <Icon name="dashboard" className="text-[15px]" />
             </button>
             <button
               onClick={() => { setCreating({ source: 'library', parentId: null, type: 'folder' }); setNewName('') }}
@@ -2010,7 +2027,7 @@ export default function LibraryNotes() {
             <>
               {/* ── Pinned notes ── */}
               {(() => {
-                const pinnedNotes = allLoadedNotes.filter(n => n.isPinned && n.type === 'file')
+                const pinnedNotes = allLoadedNotes.filter(n => n.isPinned && n.type !== 'folder')
                 if (!pinnedNotes.length) return null
                 return (
                   <div className="mb-2">
@@ -2048,7 +2065,7 @@ export default function LibraryNotes() {
               {/* ── Recently opened ── */}
               {recentNoteIds.length > 0 && (() => {
                 const recentNotes = recentNoteIds
-                  .map(id => allLoadedNotes.find(n => n.id === id && n.type === 'file'))
+                  .map(id => allLoadedNotes.find(n => n.id === id && n.type !== 'folder'))
                   .filter(Boolean)
                 if (!recentNotes.length) return null
                 return (
@@ -2077,7 +2094,7 @@ export default function LibraryNotes() {
               })()}
 
               {/* ── Library notes ── */}
-              {(libRootNotes.length > 0 || (creating?.source === 'library' && !creating.parentId)) && (
+              {(libRootNotes.length > 0 || creating?.source === 'library') && (
                 <div className="mb-1">
                   <p
                     onDragEnter={e => { e.preventDefault(); setDropHighlight('root:library') }}
@@ -2111,8 +2128,9 @@ export default function LibraryNotes() {
                       onPin={noteId => handlePin(noteId, 'library')}
                     />
                   ))}
-                  {creating?.source === 'library' && !creating.parentId && (
+                  {creating?.source === 'library' && (
                     <form onSubmit={handleCreate} className="px-1 py-0.5">
+                      {creating.parentId && <p className="text-[10px] text-slate-500 pb-1">In {libraryNotes.find(n => n.id === creating.parentId)?.name}</p>}
                       <div className="flex items-center gap-1">
                         <Icon
                           name={creating.type === 'folder' ? 'folder' : 'description'}
@@ -2246,6 +2264,12 @@ export default function LibraryNotes() {
                   >
                     Create a note
                   </button>
+                  <button
+                    onClick={() => { setCreating({ source: 'library', parentId: null, type: 'canvas' }); setNewName('') }}
+                    className="mt-3 text-[11px] text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Create a canvas
+                  </button>
                 </div>
               )}
             </>
@@ -2344,6 +2368,23 @@ export default function LibraryNotes() {
                     />
                   )}
                 </>
+              ) : selectedNote?.type === 'canvas' ? (
+                <CanvasDocument key={selectedNote.id} note={{ ...selectedNote, sourceKey: selected.source }} notes={allLoadedNotes}
+                  onSaved={updated => setSourceNotes(updated.sourceKey || selected.source, prev => prev.map(n => n.id === updated.id ? updated : n))}
+                  renderNoteEditor={({ content, onUpdate, onSave, name }) => <TiptapEditor content={content} onUpdate={onUpdate} onSave={onSave} noteName={name} getAllNotes={getAllNotesForSuggestion} onWikiLinkClick={handleWikiLinkClick} />}
+                  onOpen={target => openNoteInTab(target.id, target.sourceKey)}
+                  onCreateNote={async data => {
+                    const source = selected.source
+                    const payload = { ...data, parentId: selectedNote.parentId }
+                    let created
+                    if (source === 'library') created = await notesApi.createForLibrary(activeLibraryId, payload)
+                    else {
+                      const [kind, id] = source.split(':')
+                      created = await (kind === 'paper' ? notesApi.create(id, payload) : kind === 'website' ? notesApi.createForWebsite(id, payload) : notesApi.createForGitHubRepo(id, payload))
+                    }
+                    setSourceNotes(source, prev => [...prev, created])
+                    return { ...created, sourceKey: source }
+                  }} />
               ) : selectedNote ? (
                 <>
                   {/* Editor header with breadcrumb */}
@@ -2501,6 +2542,19 @@ export default function LibraryNotes() {
               </button>
               <button
                 onClick={() => {
+                  setCreating({ source: ctxMenu.sourceKey, parentId: null, type: 'canvas' })
+                  setNewName('')
+                  setExpandedItems(prev => ({ ...prev, [ctxMenu.sourceKey]: true }))
+                  if (!loadedItems[ctxMenu.sourceKey]) loadItemNotes(ctxMenu.sourceKey)
+                  setCtxMenu(null)
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
+              >
+                <Icon name="dashboard" className="text-[14px] text-slate-400" />
+                New canvas here
+              </button>
+              <button
+                onClick={() => {
                   setCreating({ source: ctxMenu.sourceKey, parentId: null, type: 'folder' })
                   setNewName('')
                   setExpandedItems(prev => ({ ...prev, [ctxMenu.sourceKey]: true }))
@@ -2546,6 +2600,18 @@ export default function LibraryNotes() {
                   >
                     <Icon name="note_add" className="text-[14px] text-slate-400" />
                     New file
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCreating({ source: ctxMenu.source, parentId: ctxMenu.note.id, type: 'canvas' })
+                      setNewName('')
+                      setExpandedNotes(prev => ({ ...prev, [ctxMenu.note.id]: true }))
+                      setCtxMenu(null)
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
+                  >
+                    <Icon name="dashboard" className="text-[14px] text-slate-400" />
+                    New canvas
                   </button>
                   <button
                     onClick={() => {
