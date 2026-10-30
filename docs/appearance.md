@@ -2,7 +2,7 @@
 
 Choose **Light**, **Dark**, or **System** from the **Theme** selector at the bottom of the sidebar, or from **Library settings → Appearance**. The selector is also available when the sidebar is collapsed. System is the default and follows changes to your device's appearance.
 
-Dark mode uses Obsidian-inspired charcoal surfaces, subtle gray borders, muted text, and violet accents. The theme applies to navigation, library and project views, tables, forms, dialogs, Copilot, rich-text notes, canvases, graphs, charts, and LaTeX previews. Status colors and user-selected canvas/task colors retain their meaning.
+Dark mode uses charcoal surfaces, subtle gray borders, muted text, and blue accents consistent with light mode. Primary buttons use the same blue (`#2563eb`) as light mode, while links and focus accents use a lighter blue (`#60a5fa`) for contrast against charcoal. The theme applies to navigation, library and project views, tables, forms, dialogs, Copilot, rich-text notes, canvases, graphs, charts, and LaTeX previews. Status colors and user-selected canvas/task colors retain their meaning.
 
 Your preference is saved for this browser and synchronized between open tabs. It applies before the application loads to avoid a light flash. If browser storage is blocked, switching themes still works for the current session. Switching does not reload the page or change your notes.
 

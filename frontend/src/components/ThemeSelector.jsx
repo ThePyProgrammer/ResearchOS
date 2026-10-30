@@ -3,7 +3,7 @@ import { useTheme } from '../context/ThemeContext'
 export default function ThemeSelector({ collapsed = false, sidebar = false }) {
   const { mode, setMode } = useTheme()
   return (
-    <label className={`relative flex items-center gap-2 text-xs rounded-md focus-within:ring-2 focus-within:ring-violet-400 ${sidebar ? 'text-slate-300 px-2 py-2' : 'text-slate-700'} ${collapsed ? 'justify-center' : ''}`}>
+    <label className={`relative flex items-center gap-2 text-xs rounded-md focus-within:ring-2 focus-within:ring-blue-400 ${sidebar ? 'text-slate-300 px-2 py-2' : 'text-slate-700'} ${collapsed ? 'justify-center' : ''}`}>
       <span aria-hidden="true" className="material-symbols-outlined text-[18px]">
         {mode === 'system' ? 'contrast' : mode === 'dark' ? 'dark_mode' : 'light_mode'}
       </span>

@@ -17,7 +17,7 @@ const darkVariables = { '--surface': '30 30 30', '--sidebar': '24 24 24' }
 for (const [index, family] of families.entries()) {
   for (const [i, shade] of shades.entries()) {
     const original = colors[family][shade]
-    const accent = family === 'blue' ? colors.violet : colors[family]
+    const accent = colors[family]
     for (const role of ['fg', 'bg', 'line']) {
       const key = `--${role}-${family}-${shade}`
       lightVariables[key] = rgb(original).join(' ')
@@ -28,7 +28,9 @@ for (const [index, family] of families.entries()) {
       } else if (role === 'line') {
         darkVariables[key] = mix('#1e1e1e', accent[400], shade <= 300 ? 0.35 : 0.65)
       } else {
-        darkVariables[key] = rgb(accent[shade >= 500 ? 300 : shade]).join(' ')
+        // Blue 400 keeps links clear on charcoal; solid buttons retain the
+        // same blue 600 as light mode so white labels remain readable.
+        darkVariables[key] = rgb(accent[shade >= 500 ? (family === 'blue' ? 400 : 300) : shade]).join(' ')
       }
     }
   }
