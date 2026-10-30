@@ -16,7 +16,7 @@ The editor stores [JSON Canvas 1.0](https://jsoncanvas.org/spec/1.0/), the open 
 
 ## Editing and navigation
 
-Drag card headers to move them and selected card borders to resize. Drag blank space for a selection box, Shift-click for multiple selection, or use Ctrl/Command+A. Alt-drag leaves a duplicate at the original position. The inspector offers duplication, deletion, layer ordering, grouping, six alignments, row/column/grid layouts, spacing distribution, and horizontal/vertical justification.
+Drag a card's header or preview body to move it, and selected card borders to resize. Move groups by their headers. Text editors, links, and media controls retain their normal interactions. Drag blank space for a selection box, Shift-click for multiple selection, or use Ctrl/Command+A. Alt-drag leaves a duplicate at the original position. The inspector offers duplication, deletion, layer ordering, grouping, six alignments, row/column/grid layouts, spacing distribution, and horizontal/vertical justification.
 
 Use Space-drag or the middle mouse button to pan, wheel to scroll, Ctrl/Command-wheel or pinch to zoom, and the minimap to navigate. The controls include fit-all, fit-selection, 100% zoom, group navigation, and card text search. Settings expose grid snapping, object snapping, resize aspect ratio, minimap visibility, and read-only mode.
 

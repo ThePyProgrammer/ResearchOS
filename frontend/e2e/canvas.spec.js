@@ -96,6 +96,53 @@ test('imports full JSON Canvas, edits connections, and preserves extensions on e
   expect((await download).suggestedFilename()).toBe('Map.canvas')
 })
 
+for (const surface of ['.canvas-card-title', '.canvas-card-content']) {
+  test(`cards follow the pointer throughout a drag from ${surface}`, async ({ page }) => {
+    const { writes } = await setup(page, [{ id: 'map', name: 'Map.canvas', type: 'canvas', content: makeCanvas([text('a'), text('b', 500)]) }])
+    await openCanvas(page)
+    await page.getByText('Settings', { exact: true }).click()
+    await page.getByRole('checkbox', { name: 'Snap to grid', exact: true }).uncheck()
+    await page.getByText('Settings', { exact: true }).click()
+    const card = page.locator('[data-id="a"].react-flow__node')
+    // Test both the initial selection and a subsequent drag of the selected card.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const handle = await card.locator(surface).boundingBox()
+      const pointer = { x: handle.x + 25, y: handle.y + 15 }
+      await page.mouse.move(pointer.x, pointer.y)
+      await page.mouse.down()
+      // Cross the graph library's drag threshold before measuring movement.
+      await page.mouse.move(pointer.x + 2, pointer.y + 2)
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      const draggingStart = await card.boundingBox()
+      for (const distance of [25, 55, 90]) {
+        await page.mouse.move(pointer.x + 2 + distance, pointer.y + 2 + distance / 2, { steps: 4 })
+        await expect.poll(async () => Math.abs((await card.boundingBox()).x - draggingStart.x - distance)).toBeLessThan(3)
+        await expect.poll(async () => Math.abs((await card.boundingBox()).y - draggingStart.y - distance / 2)).toBeLessThan(3)
+      }
+      await page.mouse.up()
+    }
+    await page.getByRole('button', { name: 'Save canvas', exact: true }).click()
+    await expect.poll(() => writes.length).toBeGreaterThan(0)
+    expect(JSON.parse(writes.at(-1).content).nodes.find(n => n.id === 'a').x).toBeGreaterThan(0)
+  })
+}
+
+test('editing card text does not drag the card', async ({ page }) => {
+  await setup(page, [{ id: 'map', name: 'Map.canvas', type: 'canvas', content: makeCanvas([text('a'), text('b', 500)]) }])
+  await openCanvas(page)
+  const card = page.locator('[data-id="a"].react-flow__node')
+  await card.locator('.canvas-card-content').dblclick()
+  const editor = page.getByRole('textbox', { name: 'Card text', exact: true })
+  await editor.fill('Select and edit this text')
+  const before = await card.boundingBox(), field = await editor.boundingBox()
+  await page.mouse.move(field.x + 10, field.y + 10); await page.mouse.down()
+  await page.mouse.move(field.x + 80, field.y + 20, { steps: 6 }); await page.mouse.up()
+  const after = await card.boundingBox()
+  expect(after.x).toBeCloseTo(before.x, 0)
+  expect(after.y).toBeCloseTo(before.y, 0)
+  await expect(editor).toHaveValue('Select and edit this text')
+})
+
 test('moves and resizes cards, groups selection, and undoes deletion', async ({ page }) => {
   const { writes, errors } = await setup(page, [{ id: 'map', name: 'Map.canvas', type: 'canvas', content: makeCanvas([text('a'), text('b', 400)]) }])
   await openCanvas(page)

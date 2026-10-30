@@ -12,12 +12,17 @@ import './canvas.css'
 const SIDES = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left }
 const MAX_FILE_SIZE = 15 * 1024 * 1024
 const editableTarget = target => target.closest('input, textarea, select, [contenteditable="true"]')
+const preserveCardInteraction = event => {
+  // Native controls and rendered Markdown/HTML links keep their own pointer
+  // behavior. Ordinary preview content participates in the node drag instead.
+  if (event.target.closest('a, button, input, textarea, select, audio, video, iframe, [contenteditable="true"]')) event.stopPropagation()
+}
 
 function CanvasCard({ id, data, selected }) {
   const { raw: node, notes, note, readOnly, patch, beginGesture, editing, setEditing, openFile } = data
   const color = canvasColor(node.color)
   const background = node.type === 'group' ? safeUrl(node.researchos?.backgroundData || node.background, true) : null
-  return <div className={`canvas-card canvas-card-${node.type} ${selected ? 'is-selected' : ''}`} style={{
+  return <div className={`canvas-card canvas-card-${node.type} ${selected ? 'is-selected' : ''}`} onMouseDownCapture={preserveCardInteraction} onTouchStartCapture={preserveCardInteraction} style={{
     borderColor: color, '--card-color': color,
     ...(background ? { backgroundImage: `url(${JSON.stringify(background)})`, backgroundSize: node.backgroundStyle === 'ratio' ? 'contain' : node.backgroundStyle === 'repeat' ? 'auto' : 'cover', backgroundRepeat: node.backgroundStyle === 'repeat' ? 'repeat' : 'no-repeat', backgroundPosition: 'center' } : {}),
   }}>
@@ -28,7 +33,7 @@ function CanvasCard({ id, data, selected }) {
       {node.type === 'file' && <button className="nodrag" onClick={() => openFile(node)} title="Open file">↗</button>}
       {node.type === 'link' && safeUrl(node.url) && <a className="nodrag" href={safeUrl(node.url)} target="_blank" rel="noopener noreferrer" title="Open web page">↗</a>}
     </div>
-    {node.type !== 'group' && <div className={`canvas-card-content ${selected ? 'nodrag nowheel' : ''}`}>
+    {node.type !== 'group' && <div className={`canvas-card-content ${selected ? 'nowheel' : ''}`}>
       {node.type === 'text' && (editing === id && !readOnly
         ? <textarea aria-label="Card text" className="nodrag nowheel" autoFocus value={node.text} onChange={e => patch(id, { text: e.target.value }, false)} onBlur={() => setEditing(null)} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(null) } }} />
         : <div onDoubleClick={() => { if (!readOnly) { beginGesture(); setEditing(id) } }}><MarkdownCard text={node.text || '*Double-click to write…*'} /></div>)}
@@ -162,7 +167,7 @@ function CanvasEditorInner({ initial, note, notes, onChange, onOpen, onCreateNot
   const flowNodes = useMemo(() => doc.nodes.map((n, index) => ({
     id: n.id, type: 'canvas', position: { x: n.x, y: n.y }, width: n.width, height: n.height,
     style: { width: n.width, height: n.height }, zIndex: index,
-    selected: selected.has(n.id), dragHandle: '.canvas-card-title',
+    selected: selected.has(n.id), dragHandle: n.type === 'group' ? '.canvas-card-title' : undefined,
     data: { raw: n, notes, note, readOnly, patch, beginGesture: checkpoint, editing, setEditing, openFile, keepAspectRatio,
       beginResize: id => { checkpoint(); gesture.current = { id, children: [], resize: true } },
       endResize: () => { gesture.current = null; onChange(JSON.stringify(current.current)) },
@@ -393,7 +398,7 @@ function CanvasEditorInner({ initial, note, notes, onChange, onOpen, onCreateNot
       <button onClick={() => setHelp(v => !v)} aria-label="Canvas help">?</button>
     </div>
     {error && <div role="alert" className="canvas-error">{error}<button onClick={() => setError('')} aria-label="Dismiss canvas error">×</button></div>}
-    {help && <div className="canvas-help">Double-click blank space to add text. Drag card headers to move; drag edge dots to connect. Drag on blank space to select, Shift-click to select several. Space-drag / middle-drag to pan; wheel to pan, Ctrl/⌘-wheel or pinch to zoom. Shift+1 fits all; Shift+2 fits selection. Ctrl/⌘+Z undo, +Y redo, +D duplicate, +C/+V copy/paste cards. Delete removes selection. Arrow keys move selected cards; Shift moves farther. Drop notes, folders, URLs, or local files onto the canvas.</div>}
+    {help && <div className="canvas-help">Double-click blank space to add text. Drag cards or group headers to move; drag edge dots to connect. Drag on blank space to select, Shift-click to select several. Space-drag / middle-drag to pan; wheel to pan, Ctrl/⌘-wheel or pinch to zoom. Shift+1 fits all; Shift+2 fits selection. Ctrl/⌘+Z undo, +Y redo, +D duplicate, +C/+V copy/paste cards. Delete removes selection. Arrow keys move selected cards; Shift moves farther. Drop notes, folders, URLs, or local files onto the canvas.</div>}
     <div className="canvas-workspace">
       <div className="canvas-flow" onDragOver={e => { if (!readOnly) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' } }} onDrop={e => {
         e.preventDefault(); e.stopPropagation(); if (readOnly) return
