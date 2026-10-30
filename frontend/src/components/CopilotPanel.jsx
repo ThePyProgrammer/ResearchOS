@@ -30,7 +30,7 @@ function renderWikiLinksInHtml(html) {
   if (!html) return html
   return html.replace(/\[\[([^\]]+)\]\]/g, (_, name) => {
     const safe = name.replace(/"/g, '&quot;')
-    return `<span data-wiki-name="${safe}" title="Open note: ${safe}" class="wiki-link-chat" style="color:#6366f1;font-weight:500;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px;cursor:pointer;text-decoration:underline dotted #a5b4fc;">${name}</span>`
+    return `<span data-wiki-name="${safe}" title="Open note: ${safe}" class="wiki-link-chat" style="color:rgb(var(--fg-indigo-500));font-weight:500;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px;cursor:pointer;text-decoration:underline dotted rgb(var(--line-indigo-300));">${name}</span>`
   })
 }
 

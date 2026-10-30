@@ -124,7 +124,7 @@ export default function TimelineViz({ papers = [], colorBy = 'year', projectId }
       ) : (
         <ResponsiveContainer width="100%" height={200}>
           <ScatterChart margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--bg-slate-100))" vertical={false} />
             <XAxis
               dataKey="_x"
               type="number"
@@ -132,7 +132,7 @@ export default function TimelineViz({ papers = [], colorBy = 'year', projectId }
               domain={[domainMin, domainMax]}
               tickCount={8}
               tickFormatter={formatMonthYear}
-              tick={{ fontSize: 11, fill: '#94a3b8' }}
+              tick={{ fontSize: 11, fill: 'rgb(var(--fg-slate-400))' }}
               axisLine={false}
               tickLine={false}
             />

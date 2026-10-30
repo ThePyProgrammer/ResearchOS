@@ -167,7 +167,7 @@ export default function HeatmapViz({
       .attr('text-anchor', 'end')
       .attr('font-size', '10px')
       .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
-      .attr('fill', '#64748b')
+      .attr('fill', 'rgb(var(--fg-slate-500))')
       .text(d => d.length > 20 ? d.slice(0, 20) + '\u2026' : d)
 
     // Row labels
@@ -181,7 +181,7 @@ export default function HeatmapViz({
       .attr('text-anchor', 'end')
       .attr('font-size', '10px')
       .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
-      .attr('fill', '#64748b')
+      .attr('fill', 'rgb(var(--fg-slate-500))')
       .text(d => d.length > 25 ? d.slice(0, 25) + '\u2026' : d)
 
     // Cells
@@ -202,8 +202,8 @@ export default function HeatmapViz({
           .attr('height', cellH - 1)
           .attr('rx', 2)
           .attr('ry', 2)
-          .attr('fill', count === 0 ? '#f8fafc' : colorScale(count))
-          .attr('stroke', count === 0 ? '#e2e8f0' : 'none')
+          .attr('fill', count === 0 ? 'rgb(var(--bg-slate-50))' : colorScale(count))
+          .attr('stroke', count === 0 ? 'rgb(var(--line-slate-200))' : 'none')
           .attr('stroke-dasharray', count === 0 ? '3,2' : 'none')
           .attr('cursor', count > 0 ? 'pointer' : 'default')
 

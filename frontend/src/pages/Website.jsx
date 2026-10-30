@@ -406,7 +406,7 @@ export default function Website() {
           className="flex flex-col overflow-hidden"
           style={isNotes
             ? { width: leftWidth ?? '55%', minWidth: 240, flexShrink: 0 }
-            : { flex: 1, borderRight: '1px solid #e2e8f0' }}
+            : { flex: 1, borderRight: '1px solid var(--ui-border)' }}
         >
           {/* iframe toolbar */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 bg-slate-50 text-xs text-slate-500">

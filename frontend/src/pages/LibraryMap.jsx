@@ -135,13 +135,13 @@ export default function LibraryMap() {
     const pat = defs.append('pattern')
       .attr('id', 'dot-map').attr('width', 28).attr('height', 28)
       .attr('patternUnits', 'userSpaceOnUse')
-    pat.append('circle').attr('cx', 1).attr('cy', 1).attr('r', 0.9).attr('fill', '#0c2a3e')
+    pat.append('circle').attr('cx', 1).attr('cy', 1).attr('r', 0.9).attr('fill', 'var(--map-grid)')
 
     // Radial vignette
     const vig = defs.append('radialGradient').attr('id', 'vignette')
       .attr('cx', '50%').attr('cy', '50%').attr('r', '52%')
-    vig.append('stop').attr('offset', '0%').attr('stop-color', '#060e1c').attr('stop-opacity', 0)
-    vig.append('stop').attr('offset', '100%').attr('stop-color', '#010409').attr('stop-opacity', 1)
+    vig.append('stop').attr('offset', '0%').attr('stop-color', 'var(--map-bg)').attr('stop-opacity', 0)
+    vig.append('stop').attr('offset', '100%').attr('stop-color', 'var(--map-edge)').attr('stop-opacity', 1)
 
     // Neon glow filter (multi-pass bloom)
     const flt = defs.append('filter').attr('id', 'glow')
@@ -166,13 +166,13 @@ export default function LibraryMap() {
     // Scan line gradient
     const sg = defs.append('linearGradient').attr('id', 'scan-grad')
     sg.append('stop').attr('offset', '0%').attr('stop-color', 'transparent')
-    sg.append('stop').attr('offset', '25%').attr('stop-color', '#22d3ee').attr('stop-opacity', 0.5)
-    sg.append('stop').attr('offset', '50%').attr('stop-color', '#67e8f9').attr('stop-opacity', 0.8)
-    sg.append('stop').attr('offset', '75%').attr('stop-color', '#22d3ee').attr('stop-opacity', 0.5)
+    sg.append('stop').attr('offset', '25%').attr('stop-color', 'rgb(var(--map-accent))').attr('stop-opacity', 0.5)
+    sg.append('stop').attr('offset', '50%').attr('stop-color', 'var(--map-accent-light)').attr('stop-opacity', 0.8)
+    sg.append('stop').attr('offset', '75%').attr('stop-color', 'rgb(var(--map-accent))').attr('stop-opacity', 0.5)
     sg.append('stop').attr('offset', '100%').attr('stop-color', 'transparent')
 
     // ── Background layers ──────────────────────────────────────────────────────
-    svg.append('rect').attr('width', width).attr('height', height).attr('fill', '#060e1c')
+    svg.append('rect').attr('width', width).attr('height', height).attr('fill', 'var(--map-bg)')
     svg.append('rect').attr('width', width).attr('height', height).attr('fill', 'url(#dot-map)')
     svg.append('rect').attr('width', width).attr('height', height).attr('fill', 'url(#vignette)')
 
@@ -184,13 +184,13 @@ export default function LibraryMap() {
       `M ${P+B},${height-P} L ${P},${height-P} L ${P},${height-P-B}`,
       `M ${width-P-B},${height-P} L ${width-P},${height-P} L ${width-P},${height-P-B}`,
     ].forEach(d => svg.append('path').attr('d', d)
-      .attr('fill', 'none').attr('stroke', '#22d3ee')
+      .attr('fill', 'none').attr('stroke', 'rgb(var(--map-accent))')
       .attr('stroke-width', 1.5).attr('opacity', 0.35))
 
     // ── Zoom level readout ─────────────────────────────────────────────────────
     const zoomLabel = svg.append('text')
       .attr('x', width - P - 4).attr('y', height - P - 4)
-      .attr('text-anchor', 'end')      .attr('fill', '#1e4a6a')
+      .attr('text-anchor', 'end')      .attr('fill', 'var(--map-grid-label)')
       .attr('font-size', '10').attr('font-family', 'monospace')
       .attr('letter-spacing', '0.06em').text('1.0×')
 
@@ -304,12 +304,12 @@ export default function LibraryMap() {
     const tip = document.createElement('div')
     Object.assign(tip.style, {
       position: 'fixed', pointerEvents: 'none',
-      background: 'rgba(4,10,20,0.97)',
-      border: '1px solid rgba(34,211,238,0.3)',
+      background: 'rgb(var(--map-panel) / 0.97)',
+      border: '1px solid rgb(var(--map-accent) / 0.3)',
       borderRadius: '6px', padding: '9px 13px',
       fontSize: '12px', color: '#e2e8f0', maxWidth: '240px',
       opacity: '0', zIndex: '9999', transition: 'opacity 0.1s',
-      lineHeight: '1.5', boxShadow: '0 0 24px rgba(34,211,238,0.12), 0 8px 32px rgba(0,0,0,0.7)',
+      lineHeight: '1.5', boxShadow: '0 0 24px rgb(var(--map-accent) / 0.12), 0 8px 32px rgba(0,0,0,0.7)',
     })
     document.body.appendChild(tip)
 
@@ -342,7 +342,7 @@ export default function LibraryMap() {
         const colNames = (d.collections || []).map(id => cm[id]?.name).filter(Boolean).join(', ') || 'Uncollected'
         tip.innerHTML =
           `<div style="font-weight:600;margin-bottom:3px;color:#f8fafc">${d.title}</div>` +
-          `<div style="color:#22d3ee;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px">${TYPE_LABELS[d.itemType] || d.itemType}</div>` +
+          `<div style="color:rgb(var(--map-accent));font-size:10px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px">${TYPE_LABELS[d.itemType] || d.itemType}</div>` +
           `<div style="color:#94a3b8;font-size:11px">${colNames}</div>`
         tip.style.opacity = '1'
         tip.style.left    = `${event.clientX + 15}px`
@@ -415,9 +415,9 @@ export default function LibraryMap() {
 
       gBrush.call(brush)
       gBrush.select('.selection')
-        .attr('fill', 'rgba(34,211,238,0.07)')
-        .attr('stroke', '#22d3ee').attr('stroke-width', 1)
-      gBrush.selectAll('.handle').attr('fill', '#22d3ee').attr('fill-opacity', 0.4)
+        .attr('fill', 'rgb(var(--map-accent) / 0.07)')
+        .attr('stroke', 'rgb(var(--map-accent))').attr('stroke-width', 1)
+      gBrush.selectAll('.handle').attr('fill', 'rgb(var(--map-accent))').attr('fill-opacity', 0.4)
     }
 
     return () => {
@@ -463,9 +463,9 @@ export default function LibraryMap() {
       ]
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  const CYAN = '#22d3ee'
+  const CYAN = 'rgb(var(--map-accent))'
   return (
-    <div className="flex flex-col h-full" style={{ background: '#060e1c' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--map-bg)' }}>
 
       {/* CSS keyframes (always in DOM) */}
       <style>{`
@@ -477,10 +477,10 @@ export default function LibraryMap() {
       <div
         className="flex items-center gap-2 px-4 py-2 flex-shrink-0 flex-wrap"
         style={{
-          background: 'rgba(4,10,20,0.92)',
-          borderBottom: `1px solid rgba(34,211,238,0.18)`,
+          background: 'rgb(var(--map-panel) / 0.92)',
+          borderBottom: `1px solid rgb(var(--map-accent) / 0.18)`,
           backdropFilter: 'blur(10px)',
-          boxShadow: `0 1px 0 rgba(34,211,238,0.05)`,
+          boxShadow: `0 1px 0 rgb(var(--map-accent) / 0.05)`,
         }}
       >
         {/* Title */}
@@ -491,18 +491,18 @@ export default function LibraryMap() {
           </span>
         </div>
 
-        <div style={{ width: 1, height: 14, background: 'rgba(34,211,238,0.18)' }} />
+        <div style={{ width: 1, height: 14, background: 'rgb(var(--map-accent) / 0.18)' }} />
 
         {/* Color-by */}
-        <div className="flex items-center gap-px p-0.5 rounded" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.12)' }}>
+        <div className="flex items-center gap-px p-0.5 rounded" style={{ background: 'rgb(var(--map-accent) / 0.05)', border: '1px solid rgb(var(--map-accent) / 0.12)' }}>
           {[['collection', 'Collections'], ['type', 'Item type']].map(([v, lbl]) => (
             <button
               key={v}
               onClick={() => setColorBy(v)}
               className="px-2.5 py-1 rounded text-xs transition-all"
               style={colorBy === v
-                ? { background: 'rgba(34,211,238,0.18)', color: CYAN, fontWeight: 600 }
-                : { color: '#64748b' }}
+                ? { background: 'rgb(var(--map-accent) / 0.18)', color: CYAN, fontWeight: 600 }
+                : { color: 'var(--map-muted)' }}
             >
               {lbl}
             </button>
@@ -510,13 +510,13 @@ export default function LibraryMap() {
         </div>
 
         {/* Mode */}
-        <div className="flex items-center gap-px p-0.5 rounded" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.12)' }}>
+        <div className="flex items-center gap-px p-0.5 rounded" style={{ background: 'rgb(var(--map-accent) / 0.05)', border: '1px solid rgb(var(--map-accent) / 0.12)' }}>
           <button
             onClick={() => { setSelectMode(false); setSelectedPoints([]) }}
             className="flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-all"
             style={!selectMode
-              ? { background: 'rgba(34,211,238,0.18)', color: CYAN, fontWeight: 600 }
-              : { color: '#64748b' }}
+              ? { background: 'rgb(var(--map-accent) / 0.18)', color: CYAN, fontWeight: 600 }
+              : { color: 'var(--map-muted)' }}
           >
             <Icon name="pan_tool" className="text-[13px]" />
             Explore
@@ -526,7 +526,7 @@ export default function LibraryMap() {
             className="flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-all"
             style={selectMode
               ? { background: 'rgba(96,165,250,0.2)', color: '#93c5fd', fontWeight: 600 }
-              : { color: '#64748b' }}
+              : { color: 'var(--map-muted)' }}
           >
             <Icon name="highlight_alt" className="text-[13px]" />
             Select
@@ -546,7 +546,7 @@ export default function LibraryMap() {
 
         <div className="ml-auto flex items-center gap-3">
           {!loading && points.length > 0 && (
-            <span style={{ color: '#475569', fontSize: '10px', letterSpacing: '0.1em', fontWeight: 700, textTransform: 'uppercase' }}>
+            <span style={{ color: 'var(--map-faint)', fontSize: '10px', letterSpacing: '0.1em', fontWeight: 700, textTransform: 'uppercase' }}>
               {points.length} nodes
             </span>
           )}
@@ -554,7 +554,7 @@ export default function LibraryMap() {
             onClick={() => setLegendOpen(o => !o)}
             title={legendOpen ? 'Hide legend' : 'Show legend'}
             className="p-1.5 rounded transition-colors"
-            style={{ color: legendOpen ? CYAN : '#475569' }}
+            style={{ color: legendOpen ? CYAN : 'var(--map-faint)' }}
           >
             <Icon name="legend_toggle" className="text-[18px]" />
           </button>
@@ -564,11 +564,11 @@ export default function LibraryMap() {
       {/* ── Canvas + legend ── */}
       <div className="flex flex-1 min-h-0">
 
-        <div ref={wrapperRef} className="flex-1 relative overflow-hidden" style={{ background: '#060e1c' }}>
+        <div ref={wrapperRef} className="flex-1 relative overflow-hidden" style={{ background: 'var(--map-bg)' }}>
 
           {/* Loading */}
           {loading && (
-            <div className="absolute inset-0 flex items-center justify-center" style={{ background: '#060e1c' }}>
+            <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'var(--map-bg)' }}>
               <div className="text-center">
                 <div className="relative w-14 h-14 mx-auto mb-5">
                   <div style={{
@@ -583,13 +583,13 @@ export default function LibraryMap() {
                   }} />
                   <div style={{
                     position: 'absolute', inset: '10px', borderRadius: '50%',
-                    background: `radial-gradient(circle, rgba(34,211,238,0.15), transparent)`,
+                    background: `radial-gradient(circle, rgb(var(--map-accent) / 0.15), transparent)`,
                   }} />
                 </div>
                 <p style={{ color: CYAN, fontSize: '11px', letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700 }}>
                   Computing semantic map
                 </p>
-                <p style={{ color: '#475569', fontSize: '11px', marginTop: '4px' }}>
+                <p style={{ color: 'var(--map-faint)', fontSize: '11px', marginTop: '4px' }}>
                   Running UMAP projection…
                 </p>
               </div>
@@ -598,7 +598,7 @@ export default function LibraryMap() {
 
           {/* Error */}
           {!loading && error && (
-            <div className="absolute inset-0 flex items-center justify-center" style={{ background: '#060e1c' }}>
+            <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'var(--map-bg)' }}>
               <div className="text-center max-w-sm px-6">
                 <Icon name="error_outline" className="text-[44px] mb-3" style={{ color: '#f87171' }} />
                 <p className="text-sm font-semibold mb-2" style={{ color: '#f1f5f9' }}>Map failed to load</p>
@@ -615,11 +615,11 @@ export default function LibraryMap() {
 
           {/* Empty */}
           {!loading && !error && points.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center" style={{ background: '#060e1c' }}>
+            <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'var(--map-bg)' }}>
               <div className="text-center max-w-sm px-6">
                 <Icon name="scatter_plot" className="text-[52px] mb-4" style={{ color: '#1e3a5f' }} />
-                <p className="text-sm font-semibold mb-2" style={{ color: '#64748b' }}>No embeddings yet</p>
-                <p className="text-xs leading-relaxed" style={{ color: '#475569' }}>
+                <p className="text-sm font-semibold mb-2" style={{ color: 'var(--map-muted)' }}>No embeddings yet</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--map-faint)' }}>
                   Add papers and use semantic search to index items.
                 </p>
               </div>
@@ -633,7 +633,7 @@ export default function LibraryMap() {
           {selectMode && !loading && points.length > 0 && (
             <div className="absolute bottom-5 left-1/2 -translate-x-1/2 pointer-events-none">
               <div className="text-xs px-4 py-1.5 rounded-full"
-                style={{ background: 'rgba(34,211,238,0.05)', border: `1px solid rgba(34,211,238,0.2)`, color: CYAN, letterSpacing: '0.05em' }}>
+                style={{ background: 'rgb(var(--map-accent) / 0.05)', border: `1px solid rgb(var(--map-accent) / 0.2)`, color: CYAN, letterSpacing: '0.05em' }}>
                 Drag to select a region
               </div>
             </div>
@@ -642,7 +642,7 @@ export default function LibraryMap() {
 
         {/* Legend */}
         {legendOpen && !loading && points.length > 0 && (
-          <div className="w-44 flex-shrink-0 overflow-y-auto" style={{ background: 'rgba(4,10,20,0.9)', borderLeft: `1px solid rgba(34,211,238,0.1)` }}>
+          <div className="w-44 flex-shrink-0 overflow-y-auto" style={{ background: 'rgb(var(--map-panel) / 0.9)', borderLeft: `1px solid rgb(var(--map-accent) / 0.1)` }}>
             <div className="p-3 pt-4">
               <p className="mb-3" style={{ color: CYAN, fontSize: '9px', letterSpacing: '0.14em', fontWeight: 700, textTransform: 'uppercase' }}>
                 {colorBy === 'type' ? 'Item type' : 'Collections'}

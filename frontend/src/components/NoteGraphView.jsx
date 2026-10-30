@@ -204,7 +204,7 @@ export default function NoteGraphView({
       .attr('id', 'wiki-arrow').attr('viewBox', '0 -5 10 10')
       .attr('refX', 22).attr('refY', 0)
       .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
-      .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#cbd5e1')
+      .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', 'rgb(var(--line-slate-300))')
 
     const dotPattern = defs.append('pattern')
       .attr('id', 'dot-grid')
@@ -212,7 +212,7 @@ export default function NoteGraphView({
       .attr('width', 24).attr('height', 24)
     dotPattern.append('circle')
       .attr('cx', 12).attr('cy', 12).attr('r', 1)
-      .attr('fill', '#cbd5e1')
+      .attr('fill', 'rgb(var(--line-slate-300))')
 
     // Background rect — sits behind the zoom group, pattern moves with zoom
     svgEl.append('rect')
@@ -284,7 +284,7 @@ export default function NoteGraphView({
     // ── Links ─────────────────────────────────────────────────────────────────
     const linkEls = g.append('g').attr('class', 'links')
       .selectAll('line').data(links).join('line')
-      .attr('stroke', '#cbd5e1').attr('stroke-width', 1.5)
+      .attr('stroke', 'rgb(var(--line-slate-300))').attr('stroke-width', 1.5)
       .attr('marker-end', 'url(#wiki-arrow)')
     linkElsRef.current = linkEls
 
@@ -327,12 +327,12 @@ export default function NoteGraphView({
     nodeEls.append('circle').attr('r', d => nodeRadius(d.degree) + 5).attr('fill', 'transparent')
     nodeEls.append('circle').attr('r', d => nodeRadius(d.degree))
       .attr('fill',   d => mergedColors[d.source] || mergedColors.library)
-      .attr('stroke', '#fff').attr('stroke-width', 2.5)
+      .attr('stroke', 'var(--ui-surface)').attr('stroke-width', 2.5)
     nodeEls.append('text').text(d => d.name)
       .attr('x', 0).attr('y', d => nodeRadius(d.degree) + 13)
       .attr('font-size',   '11px')
       .attr('font-family', 'ui-sans-serif, system-ui, sans-serif')
-      .attr('fill',        '#334155')
+      .attr('fill',        'rgb(var(--fg-slate-700))')
       .attr('text-anchor', 'middle')
       .attr('pointer-events', 'none')
 
@@ -508,7 +508,7 @@ export default function NoteGraphView({
           <svg
             ref={svgRef}
             className="w-full h-full"
-            style={{ background: 'radial-gradient(ellipse at center, #f8fafc 0%, #f1f5f9 100%)' }}
+            style={{ background: 'radial-gradient(ellipse at center, rgb(var(--bg-slate-50)) 0%, rgb(var(--bg-slate-100)) 100%)' }}
           />
 
           {/* ── Options panel — top-right overlay ─────────────────────────── */}

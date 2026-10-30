@@ -6,12 +6,14 @@
  */
 
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { github } from 'react-syntax-highlighter/dist/esm/styles/hljs'
+import { github, atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs'
+import { useTheme } from '../context/ThemeContext'
 import latex from 'react-syntax-highlighter/dist/esm/languages/hljs/latex'
 
 SyntaxHighlighter.registerLanguage('latex', latex)
 
 export default function LaTeXPreviewPanel({ texContent }) {
+  const { resolvedTheme } = useTheme()
   if (!texContent || !texContent.trim()) {
     return (
       <div
@@ -20,7 +22,7 @@ export default function LaTeXPreviewPanel({ texContent }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#94a3b8',
+          color: 'rgb(var(--fg-slate-400))',
           fontSize: 12,
           fontStyle: 'italic',
           fontFamily: 'ui-sans-serif, system-ui, sans-serif',
@@ -35,12 +37,12 @@ export default function LaTeXPreviewPanel({ texContent }) {
     <div style={{ height: '100%', overflowY: 'auto', fontSize: 12, fontFamily: 'monospace' }}>
       <SyntaxHighlighter
         language="latex"
-        style={github}
+        style={resolvedTheme === 'dark' ? atomOneDark : github}
         showLineNumbers={false}
         customStyle={{
           margin: 0,
           padding: '12px 16px',
-          background: '#f8fafc',
+          background: 'rgb(var(--bg-slate-50))',
           fontSize: 12,
           lineHeight: '1.6',
           minHeight: '100%',

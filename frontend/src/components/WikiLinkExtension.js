@@ -122,8 +122,8 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
           `top:${y}px`,
           `left:${x}px`,
           'z-index:9999',
-          'background:#fff',
-          'border:1px solid #e2e8f0',
+          'background:var(--ui-surface)',
+          'border:1px solid rgb(var(--line-slate-200))',
           'border-radius:8px',
           'box-shadow:0 8px 24px rgba(0,0,0,.12)',
           'min-width:200px',
@@ -133,15 +133,15 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
 
         // Header: show the target note name
         const header = document.createElement('div')
-        header.style.cssText = 'padding:6px 12px 5px;border-bottom:1px solid #f1f5f9;margin-bottom:4px;'
-        header.innerHTML = `<span style="font-size:10px;color:#94a3b8;display:block;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px;">Wiki link</span><span style="font-size:12px;color:#334155;font-weight:500;">📄 ${noteName}</span>`
+        header.style.cssText = 'padding:6px 12px 5px;border-bottom:1px solid rgb(var(--bg-slate-100));margin-bottom:4px;'
+        header.innerHTML = `<span style="font-size:10px;color:rgb(var(--fg-slate-400));display:block;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px;">Wiki link</span><span style="font-size:12px;color:rgb(var(--fg-slate-700));font-weight:500;">📄 ${noteName}</span>`
         ctxMenu.appendChild(header)
 
         // ── Set label ─────────────────────────────────────────────────────
         const setLabelBtn = document.createElement('div')
-        setLabelBtn.style.cssText = 'padding:6px 12px;cursor:pointer;font-size:12px;color:#374151;display:flex;align-items:center;gap:8px;'
+        setLabelBtn.style.cssText = 'padding:6px 12px;cursor:pointer;font-size:12px;color:rgb(var(--fg-gray-700));display:flex;align-items:center;gap:8px;'
         setLabelBtn.innerHTML = '<span style="font-size:13px;">✏️</span> Set label'
-        setLabelBtn.addEventListener('mouseenter', () => setLabelBtn.style.background = '#f8fafc')
+        setLabelBtn.addEventListener('mouseenter', () => setLabelBtn.style.background = 'rgb(var(--bg-slate-50))')
         setLabelBtn.addEventListener('mouseleave', () => setLabelBtn.style.background = '')
         setLabelBtn.addEventListener('mousedown', e => {
           e.preventDefault()
@@ -158,15 +158,15 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
           const currentText = view.state.doc.textBetween(range.from, range.to)
           input.value = currentText
           input.placeholder = 'Display label…'
-          input.style.cssText = 'flex:1;min-width:0;padding:4px 8px;font-size:12px;border:1px solid #cbd5e1;border-radius:6px;outline:none;'
-          input.addEventListener('focus', () => input.style.borderColor = '#6366f1')
-          input.addEventListener('blur',  () => input.style.borderColor = '#cbd5e1')
+          input.style.cssText = 'flex:1;min-width:0;padding:4px 8px;font-size:12px;border:1px solid rgb(var(--line-slate-300));border-radius:6px;outline:none;'
+          input.addEventListener('focus', () => input.style.borderColor = 'rgb(var(--fg-indigo-500))')
+          input.addEventListener('blur',  () => input.style.borderColor = 'rgb(var(--line-slate-300))')
 
           const confirmBtn = document.createElement('button')
           confirmBtn.textContent = '✓'
-          confirmBtn.style.cssText = 'padding:4px 8px;font-size:12px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer;flex-shrink:0;'
-          confirmBtn.addEventListener('mouseenter', () => confirmBtn.style.background = '#4f46e5')
-          confirmBtn.addEventListener('mouseleave', () => confirmBtn.style.background = '#6366f1')
+          confirmBtn.style.cssText = 'padding:4px 8px;font-size:12px;background:rgb(var(--bg-indigo-500));color:#fff;border:none;border-radius:6px;cursor:pointer;flex-shrink:0;'
+          confirmBtn.addEventListener('mouseenter', () => confirmBtn.style.background = 'rgb(var(--bg-indigo-600))')
+          confirmBtn.addEventListener('mouseleave', () => confirmBtn.style.background = 'rgb(var(--bg-indigo-500))')
 
           function applyLabel() {
             const newLabel = input.value.trim()
@@ -200,9 +200,9 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
 
         // ── Remove link ───────────────────────────────────────────────────
         const removeLinkBtn = document.createElement('div')
-        removeLinkBtn.style.cssText = 'padding:6px 12px;cursor:pointer;font-size:12px;color:#ef4444;display:flex;align-items:center;gap:8px;'
+        removeLinkBtn.style.cssText = 'padding:6px 12px;cursor:pointer;font-size:12px;color:rgb(var(--fg-red-500));display:flex;align-items:center;gap:8px;'
         removeLinkBtn.innerHTML = '<span style="font-size:13px;">🔗</span> Remove link'
-        removeLinkBtn.addEventListener('mouseenter', () => removeLinkBtn.style.background = '#fef2f2')
+        removeLinkBtn.addEventListener('mouseenter', () => removeLinkBtn.style.background = 'rgb(var(--bg-red-50))')
         removeLinkBtn.addEventListener('mouseleave', () => removeLinkBtn.style.background = '')
         removeLinkBtn.addEventListener('mousedown', e => {
           e.preventDefault()
@@ -321,10 +321,10 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
             let selectedIndex = 0
 
             const SOURCE_BADGE = {
-              library: { bg: '#f1f5f9', color: '#64748b', label: 'Library' },
-              paper:   { bg: '#dbeafe', color: '#2563eb', label: 'Paper'   },
-              website: { bg: '#ccfbf1', color: '#0d9488', label: 'Website' },
-              github:  { bg: '#ede9fe', color: '#7c3aed', label: 'GitHub'  },
+              library: { bg: 'rgb(var(--bg-slate-100))', color: 'rgb(var(--fg-slate-500))', label: 'Library' },
+              paper:   { bg: 'rgb(var(--bg-blue-100))', color: 'rgb(var(--fg-blue-600))', label: 'Paper'   },
+              website: { bg: 'rgb(var(--bg-teal-100))', color: 'rgb(var(--fg-teal-600))', label: 'Website' },
+              github:  { bg: 'rgb(var(--bg-violet-100))', color: 'rgb(var(--fg-violet-600))', label: 'GitHub'  },
             }
 
             function removePopup() {
@@ -338,8 +338,8 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
               popup.style.cssText = [
                 'position:fixed',
                 'z-index:9999',
-                'background:#fff',
-                'border:1px solid #e2e8f0',
+                'background:var(--ui-surface)',
+                'border:1px solid rgb(var(--line-slate-200))',
                 'border-radius:8px',
                 'box-shadow:0 8px 24px rgba(0,0,0,.12)',
                 'min-width:300px',
@@ -366,7 +366,7 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
               if (!props.items.length) {
                 const empty = document.createElement('div')
                 empty.style.cssText =
-                  'padding:8px 12px;font-size:12px;color:#94a3b8;font-style:italic;'
+                  'padding:8px 12px;font-size:12px;color:rgb(var(--fg-slate-400));font-style:italic;'
                 empty.textContent = 'No notes found'
                 popup.appendChild(empty)
                 return
@@ -380,21 +380,21 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
                   'display:flex',
                   'align-items:center',
                   'gap:7px',
-                  i === selectedIndex ? 'background:#f1f5f9' : '',
+                  i === selectedIndex ? 'background:rgb(var(--bg-slate-100))' : '',
                 ].join(';')
 
                 if (item.isNew) {
                   el.innerHTML = [
-                    `<span style="font-size:10px;background:#eef2ff;color:#6366f1;padding:1px 6px;border-radius:4px;font-weight:600;flex-shrink:0;">new</span>`,
-                    `<span style="font-size:12px;color:#6366f1;">${item.name}</span>`,
+                    `<span style="font-size:10px;background:rgb(var(--bg-indigo-50));color:rgb(var(--fg-indigo-500));padding:1px 6px;border-radius:4px;font-weight:600;flex-shrink:0;">new</span>`,
+                    `<span style="font-size:12px;color:rgb(var(--fg-indigo-500));">${item.name}</span>`,
                   ].join('')
                 } else {
                   const badge = SOURCE_BADGE[item.source] || SOURCE_BADGE.library
                   const sourceName = item.sourceName || badge.label
                   const truncated = sourceName.length > 28 ? sourceName.slice(0, 26) + '…' : sourceName
                   el.innerHTML = [
-                    `<span style="font-size:11px;color:#94a3b8;flex-shrink:0;">📄</span>`,
-                    `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#1e293b;">${item.name}</span>`,
+                    `<span style="font-size:11px;color:rgb(var(--fg-slate-400));flex-shrink:0;">📄</span>`,
+                    `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:rgb(var(--fg-slate-800));">${item.name}</span>`,
                     `<span style="flex-shrink:0;font-size:10px;padding:1px 6px;border-radius:4px;background:${badge.bg};color:${badge.color};font-weight:500;white-space:nowrap;" title="${sourceName}">${truncated}</span>`,
                   ].join('')
                 }
@@ -413,7 +413,7 @@ export function createWikiLinkExtension({ getAllNotes, onWikiLinkClick }) {
             function highlight() {
               if (!popup) return
               Array.from(popup.children).forEach((el, i) => {
-                el.style.background = i === selectedIndex ? '#f1f5f9' : ''
+                el.style.background = i === selectedIndex ? 'rgb(var(--bg-slate-100))' : ''
               })
             }
 

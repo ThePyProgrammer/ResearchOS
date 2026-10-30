@@ -3,6 +3,7 @@ import github from '../assets/profile-icons/github.svg'
 import googlescholar from '../assets/profile-icons/googlescholar.svg'
 import linkedin from '../assets/profile-icons/linkedin.svg'
 import x from '../assets/profile-icons/x.svg'
+import './ProfileIcon.css'
 
 const BRAND_ICONS = { orcid, github, googlescholar, linkedin, x }
 
@@ -11,7 +12,7 @@ function Icon({ name, className = '' }) {
 }
 
 export default function ProfileIcon({ name, className = '' }) {
-  const iconClassName = 'opacity-50 transition-opacity duration-150 group-hover/profile:opacity-100 group-focus-visible/profile:opacity-100 motion-reduce:transition-none ' + className
+  const iconClassName = `profile-icon profile-icon--${name} opacity-50 dark:opacity-100 transition-opacity duration-150 group-hover/profile:opacity-100 group-focus-visible/profile:opacity-100 motion-reduce:transition-none ` + className
   if (name === 'openreview') {
     return <Icon name="rate_review" className={'text-red-700 ' + iconClassName} />
   }
@@ -20,5 +21,7 @@ export default function ProfileIcon({ name, className = '' }) {
       <circle cx="12" cy="12" r="9" /><ellipse cx="12" cy="12" rx="4" ry="9" /><path d="M3 12h18" />
     </svg>
   }
-  return <img src={BRAND_ICONS[name]} alt="" aria-hidden="true" className={'shrink-0 object-contain ' + iconClassName} />
+  return <span aria-hidden="true" className={'profile-icon-brand shrink-0 ' + iconClassName} style={{ '--profile-icon-image': `url("${BRAND_ICONS[name]}")` }}>
+    <img src={BRAND_ICONS[name]} alt="" className="h-full w-full object-contain dark:hidden" />
+  </span>
 }

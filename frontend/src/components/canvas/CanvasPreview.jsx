@@ -72,7 +72,7 @@ export default function CanvasPreview({ content, notes = [], sourceKey, visited 
   const byId = new Map(doc.nodes.map(n => [n.id, n]))
   return <svg className="canvas-preview" viewBox={`${box.x - 20} ${box.y - 20} ${width} ${height}`} role="img" aria-label="Nested canvas preview">
     {doc.nodes.map(n => <g key={n.id}>
-      <rect x={n.x} y={n.y} width={n.width} height={n.height} rx="8" fill={n.type === 'group' ? '#e2e8f0' : 'white'} stroke={canvasColor(n.color)} strokeWidth="3" />
+      <rect x={n.x} y={n.y} width={n.width} height={n.height} rx="8" fill={n.type === 'group' ? 'rgb(var(--bg-slate-200))' : 'var(--ui-surface)'} stroke={canvasColor(n.color)} strokeWidth="3" />
       <foreignObject x={n.x + 10} y={n.y + 10} width={Math.max(n.width - 20, 1)} height={Math.max(n.height - 20, 1)}>
         <div className="canvas-preview-content">
           {n.type === 'text' && <MarkdownCard text={n.text} />}

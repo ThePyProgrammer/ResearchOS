@@ -1,0 +1,19 @@
+/* Reuse the bundled SVG silhouettes, with legible colors on dark surfaces. */
+.dark .profile-icon-brand {
+  background-color: var(--profile-icon-color, rgb(var(--fg-slate-800)));
+  -webkit-mask: var(--profile-icon-image) center / contain no-repeat;
+  mask: var(--profile-icon-image) center / contain no-repeat;
+}
+
+.dark .profile-icon--linkedin,
+.dark .profile-icon--googlescholar {
+  --profile-icon-color: rgb(var(--fg-blue-400));
+}
+
+.dark .profile-icon--orcid {
+  --profile-icon-color: #a6ce39;
+}
+
+.dark .profile-icon--website {
+  color: rgb(var(--fg-blue-400));
+}
