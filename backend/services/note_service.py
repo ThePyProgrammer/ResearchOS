@@ -10,6 +10,8 @@ from agents.prompts import NOTE_GENERATION
 from services.cost_service import record_openai_usage
 
 from models.note import Note, NoteCreate, NoteUpdate
+from models.canvas import validate_canvas
+from fastapi import HTTPException
 from models.note_batch import ItemNotes, NoteBatchRequest
 from services.db import get_client
 
@@ -124,6 +126,14 @@ def update_note(note_id: str, data: NoteUpdate) -> Optional[Note]:
         return None
     # exclude_unset (not exclude_none) so callers can explicitly set fields to null
     updates = data.model_dump(exclude_unset=True)
+    if existing.type == "canvas":
+        if "content" in updates:
+            try:
+                validate_canvas(updates["content"])
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if updates.get("name") and not updates["name"].lower().endswith(".canvas"):
+            updates["name"] += ".canvas"
     # When reassigning to a different source, null out all other source fields so
     # a note always belongs to exactly one source at a time.
     if any(f in updates for f in _SOURCE_FIELDS):
