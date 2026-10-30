@@ -139,8 +139,8 @@ export function createCitationExtension({
           `top:${y}px`,
           `left:${x}px`,
           'z-index:9999',
-          'background:#fff',
-          'border:1px solid #e2e8f0',
+          'background:var(--ui-surface)',
+          'border:1px solid rgb(var(--line-slate-200))',
           'border-radius:8px',
           'box-shadow:0 8px 24px rgba(0,0,0,.12)',
           'min-width:220px',
@@ -150,13 +150,13 @@ export function createCitationExtension({
 
         // ── Header: label + citation key ────────────────────────────────────
         const header = document.createElement('div')
-        header.style.cssText = 'padding:6px 12px 5px;border-bottom:1px solid #f1f5f9;margin-bottom:4px;'
+        header.style.cssText = 'padding:6px 12px 5px;border-bottom:1px solid rgb(var(--bg-slate-100));margin-bottom:4px;'
         const labelText = displayLabel || '(citation)'
         const keyText = citationKey || ''
         header.innerHTML = `
-          <span style="font-size:10px;color:#94a3b8;display:block;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px;">Citation</span>
-          <span style="font-size:12px;color:#334155;font-weight:500;">${labelText}</span>
-          ${keyText ? `<span style="display:block;font-size:10px;color:#64748b;margin-top:1px;font-family:monospace;">${keyText}</span>` : ''}
+          <span style="font-size:10px;color:rgb(var(--fg-slate-400));display:block;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px;">Citation</span>
+          <span style="font-size:12px;color:rgb(var(--fg-slate-700));font-weight:500;">${labelText}</span>
+          ${keyText ? `<span style="display:block;font-size:10px;color:rgb(var(--fg-slate-500));margin-top:1px;font-family:monospace;">${keyText}</span>` : ''}
         `
         ctxMenu.appendChild(header)
 
@@ -164,7 +164,7 @@ export function createCitationExtension({
           const btn = document.createElement('div')
           btn.style.cssText = `padding:6px 12px;cursor:pointer;font-size:12px;color:${color};display:flex;align-items:center;gap:8px;`
           btn.innerHTML = `<span style="font-size:13px;">${icon}</span> ${label}`
-          btn.addEventListener('mouseenter', () => { btn.style.background = '#f8fafc' })
+          btn.addEventListener('mouseenter', () => { btn.style.background = 'rgb(var(--bg-slate-50))' })
           btn.addEventListener('mouseleave', () => { btn.style.background = '' })
           btn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); onClick(e) })
           ctxMenu.appendChild(btn)
@@ -172,13 +172,13 @@ export function createCitationExtension({
         }
 
         // ── Open paper ───────────────────────────────────────────────────────
-        addMenuItem('📄', 'Open paper', '#374151', () => {
+        addMenuItem('📄', 'Open paper', 'rgb(var(--fg-gray-700))', () => {
           removeCtxMenu()
           onOpenItem?.(paperId, websiteId)
         })
 
         // ── Copy citation key ────────────────────────────────────────────────
-        addMenuItem('🔑', 'Copy citation key', '#374151', async () => {
+        addMenuItem('🔑', 'Copy citation key', 'rgb(var(--fg-gray-700))', async () => {
           if (citationKey) {
             await navigator.clipboard.writeText(citationKey).catch(() => {})
           }
@@ -186,7 +186,7 @@ export function createCitationExtension({
         })
 
         // ── Copy BibTeX entry ────────────────────────────────────────────────
-        addMenuItem('📋', 'Copy BibTeX entry', '#374151', async () => {
+        addMenuItem('📋', 'Copy BibTeX entry', 'rgb(var(--fg-gray-700))', async () => {
           try {
             const bibtex = await getBibtexEntry?.(paperId, websiteId)
             if (bibtex) {
@@ -200,11 +200,11 @@ export function createCitationExtension({
 
         // ── Separator ────────────────────────────────────────────────────────
         const sep = document.createElement('div')
-        sep.style.cssText = 'height:1px;background:#f1f5f9;margin:4px 0;'
+        sep.style.cssText = 'height:1px;background:rgb(var(--bg-slate-100));margin:4px 0;'
         ctxMenu.appendChild(sep)
 
         // ── Remove citation ──────────────────────────────────────────────────
-        addMenuItem('🗑️', 'Remove citation', '#ef4444', () => {
+        addMenuItem('🗑️', 'Remove citation', 'rgb(var(--fg-red-500))', () => {
           const { state, dispatch } = view
           dispatch(state.tr.removeMark(range.from, range.to, mark.type))
           removeCtxMenu()
@@ -372,7 +372,7 @@ export function createCitationExtension({
               if (!popup) return
               const items = getSelectableItems()
               items.forEach((el, i) => {
-                el.style.background = i === selectedIndex ? '#f1f5f9' : ''
+                el.style.background = i === selectedIndex ? 'rgb(var(--bg-slate-100))' : ''
               })
             }
 
@@ -383,8 +383,8 @@ export function createCitationExtension({
               popup.style.cssText = [
                 'position:fixed',
                 'z-index:9999',
-                'background:#fff',
-                'border:1px solid #e2e8f0',
+                'background:var(--ui-surface)',
+                'border:1px solid rgb(var(--line-slate-200))',
                 'border-radius:8px',
                 'box-shadow:0 8px 24px rgba(0,0,0,.12)',
                 'min-width:320px',
@@ -408,7 +408,7 @@ export function createCitationExtension({
 
               if (!props.items.length) {
                 const empty = document.createElement('div')
-                empty.style.cssText = 'padding:8px 12px;font-size:12px;color:#94a3b8;font-style:italic;'
+                empty.style.cssText = 'padding:8px 12px;font-size:12px;color:rgb(var(--fg-slate-400));font-style:italic;'
                 empty.textContent = 'No papers found'
                 popup.appendChild(empty)
                 return
@@ -422,11 +422,11 @@ export function createCitationExtension({
                   div.style.cssText = [
                     'padding:4px 12px 3px',
                     'font-size:10px',
-                    'color:#94a3b8',
+                    'color:rgb(var(--fg-slate-400))',
                     'font-weight:500',
                     'text-transform:uppercase',
                     'letter-spacing:.05em',
-                    'border-top:1px solid #f1f5f9',
+                    'border-top:1px solid rgb(var(--bg-slate-100))',
                     'margin-top:2px',
                   ].join(';')
                   div.textContent = 'Search full library...'
@@ -443,7 +443,7 @@ export function createCitationExtension({
                   'display:flex',
                   'align-items:center',
                   'gap:7px',
-                  idx === selectedIndex ? 'background:#f1f5f9' : '',
+                  idx === selectedIndex ? 'background:rgb(var(--bg-slate-100))' : '',
                 ].join(';')
 
                 const icon = item.type === 'website' ? '🌐' : '📄'
@@ -460,11 +460,11 @@ export function createCitationExtension({
                 el.innerHTML = [
                   `<span style="font-size:13px;flex-shrink:0;">${icon}</span>`,
                   `<span style="flex:1;min-width:0;">`,
-                  `  <span style="display:block;font-size:12px;color:#1e293b;font-weight:${item.isLinked ? '600' : '400'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titleDisplay}</span>`,
-                  subtitle ? `  <span style="display:block;font-size:10px;color:#94a3b8;">${subtitle}</span>` : '',
+                  `  <span style="display:block;font-size:12px;color:rgb(var(--fg-slate-800));font-weight:${item.isLinked ? '600' : '400'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titleDisplay}</span>`,
+                  subtitle ? `  <span style="display:block;font-size:10px;color:rgb(var(--fg-slate-400));">${subtitle}</span>` : '',
                   `</span>`,
                   item.isLinked
-                    ? `<span style="font-size:10px;background:#dbeafe;color:#2563eb;padding:1px 5px;border-radius:4px;font-weight:500;flex-shrink:0;">Linked</span>`
+                    ? `<span style="font-size:10px;background:rgb(var(--bg-blue-100));color:rgb(var(--fg-blue-600));padding:1px 5px;border-radius:4px;font-weight:500;flex-shrink:0;">Linked</span>`
                     : '',
                 ].join('')
 

@@ -50,7 +50,7 @@ function renderWikiLinksInHtml(html) {
   if (!html) return html
   return html.replace(/\[\[([^\]]+)\]\]/g, (_, name) => {
     const safe = name.replace(/"/g, '&quot;')
-    return `<span data-wiki-name="${safe}" title="Open note: ${safe}" style="color:#6366f1;font-weight:500;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px;cursor:pointer;text-decoration:underline dotted #a5b4fc;">${name}</span>`
+    return `<span data-wiki-name="${safe}" title="Open note: ${safe}" style="color:rgb(var(--fg-indigo-500));font-weight:500;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px;cursor:pointer;text-decoration:underline dotted rgb(var(--line-indigo-300));">${name}</span>`
   })
 }
 
@@ -94,25 +94,25 @@ function Icon({ name, className = '' }) {
 }
 
 /* ─── Inline metric chart (rendered into data-chart divs) ───────────────────── */
-function MetricComparisonChart({ type = 'bar', data = [], xKey = 'name', yKey = 'value', color = '#6366f1' }) {
+function MetricComparisonChart({ type = 'bar', data = [], xKey = 'name', yKey = 'value', color = 'rgb(var(--fg-indigo-500))' }) {
   if (!data || data.length === 0) return null
   return (
     <div style={{ width: '100%', height: 140, marginTop: 8, marginBottom: 8 }}>
       <ResponsiveContainer width="100%" height="100%">
         {type === 'line' ? (
           <LineChart data={data} margin={{ top: 4, right: 12, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: '#64748b' }} />
-            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
-            <Tooltip contentStyle={{ fontSize: 11 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line-slate-200))" />
+            <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: 'rgb(var(--fg-slate-500))' }} />
+            <YAxis tick={{ fontSize: 10, fill: 'rgb(var(--fg-slate-500))' }} />
+            <Tooltip contentStyle={{ background: 'var(--ui-surface)', color: 'var(--ui-text)', borderColor: 'var(--ui-border)', fontSize: 11 }} />
             <Line type="monotone" dataKey={yKey} stroke={color} strokeWidth={2} dot={{ r: 3 }} />
           </LineChart>
         ) : (
           <BarChart data={data} margin={{ top: 4, right: 12, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: '#64748b' }} />
-            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} />
-            <Tooltip contentStyle={{ fontSize: 11 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line-slate-200))" />
+            <XAxis dataKey={xKey} tick={{ fontSize: 10, fill: 'rgb(var(--fg-slate-500))' }} />
+            <YAxis tick={{ fontSize: 10, fill: 'rgb(var(--fg-slate-500))' }} />
+            <Tooltip contentStyle={{ background: 'var(--ui-surface)', color: 'var(--ui-text)', borderColor: 'var(--ui-border)', fontSize: 11 }} />
             <Bar dataKey={yKey} fill={color} radius={[3, 3, 0, 0]} />
           </BarChart>
         )}

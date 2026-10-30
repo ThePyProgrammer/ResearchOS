@@ -395,7 +395,7 @@ export default function Paper() {
           className="flex flex-col overflow-hidden"
           style={isNotes
             ? { width: leftWidth ?? '40%', minWidth: 240, flexShrink: 0 }
-            : { flex: 1, borderRight: '1px solid #e2e8f0' }}
+            : { flex: 1, borderRight: '1px solid var(--ui-border)' }}
         >
           {/* PDF Toolbar */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 bg-white text-sm">
