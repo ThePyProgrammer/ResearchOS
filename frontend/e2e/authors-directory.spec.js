@@ -61,7 +61,7 @@ test('add author suggests frequent names and still accepts custom names after a 
   await page.goto('/authors')
   await page.getByRole('button', { name: 'Add author' }).click()
   const input = page.getByRole('combobox', { name: 'Name *' })
-  await expect(page.getByRole('option')).toHaveText(['Jane Smith8 papers', 'Alex Doe2 papers'])
+  await expect(page.getByRole('listbox').getByRole('option')).toHaveText(['Jane Smith8 papers', 'Alex Doe2 papers'])
   await page.screenshot({ path: testInfo.outputPath('author-suggestions.png') })
   await input.fill('alex')
   await input.press('ArrowDown')

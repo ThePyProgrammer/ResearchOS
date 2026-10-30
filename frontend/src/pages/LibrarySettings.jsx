@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLibrary } from '../context/LibraryContext'
 import { librariesApi, settingsApi } from '../services/api'
+import ThemeSelector from '../components/ThemeSelector'
 
 function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
@@ -204,6 +205,9 @@ export default function LibrarySettings() {
 
       {/* Content */}
       <div className="max-w-2xl mx-auto px-8 py-8 space-y-6">
+        <SettingsSection title="Appearance" description="Choose a theme for this browser. System follows your device’s appearance.">
+          <ThemeSelector />
+        </SettingsSection>
 
         {/* General */}
         <SettingsSection

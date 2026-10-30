@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import ThemeSelector from '../ThemeSelector'
 import { NavLink, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { proposalsApi, papersApi, websitesApi, projectsApi } from '../../services/api'
 import { useLibrary } from '../../context/LibraryContext'
@@ -827,7 +828,7 @@ export default function Sidebar({ collapsed, onToggle }) {
 
   return (
     <aside
-      className={`flex-shrink-0 bg-slate-800 flex flex-col h-screen sticky top-0 dark-scroll overflow-y-auto transition-all duration-200 ${
+      className={`theme-sidebar flex-shrink-0 bg-sidebar flex flex-col h-screen sticky top-0 dark-scroll overflow-y-auto transition-all duration-200 ${
         collapsed ? 'w-14' : 'w-60'
       }`}
     >
@@ -857,7 +858,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       {/* Library switcher */}
       <LibrarySwitcher collapsed={collapsed} />
 
-      <nav className={`flex-1 space-y-1 ${collapsed ? 'p-2 pt-3' : 'p-3'}`}>
+      <nav className={`flex-1 min-h-0 overflow-y-auto space-y-1 ${collapsed ? 'p-2 pt-3' : 'p-3'}`}>
         {/* Main navigation */}
         <div className="space-y-0.5">
           <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" collapsed={collapsed} />
@@ -905,6 +906,7 @@ export default function Sidebar({ collapsed, onToggle }) {
 
       {/* User profile */}
       <div className="p-2 border-t border-white/10">
+        <ThemeSelector collapsed={collapsed} sidebar />
         {collapsed ? (
           <button
             title={`${user.name} — ${user.org}`}
