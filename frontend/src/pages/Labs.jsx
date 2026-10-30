@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import WindowModal from '../components/WindowModal'
 import AuthorChip from '../components/AuthorChip'
+import ProfileIcon from '../components/ProfileIcon'
 import { labsApi } from '../services/api'
 
 const INPUT = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30'
@@ -302,7 +303,7 @@ function LabDetail({ id, onDeleted, backTo }) {
           <h1 className="break-words text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{lab.data.name}</h1>
           {lab.data.description && <p className="mt-3 max-w-3xl whitespace-pre-wrap break-words text-sm leading-7 text-slate-500">{lab.data.description}</p>}
           <section aria-label="Websites" className="mt-5">
-            {lab.data.websites?.length ? <ul className="flex flex-wrap gap-2">{lab.data.websites.map(url => <li key={url} className="min-w-0 max-w-full"><a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"><Icon name="language" className="shrink-0 text-[15px]" /><span className="break-all">{url}</span><Icon name="open_in_new" className="shrink-0 text-[13px]" /></a></li>)}</ul> : <p className="text-xs text-slate-400">No websites added. Use Edit lab to add links.</p>}
+            {lab.data.websites?.length ? <ul className="flex flex-wrap gap-2">{lab.data.websites.map(url => <li key={url} className="min-w-0 max-w-full"><a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"><ProfileIcon name="website" className="h-4 w-4 !opacity-100" /><span className="break-all">{url}</span><Icon name="open_in_new" className="shrink-0 text-[13px]" /></a></li>)}</ul> : <p className="text-xs text-slate-400">No websites added. Use Edit lab to add links.</p>}
           </section>
         </div>
         <div className="flex shrink-0 gap-1"><button className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-600 disabled:opacity-40" aria-label="Edit lab" title="Edit lab" disabled={!!busy} onClick={() => setEditing(true)}><Icon name="edit" className="text-[18px]" /></button><button className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-40" aria-label="Delete lab" title="Delete lab" disabled={!!busy} onClick={() => { setError(null); setDeleting(true) }}><Icon name="delete" className="text-[18px]" /></button></div>
@@ -405,7 +406,7 @@ function LabsDirectory() {
               <span className="shrink-0 tabular-nums text-slate-500">{lab.paperCount ?? 0} {lab.paperCount === 1 ? 'paper' : 'papers'}</span>
               {!!lab.websites?.length && <a href={lab.websites[0]} target="_blank" rel="noopener noreferrer" title="Website" aria-label={`Website for ${lab.name}`}
                 className="relative z-10 inline-flex rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-slate-500">
-                <Icon name="language" className="text-[16px]" />
+                <ProfileIcon name="website" className="h-4 w-4 !opacity-100" />
               </a>}
             </div>
           </div>
