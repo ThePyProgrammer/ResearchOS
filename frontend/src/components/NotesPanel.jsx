@@ -1,3 +1,6 @@
+import { CanvasEmbed, CanvasEmbedPicker } from './canvas/CanvasEmbed'
+import CanvasDocument from './canvas/CanvasDocument'
+import { EMPTY_CANVAS, canvasName } from '../utils/jsonCanvas'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -34,7 +37,9 @@ function ToolBtn({ icon, label, active, onClick, className = '' }) {
 }
 
 /* ─── Tiptap WYSIWYG Editor ─── */
-function TiptapEditor({ content, onUpdate, onSave }) {
+function TiptapEditor({ content, onUpdate, onSave, notes, onOpen }) {
+  const notesRef = useRef(notes); notesRef.current = notes
+  const openRef = useRef(onOpen); openRef.current = onOpen
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -54,6 +59,7 @@ function TiptapEditor({ content, onUpdate, onSave }) {
       Highlight.configure({ multicolor: false }),
       Typography,
       Mathematics,
+      CanvasEmbed.configure({ getNotes: () => notesRef.current || [], onOpen: (_, id) => openRef.current?.(id) }),
     ],
     content: content || '',
     editorProps: {
@@ -83,6 +89,7 @@ function TiptapEditor({ content, onUpdate, onSave }) {
   return (
     <>
       {/* Fixed toolbar */}
+      <CanvasEmbedPicker editor={editor} notes={notes || []} />
       <div className="flex items-center gap-0.5 px-2 py-1 border-b border-slate-100 bg-white flex-wrap">
         <select
           value={
@@ -177,6 +184,8 @@ function TreeNode({ note, notes, selected, expanded, onSelect, onToggle, onConte
   return (
     <div>
       <button
+        draggable
+        onDragStart={e => { e.dataTransfer.setData('text/plain', note.id); e.dataTransfer.effectAllowed = 'copyMove' }}
         onClick={() => {
           if (isFolder) onToggle(note.id)
           else onSelect(note.id)
@@ -195,13 +204,13 @@ function TreeNode({ note, notes, selected, expanded, onSelect, onToggle, onConte
           <span className="w-[14px] flex-shrink-0" />
         )}
         <Icon
-          name={isFolder ? (isOpen ? 'folder_open' : 'folder') : 'description'}
+          name={isFolder ? (isOpen ? 'folder_open' : 'folder') : note.type === 'canvas' ? 'dashboard' : 'description'}
           className={`text-[15px] flex-shrink-0 ${isFolder ? 'text-amber-500' : 'text-slate-400'}`}
         />
         <span className="truncate">{note.name}</span>
       </button>
       {isFolder && isOpen && children
-        .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'folder' ? -1 : 1))
+        .sort((a, b) => (a.type === 'folder' && b.type !== 'folder' ? -1 : b.type === 'folder' && a.type !== 'folder' ? 1 : a.name.localeCompare(b.name)))
         .map(child => (
           <TreeNode
             key={child.id}
@@ -244,7 +253,7 @@ export default function NotesPanel({ paperId, notes, setNotes, createFn }) {
 
   // Auto-save debounce
   const save = useCallback(async () => {
-    if (!selectedId || !dirty) return
+    if (!selectedId || !dirty || selectedNote?.type === 'canvas') return
     try {
       const updated = await notesApi.update(selectedId, { content })
       setNotes(prev => prev.map(n => n.id === updated.id ? updated : n))
@@ -284,13 +293,14 @@ export default function NotesPanel({ paperId, notes, setNotes, createFn }) {
     try {
       const _create = createFn ?? ((data) => notesApi.create(paperId, data))
       const note = await _create({
-        name: newName.trim(),
+        name: creating.type === 'canvas' ? canvasName(newName.trim()) : newName.trim(),
+        content: creating.type === 'canvas' ? EMPTY_CANVAS : '',
         parentId: creating.parentId,
         type: creating.type,
       })
       setNotes(prev => [...prev, note])
       if (creating.parentId) setExpanded(e => ({ ...e, [creating.parentId]: true }))
-      if (note.type === 'file') setSelectedId(note.id)
+      if (note.type !== 'folder') setSelectedId(note.id)
       setCreating(null)
       setNewName('')
     } catch (err) {
@@ -329,7 +339,7 @@ export default function NotesPanel({ paperId, notes, setNotes, createFn }) {
 
   const rootNotes = notes
     .filter(n => !n.parentId)
-    .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'folder' ? -1 : 1))
+    .sort((a, b) => (a.type === 'folder' && b.type !== 'folder' ? -1 : b.type === 'folder' && a.type !== 'folder' ? 1 : a.name.localeCompare(b.name)))
 
   return (
     <div className="flex h-full">
@@ -344,6 +354,13 @@ export default function NotesPanel({ paperId, notes, setNotes, createFn }) {
               title="New file"
             >
               <Icon name="note_add" className="text-[15px]" />
+            </button>
+            <button
+              onClick={() => { setCreating({ parentId: null, type: 'canvas' }); setNewName('') }}
+              className="p-0.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+              title="New canvas"
+            >
+              <Icon name="dashboard" className="text-[15px]" />
             </button>
             <button
               onClick={() => { setCreating({ parentId: null, type: 'folder' }); setNewName('') }}
@@ -398,6 +415,12 @@ export default function NotesPanel({ paperId, notes, setNotes, createFn }) {
               >
                 Create a note
               </button>
+              <button
+                onClick={() => { setCreating({ parentId: null, type: 'canvas' }); setNewName('') }}
+                className="mt-2 text-[11px] text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Create a canvas
+              </button>
             </div>
           )}
         </div>
@@ -405,7 +428,17 @@ export default function NotesPanel({ paperId, notes, setNotes, createFn }) {
 
       {/* Editor area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {selectedNote ? (
+        {selectedNote?.type === 'canvas' ? (
+          <CanvasDocument key={selectedNote.id} note={selectedNote} notes={notes}
+            onSaved={updated => setNotes(prev => prev.map(n => n.id === updated.id ? updated : n))}
+            renderNoteEditor={({ content, onUpdate, onSave }) => <TiptapEditor content={content} onUpdate={onUpdate} onSave={onSave} notes={notes} onOpen={setSelectedId} />}
+            onOpen={target => setSelectedId(target.id)}
+            onCreateNote={async data => {
+              const created = await (createFn ?? (payload => notesApi.create(paperId, payload)))({ ...data, parentId: selectedNote.parentId })
+              setNotes(prev => [...prev, created])
+              return created
+            }} />
+        ) : selectedNote ? (
           <>
             {/* Editor header */}
             <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between bg-white">
@@ -425,6 +458,7 @@ export default function NotesPanel({ paperId, notes, setNotes, createFn }) {
 
             {/* Tiptap WYSIWYG */}
             <TiptapEditor
+              notes={notes} onOpen={setSelectedId}
               content={content}
               onUpdate={handleContentUpdate}
               onSave={save}
@@ -456,6 +490,13 @@ export default function NotesPanel({ paperId, notes, setNotes, createFn }) {
               >
                 <Icon name="note_add" className="text-[14px] text-slate-400" />
                 New file
+              </button>
+              <button
+                onClick={() => { setCreating({ parentId: ctxMenu.note.id, type: 'canvas' }); setNewName(''); setExpanded(e => ({ ...e, [ctxMenu.note.id]: true })); setCtxMenu(null) }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
+              >
+                <Icon name="dashboard" className="text-[14px] text-slate-400" />
+                New canvas
               </button>
               <button
                 onClick={() => { setCreating({ parentId: ctxMenu.note.id, type: 'folder' }); setNewName(''); setExpanded(e => ({ ...e, [ctxMenu.note.id]: true })); setCtxMenu(null) }}

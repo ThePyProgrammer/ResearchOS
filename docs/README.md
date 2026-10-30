@@ -2,6 +2,7 @@
 
 ## For Users
 
+- [Canvas documents](canvas.md) — Visual notes, nested canvases, file cards, and portable exports
 - [User Guide](user-guide.md) — Walkthrough: first papers to projects to AI features
 - [Costs & Privacy](costs-and-privacy.md) — What goes to OpenAI, cost estimates, data ownership
 - [FAQ & Troubleshooting](faq.md) — Common questions and fixes

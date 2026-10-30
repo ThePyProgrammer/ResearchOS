@@ -1,3 +1,4 @@
+import { canvasReferences } from '../utils/jsonCanvas'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import * as d3 from 'd3'
 import { extractWikiLinks } from './WikiLinkExtension'
@@ -127,7 +128,7 @@ export default function NoteGraphView({
   // ── Build graph data (filtered by visibleTypes and selected collections) ───────
   const buildGraph = useCallback(() => {
     const fileNotes = allNotes.filter(n => {
-      if (n.type !== 'file') return false
+      if (n.type === 'folder') return false
       if (visibleTypes[n.source ?? 'library'] === false) return false
       if (hullCollections.length > 0 && (n.sourceKey ?? n.source ?? 'library') !== 'library') {
         const collIds = sourceKeyCollections[n.sourceKey ?? n.source ?? 'library'] || []
@@ -157,7 +158,7 @@ export default function NoteGraphView({
     const links     = []
 
     for (const note of fileNotes) {
-      for (const { name: targetName, noteId: targetId } of extractWikiLinks(note.content || '')) {
+      for (const { name: targetName, noteId: targetId } of (note.type === 'canvas' ? canvasReferences(note, allNotes) : extractWikiLinks(note.content || ''))) {
         let target
         if (targetId) {
           target = idMap.get(targetId)
