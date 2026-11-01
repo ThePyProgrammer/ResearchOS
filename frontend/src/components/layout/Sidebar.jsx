@@ -833,7 +833,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       }`}
     >
       {/* Logo + toggle */}
-      <div className={`flex items-center border-b border-white/10 ${collapsed ? 'flex-col gap-2 px-0 py-3' : 'px-4 py-4 justify-between'}`}>
+      <div className={`flex h-16 shrink-0 items-center border-b border-white/10 dark:border-slate-200 ${collapsed ? 'flex-col gap-1 px-0 justify-center' : 'px-4 justify-between'}`}>
         <button
           onClick={() => navigate('/dashboard')}
           className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
@@ -849,7 +849,7 @@ export default function Sidebar({ collapsed, onToggle }) {
         <button
           onClick={onToggle}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="p-1 rounded text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-colors"
         >
           <Icon name={collapsed ? 'chevron_right' : 'chevron_left'} className="text-[18px]" />
         </button>

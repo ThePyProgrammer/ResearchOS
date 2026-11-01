@@ -1077,7 +1077,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-4">
+      <header className="sticky top-0 z-10 h-16 shrink-0 bg-white border-b border-slate-200 px-6 flex items-center gap-4">
         {/* Search with live dropdown */}
         <div ref={containerRef} className="flex-1 max-w-xl relative">
           <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] pointer-events-none" />
