@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from routers import papers, collections, workflows, runs, proposals, activity, search, libraries, websites, notes, chat, authors, github_repos, settings, notes_copilot, usage, projects, research_questions, experiments, project_notes_copilot, tasks, gap_analysis, batch
 from services.db import get_client
 from routers import labs
+from routers import citations
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ app.add_middleware(
 
 app.include_router(libraries.router)
 app.include_router(papers.router)
+app.include_router(citations.router)
 app.include_router(websites.router)
 app.include_router(github_repos.router)
 app.include_router(collections.router)
