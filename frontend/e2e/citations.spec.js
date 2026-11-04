@@ -33,7 +33,7 @@ test('paper citations show evidence, direction, indexing state, and target navig
   await citations.getByRole('button', { name: 'Cited by', exact: true }).click()
   await expect(citations.getByText('No papers in this library are linked as citing this paper yet.')).toBeVisible()
   await citations.getByRole('button', { name: 'References', exact: true }).click()
-  await citations.getByRole('button', { name: 'Index this paper' }).click()
+  await citations.getByRole('button', { name: 'Index', exact: true }).click()
   await expect(citations.getByText('Indexing queued or in progress.')).toBeVisible()
   await expect(citations.getByRole('button', { name: 'Indexing…' })).toBeDisabled()
   await citations.getByRole('link', { name: 'Target Paper' }).click()

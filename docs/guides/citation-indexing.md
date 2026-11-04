@@ -24,7 +24,7 @@ Apply `037_automatic_pdf_citation_fallback.sql` after 036, then restart the cita
 
 The trigger is absence of retrieved reference records, not absence of library matches. References in partial runs or retained active runs suppress fallback too. Pending/running provider attempts wait; terminal failures after retries can fall back. GROBID is never selected automatically, and no PDF is sent to an external parser. Papers without a stored PDF continue to use provider indexing only.
 
-An unchanged source with an existing local PDF job is not queued again by a sweep, including partial/failed PDF attempts. Existing retry limits remain in effect; use **Index PDF bibliography** to explicitly retry a terminal PDF job. Source metadata or PDF changes invalidate the existing citation fingerprint through the established triggers, so those changes can cause extraction to run again. Reindexing the providers alone does not rerun an unchanged PDF job.
+An unchanged source with an existing local PDF job is not queued again by a sweep, including partial/failed PDF attempts. Existing retry limits remain in effect; use the explicit PDF reindex API to retry a terminal PDF job. Source metadata or PDF changes invalidate the existing citation fingerprint through the established triggers, so those changes can cause extraction to run again. Reindexing the providers alone does not rerun an unchanged PDF job.
 
 Worker startup and each processing loop sweep eligible papers, recovering the interval between a provider finishing and a worker crash. Resumable batches include local fallback jobs for their original enqueued paper IDs, including jobs created before a restart; they do not process other libraries' jobs. The default worker processes one job at a time. Import requests do not wait for citation network calls or parsing; keep the worker running locally for this background work.
 
@@ -32,14 +32,14 @@ Installing 037 itself performs no indexing or provider requests. Starting the up
 
 ## Manual PDF bibliography extraction
 
-Apply `034_pdf_citations.sql` and then `035_local_pdf_citations.sql` after 033. The default extractor uses the existing PyMuPDF dependency locally; no GROBID service or new API key is required. Click **Index PDF bibliography** for a managed PDF, or add `--include-pdf` to a new backfill:
+Apply `034_pdf_citations.sql` and then `035_local_pdf_citations.sql` after 033. The default extractor uses the existing PyMuPDF dependency locally; no GROBID service or new API key is required. The UI has one **Index** button: providers first, then local PDF fallback when needed (requires 037). To explicitly request PDF extraction, use `POST /api/papers/{id}/citations/pdf/reindex`, or add `--include-pdf` to a new backfill:
 
 ```powershell
 uv run --directory backend python scripts/index_paper_citations.py --library-id LIBRARY_ID --include-pdf --dry-run
 uv run --directory backend python scripts/index_paper_citations.py --library-id LIBRARY_ID --include-pdf
 ```
 
-The PDF button and `--include-pdf` explicitly request extraction even when providers returned references. New batches record `pdf_engine: pymupdf`; old manifests without that field retain their original GROBID scope and service requirement. Managed GCS/Supabase credentials read private files directly. Arbitrary external PDF URLs must first be stored through the existing import/upload path. The size limit is 100 MiB; local extraction also rejects encrypted documents and documents over 1,000 pages.
+The PDF reindex API and `--include-pdf` explicitly request extraction even when providers returned references. New batches record `pdf_engine: pymupdf`; old manifests without that field retain their original GROBID scope and service requirement. Managed GCS/Supabase credentials read private files directly. Arbitrary external PDF URLs must first be stored through the existing import/upload path. The size limit is 100 MiB; local extraction also rejects encrypted documents and documents over 1,000 pages.
 
 The local extractor recognizes numbered bibliographies beneath References/Bibliography/Works Cited headings, orders one- or two-column text, and retains raw text, page numbers, parser version and PDF SHA-256. It uses only explicit DOI/arXiv identifiers. Title-only references and conflicting identifiers remain unresolved. Nonsequential numbering, unrecognized bibliographies and uncertain boundaries return partial results without publishing new identifiers or erasing previous successful evidence. Scans, unnumbered references, unusual layouts and line-wrapped identifiers remain coverage limitations. No OCR or fuzzy title linking is performed. Extraction success does not guarantee that every bibliography entry was found.
 

@@ -524,7 +524,6 @@ export default function Paper() {
                   onPaperUpdate={setPaper}
                 />
                 <PaperCitations paperId={paper.id} libraryId={paper.libraryId}
-                  hasStoredPdf={paper.hasStoredPdf}
                   sourceVersion={JSON.stringify([paper.doi, paper.arxivId, paper.title, paper.authors, paper.year, paper.pdfUrl, paper.pdfRevision])} />
               </div>
             )}

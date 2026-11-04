@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom'
 import { papersApi } from '../services/api'
 
 // Remount on paper/library change so old reads, mutations and polls cannot leak state.
-export default function PaperCitations({ paperId, libraryId, sourceVersion = '', hasStoredPdf = false }) {
-  return <CitationLists key={`${libraryId || ''}:${paperId}:${sourceVersion}`} paperId={paperId} hasStoredPdf={hasStoredPdf} />
+export default function PaperCitations({ paperId, libraryId, sourceVersion = '' }) {
+  return <CitationLists key={`${libraryId || ''}:${paperId}:${sourceVersion}`} paperId={paperId} />
 }
 
-function CitationLists({ paperId, hasStoredPdf }) {
+function CitationLists({ paperId }) {
   const [direction, setDirection] = useState('outgoing')
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState(null)
@@ -44,12 +44,11 @@ function CitationLists({ paperId, hasStoredPdf }) {
     return () => { cancelled = true; clearTimeout(timer) }
   }, [paperId, direction, offset, refresh])
 
-  async function reindex(pdf = false) {
+  async function reindex() {
     setQueueing(true)
     setError(null)
     try {
-      if (pdf) await papersApi.reindexPdfCitations(paperId)
-      else await papersApi.reindexCitations(paperId)
+      await papersApi.reindexCitations(paperId)
       if (alive.current) setRefresh(value => value + 1)
     } catch {
       if (alive.current) setError('Could not start indexing. Please try again.')
@@ -92,7 +91,6 @@ function CitationLists({ paperId, hasStoredPdf }) {
         {failed && <p className="text-amber-700 mb-2">Indexing failed. {activeRuns.length > 0 && 'Showing previous results.'}</p>}
         {partial && <p className="text-slate-500 mb-2">Some references could not be found.</p>}
         {!activeRuns.length && !busy && !failed && !partial && <p className="text-slate-500">Not indexed yet.</p>}
-        {lastIndexed && <p className="text-xs text-slate-500 mb-2">Last indexed: {new Date(lastIndexed).toLocaleString()}</p>}
         {!data.items.length && <p className="text-slate-500 mb-2">{emptyMessage}</p>}
         <ul className="space-y-3">
           {data.items.map(item => <li key={item.id}>
@@ -116,15 +114,12 @@ function CitationLists({ paperId, hasStoredPdf }) {
           <span className="text-xs">{offset + 1}–{Math.min(offset + 10, data.total)} of {data.total}</span>
           <button disabled={offset + 10 >= data.total || loading} onClick={() => { setData(null); setOffset(n => n + 10) }}>Next</button>
         </div>}
-        <p className="text-xs text-slate-500 mt-3">{data.indexedPapers} of {data.libraryPapers} papers indexed.</p>
         {direction === 'outgoing' && data.unresolvedCount > 0 && <p className="text-xs text-slate-500">{data.unresolvedCount} references not linked to a paper in this library.</p>}
       </>}
       <button type="button" disabled={busy} onClick={() => reindex()} className="mt-3 text-xs text-blue-700 disabled:text-slate-400">
-        {busy ? 'Indexing…' : 'Index this paper'}
+        {busy ? 'Indexing…' : 'Index'}
       </button>
-      {hasStoredPdf && <div className="mt-3">
-        <button type="button" disabled={busy} onClick={() => reindex(true)} className="text-xs text-blue-700 disabled:text-slate-400">Index PDF bibliography</button>
-      </div>}
+      {lastIndexed && <p className="text-xs text-slate-500 mt-2">Last indexed: {new Date(lastIndexed).toLocaleString()}</p>}
     </section>
   )
 }

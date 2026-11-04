@@ -107,23 +107,23 @@ it('queues explicitly and preserves visible links while awaiting the worker', as
   papersApi.reindexCitations.mockResolvedValue([{ id: 'job1', status: 'pending' }])
   render(view())
   await screen.findByText('Target paper')
-  fireEvent.click(screen.getByRole('button', { name: 'Index this paper' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Index', exact: true }))
   await screen.findByText('Indexing queued or in progress.')
   expect(papersApi.reindexCitations).toHaveBeenCalledWith('p_a')
   expect(screen.getByRole('button', { name: 'Indexing…' })).toBeDisabled()
   expect(screen.getByRole('link', { name: 'Target paper' })).toBeInTheDocument()
 })
 
-it('PDF extraction is an explicit action and reports queue failures', async () => {
+it('the single index action starts providers and reports queue failures', async () => {
   papersApi.citations.mockResolvedValue(page())
-  papersApi.reindexPdfCitations.mockRejectedValue(new Error('PDF indexing unavailable'))
-  render(<MemoryRouter><PaperCitations paperId="p_a" hasStoredPdf /></MemoryRouter>)
+  papersApi.reindexCitations.mockRejectedValue(new Error('Indexing unavailable'))
+  render(<MemoryRouter><PaperCitations paperId="p_a" /></MemoryRouter>)
   await screen.findByText('Not indexed yet.')
   expect(papersApi.reindexPdfCitations).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Index PDF bibliography' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Index', exact: true }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Could not start indexing. Please try again.')
-  expect(papersApi.reindexPdfCitations).toHaveBeenCalledWith('p_a')
-  expect(papersApi.reindexCitations).not.toHaveBeenCalled()
+  expect(papersApi.reindexCitations).toHaveBeenCalledWith('p_a')
+  expect(papersApi.reindexPdfCitations).not.toHaveBeenCalled()
 })
 
 it('shows the PDF source and original reference without implementation details', async () => {
