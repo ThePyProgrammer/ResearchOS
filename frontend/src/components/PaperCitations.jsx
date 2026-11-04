@@ -95,14 +95,14 @@ function CitationLists({ paperId, hasStoredPdf }) {
             <details className="text-xs text-slate-500 mt-1">
               <summary className="cursor-pointer">Citation evidence</summary>
               {item.evidence.map((evidence, index) => <div key={index} className="mt-1">
-                <p>{{ openalex: 'OpenAlex', crossref: 'Crossref', grobid: 'PDF bibliography (GROBID)' }[evidence.provider] || evidence.provider} · identifier match · {new Date(evidence.indexedAt).toLocaleDateString()}</p>
+                <p>{{ openalex: 'OpenAlex', crossref: 'Crossref', grobid: 'PDF bibliography (GROBID)', pymupdf: 'PDF bibliography (local)' }[evidence.provider] || evidence.provider} · identifier match · {new Date(evidence.indexedAt).toLocaleDateString()}</p>
                 {evidence.provider === 'openalex' && /^W\d+$/.test(evidence.reference.source_work) &&
                   <a className="underline" href={`https://openalex.org/${evidence.reference.source_work}`} target="_blank" rel="noreferrer">Source record</a>}
                 {evidence.reference.unstructured && <p className="mt-1">{evidence.reference.unstructured}</p>}
                 {evidence.reference.DOI && <p className="mt-1">DOI: {evidence.reference.DOI}</p>}
                 {evidence.reference.target_work && <p className="mt-1">Referenced work: {evidence.reference.target_work}</p>}
-                {evidence.provider === 'grobid' && evidence.reference.title && <p className="mt-1">{evidence.reference.title}</p>}
-                {evidence.provider === 'grobid' && evidence.reference.pdf_sha256 && <p className="mt-1 break-all" title={evidence.reference.pdf_sha256}>PDF fingerprint: {evidence.reference.pdf_sha256.slice(0, 12)}…</p>}
+                {['grobid', 'pymupdf'].includes(evidence.provider) && evidence.reference.title && <p className="mt-1">{evidence.reference.title}</p>}
+                {['grobid', 'pymupdf'].includes(evidence.provider) && evidence.reference.pdf_sha256 && <p className="mt-1 break-all" title={evidence.reference.pdf_sha256}>PDF fingerprint: {evidence.reference.pdf_sha256.slice(0, 12)}…</p>}
               </div>)}
             </details>
           </li>)}
@@ -120,7 +120,7 @@ function CitationLists({ paperId, hasStoredPdf }) {
       </button>
       {hasStoredPdf && <div className="mt-3">
         <button type="button" disabled={busy} onClick={() => reindex(true)} className="text-xs text-blue-700 disabled:text-slate-400">Index PDF bibliography</button>
-        <p className="text-xs text-slate-500 mt-1">Uses the configured PDF extraction service to read the stored PDF.</p>
+        <p className="text-xs text-slate-500 mt-1">Reads numbered bibliographies locally. Matches explicit DOI/arXiv identifiers; no GROBID setup needed.</p>
       </div>}
     </section>
   )

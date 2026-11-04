@@ -73,3 +73,13 @@ def test_keyset_iterator_handles_server_page_caps(monkeypatch):
             return SimpleNamespace(data=selected[:min(self.size, 100)])
     monkeypatch.setattr(paper_service, 'get_client', lambda: SimpleNamespace(table=lambda _: Query()))
     assert list(paper_service.iter_papers(library_id='lib')) == rows
+
+
+def test_local_pdf_job_uses_local_extractor_and_publishes_evidence(monkeypatch):
+    setup_job(monkeypatch, 'pymupdf')
+    fetch = AsyncMock(return_value=CitationResult(provider='pymupdf', version='pymupdf:test;sha256:pdf'))
+    monkeypatch.setattr(jobs, 'fetch_local_pdf_references', fetch)
+    monkeypatch.setattr(jobs, 'fetch_crossref', AsyncMock(side_effect=AssertionError('Wrong provider')))
+    monkeypatch.setattr(jobs.repository, 'finish', lambda job, result: result.provider == 'pymupdf')
+    assert asyncio.run(jobs.run_one())['status'] == 'succeeded'
+    fetch.assert_awaited_once()

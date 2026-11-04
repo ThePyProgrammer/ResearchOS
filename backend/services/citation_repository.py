@@ -6,8 +6,11 @@ def enqueue(paper_id: str, force: bool = False) -> list[dict]:
     return get_client().rpc("enqueue_paper_citations", {"p_paper_id": paper_id, "p_force": force}).execute().data or []
 
 
-def enqueue_pdf(paper_id: str, force: bool = False) -> list[dict]:
-    return get_client().rpc("enqueue_pdf_citations", {"p_paper_id": paper_id, "p_force": force}).execute().data or []
+def enqueue_pdf(paper_id: str, force: bool = False, engine: str = "pymupdf") -> list[dict]:
+    if engine not in {"pymupdf", "grobid"}:
+        raise ValueError("Unsupported PDF engine")
+    rpc = "enqueue_local_pdf_citations" if engine == "pymupdf" else "enqueue_pdf_citations"
+    return get_client().rpc(rpc, {"p_paper_id": paper_id, "p_force": force}).execute().data or []
 
 
 def claim(job_id: str | None = None) -> dict | None:

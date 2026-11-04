@@ -1,4 +1,4 @@
-"""Extract one managed PDF through configured GROBID without changing the database."""
+"""Extract one managed PDF locally (or explicitly through GROBID) without changing the database."""
 import argparse
 import asyncio
 from collections import defaultdict
@@ -16,6 +16,7 @@ from services import paper_service
 from services.citation_identity_service import local_identifiers
 from services.pdf_reference_service import configured_url, fetch_pdf_references
 from services.openalex_client import CitationProviderError
+from services.local_pdf_reference_service import fetch_local_pdf_references
 
 
 async def run(args):
@@ -23,7 +24,8 @@ async def run(args):
     if paper is None:
         raise ValueError('Paper not found')
     async with httpx.AsyncClient(timeout=30) as client:
-        result = await fetch_pdf_references(paper.model_dump(), client)
+        result = (await fetch_pdf_references(paper.model_dump(), client) if args.engine == "grobid"
+                  else await fetch_local_pdf_references(paper.model_dump()))
     identities = defaultdict(set)
     targets = {}
     # A missing library ID is a distinct scope, never an implicit cross-library match.
@@ -57,11 +59,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--paper-id', required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--engine', choices=['pymupdf', 'grobid'], default='pymupdf')
     args = parser.parse_args()
     if args.output.exists():
         parser.error('Choose a new output path; existing pilot reports are not overwritten')
     try:
-        if not configured_url():
+        if args.engine == "grobid" and not configured_url():
             parser.error('Configure a self-hosted GROBID_URL before sending a PDF for extraction')
         asyncio.run(run(args))
     except (ValueError, CitationProviderError) as exc:

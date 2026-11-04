@@ -55,12 +55,12 @@ def test_missing_migration_reports_setup_problem(client, mocker):
     assert 'migration 033' in response.json()['detail']
 
 
-def test_pdf_indexing_requires_service_and_never_queues_implicitly(client, mocker, monkeypatch):
+def test_explicit_grobid_indexing_requires_service(client, mocker, monkeypatch):
     from types import SimpleNamespace
     monkeypatch.delenv('GROBID_URL', raising=False)
     mocker.patch('routers.citations.paper_service.get_paper', return_value=SimpleNamespace(pdf_url='stored'))
     queue = mocker.patch.object(citation_repository, 'enqueue_pdf')
-    response = client.post('/api/papers/a/citations/pdf/reindex')
+    response = client.post('/api/papers/a/citations/pdf/reindex?engine=grobid')
     assert response.status_code == 503
     assert 'GROBID' in response.json()['detail']
     queue.assert_not_called()
@@ -68,11 +68,11 @@ def test_pdf_indexing_requires_service_and_never_queues_implicitly(client, mocke
 
 def test_pdf_indexing_checks_managed_storage_and_accepts_explicit_job(client, mocker, monkeypatch):
     from types import SimpleNamespace
-    monkeypatch.setenv('GROBID_URL', 'http://localhost:8070')
+    monkeypatch.delenv('GROBID_URL', raising=False)
     mocker.patch('routers.citations.paper_service.get_paper', return_value=SimpleNamespace(pdf_url='stored'))
     location = mocker.patch('routers.citations.managed_location', return_value=None)
     queue = mocker.patch.object(citation_repository, 'enqueue_pdf', return_value=[{
-        'id':'pdf-job', 'paper_id':'a', 'provider':'grobid', 'status':'pending', 'attempts':0,
+        'id':'pdf-job', 'paper_id':'a', 'provider':'pymupdf', 'status':'pending', 'attempts':0,
         'updated_at':'2026-11-03T00:00:00Z',
     }])
     assert client.post('/api/papers/a/citations/pdf/reindex').status_code == 422
@@ -80,14 +80,14 @@ def test_pdf_indexing_checks_managed_storage_and_accepts_explicit_job(client, mo
     location.return_value = ('gcs','a.pdf')
     response = client.post('/api/papers/a/citations/pdf/reindex')
     assert response.status_code == 202
-    assert response.json()[0]['provider'] == 'grobid'
-    queue.assert_called_once_with('a', True)
+    assert response.json()[0]['provider'] == 'pymupdf'
+    queue.assert_called_once_with('a', True, 'pymupdf')
 
 
 def test_pdf_indexing_missing_migration_has_specific_guidance(client, mocker, monkeypatch):
     from types import SimpleNamespace
     from postgrest.exceptions import APIError
-    monkeypatch.setenv('GROBID_URL', 'http://localhost:8070')
+    monkeypatch.delenv('GROBID_URL', raising=False)
     mocker.patch('routers.citations.paper_service.get_paper', return_value=SimpleNamespace(pdf_url='stored'))
     mocker.patch('routers.citations.managed_location', return_value=('gcs','a.pdf'))
     mocker.patch.object(citation_repository, 'enqueue_pdf', side_effect=APIError({
@@ -95,4 +95,4 @@ def test_pdf_indexing_missing_migration_has_specific_guidance(client, mocker, mo
     }))
     response = client.post('/api/papers/a/citations/pdf/reindex')
     assert response.status_code == 503
-    assert 'migration 034' in response.json()['detail']
+    assert 'migrations 034 and 035' in response.json()['detail']

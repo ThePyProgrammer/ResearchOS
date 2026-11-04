@@ -6,6 +6,7 @@ import httpx
 from services import citation_repository as repository, paper_service
 from services.citation_service import fetch_crossref, fetch_openalex
 from services.pdf_reference_service import fetch_pdf_references
+from services.local_pdf_reference_service import fetch_local_pdf_references
 from services.openalex_client import CitationProviderError
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,12 @@ async def run_one(job_id: str | None = None) -> dict | None:
                 result = await fetch_openalex(data, client)
             elif job["provider"] == "grobid":
                 result = await fetch_pdf_references(data, client)
-            else:
+            elif job["provider"] == "pymupdf":
+                result = await fetch_local_pdf_references(data)
+            elif job["provider"] == "crossref":
                 result = await fetch_crossref(data, client, job.get("captured_record"))
+            else:
+                raise CitationProviderError("Unsupported citation provider")
         published = repository.finish(job, result)
         return {"id": job["id"], "status": result.status if published else "superseded"}
     except CitationProviderError as exc:
