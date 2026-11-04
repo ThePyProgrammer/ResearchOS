@@ -36,8 +36,8 @@ function CitationLists({ paperId, hasStoredPdf }) {
         if (page.pendingJobs > 0 || page.jobs.some(job => ['pending', 'running'].includes(job.status))) {
           timer = setTimeout(load, 10000)
         }
-      } catch (err) {
-        if (!cancelled) { setError(err.message); setLoading(false) }
+      } catch {
+        if (!cancelled) { setError('Citation data could not be loaded.'); setLoading(false) }
       }
     }
     load()
@@ -51,8 +51,8 @@ function CitationLists({ paperId, hasStoredPdf }) {
       if (pdf) await papersApi.reindexPdfCitations(paperId)
       else await papersApi.reindexCitations(paperId)
       if (alive.current) setRefresh(value => value + 1)
-    } catch (err) {
-      if (alive.current) setError(err.message)
+    } catch {
+      if (alive.current) setError('Could not start indexing. Please try again.')
     } finally {
       if (alive.current) setQueueing(false)
     }
@@ -83,8 +83,8 @@ function CitationLists({ paperId, hasStoredPdf }) {
       {loading && <p role="status" className="text-slate-500">Loading citations…</p>}
       {data && <>
         {busy && <p role="status" className="text-slate-500 mb-2">Indexing queued or in progress.</p>}
-        {failed && <p className="text-amber-700 mb-2">Indexing failed. {activeRuns.length > 0 && 'Showing previously indexed evidence.'}</p>}
-        {partial && <p className="text-slate-500 mb-2">Some references or paper identities are unavailable. Coverage is incomplete.</p>}
+        {failed && <p className="text-amber-700 mb-2">Indexing failed. {activeRuns.length > 0 && 'Showing previous results.'}</p>}
+        {partial && <p className="text-slate-500 mb-2">Some references could not be found.</p>}
         {!activeRuns.length && !busy && !failed && !partial && <p className="text-slate-500">Not indexed yet.</p>}
         {lastIndexed && <p className="text-xs text-slate-500 mb-2">Last indexed: {new Date(lastIndexed).toLocaleString()}</p>}
         {!data.items.length && <p className="text-slate-500 mb-2">No indexed citations found.</p>}
@@ -95,14 +95,12 @@ function CitationLists({ paperId, hasStoredPdf }) {
             <details className="text-xs text-slate-500 mt-1">
               <summary className="cursor-pointer">Citation evidence</summary>
               {item.evidence.map((evidence, index) => <div key={index} className="mt-1">
-                <p>{{ openalex: 'OpenAlex', crossref: 'Crossref', grobid: 'PDF bibliography (GROBID)', pymupdf: 'PDF bibliography (local)' }[evidence.provider] || evidence.provider} · identifier match · {new Date(evidence.indexedAt).toLocaleDateString()}</p>
+                <p>{{ openalex: 'OpenAlex', crossref: 'Crossref', grobid: 'PDF', pymupdf: 'PDF' }[evidence.provider] || 'Source'} · {new Date(evidence.indexedAt).toLocaleDateString()}</p>
                 {evidence.provider === 'openalex' && /^W\d+$/.test(evidence.reference.source_work) &&
                   <a className="underline" href={`https://openalex.org/${evidence.reference.source_work}`} target="_blank" rel="noreferrer">Source record</a>}
                 {evidence.reference.unstructured && <p className="mt-1">{evidence.reference.unstructured}</p>}
                 {evidence.reference.DOI && <p className="mt-1">DOI: {evidence.reference.DOI}</p>}
-                {evidence.reference.target_work && <p className="mt-1">Referenced work: {evidence.reference.target_work}</p>}
                 {['grobid', 'pymupdf'].includes(evidence.provider) && evidence.reference.title && <p className="mt-1">{evidence.reference.title}</p>}
-                {['grobid', 'pymupdf'].includes(evidence.provider) && evidence.reference.pdf_sha256 && <p className="mt-1 break-all" title={evidence.reference.pdf_sha256}>PDF fingerprint: {evidence.reference.pdf_sha256.slice(0, 12)}…</p>}
               </div>)}
             </details>
           </li>)}
@@ -112,15 +110,14 @@ function CitationLists({ paperId, hasStoredPdf }) {
           <span className="text-xs">{offset + 1}–{Math.min(offset + 10, data.total)} of {data.total}</span>
           <button disabled={offset + 10 >= data.total || loading} onClick={() => { setData(null); setOffset(n => n + 10) }}>Next</button>
         </div>}
-        <p className="text-xs text-slate-500 mt-3">{data.indexedPapers} of {data.libraryPapers} library papers have indexed reference data.</p>
-        {data.unresolvedCount > 0 && <p className="text-xs text-slate-500">{data.unresolvedCount} reference records not matched to a unique local citation.</p>}
+        <p className="text-xs text-slate-500 mt-3">{data.indexedPapers} of {data.libraryPapers} papers indexed.</p>
+        {data.unresolvedCount > 0 && <p className="text-xs text-slate-500">{data.unresolvedCount} references not linked to a paper in this library.</p>}
       </>}
       <button type="button" disabled={busy} onClick={() => reindex()} className="mt-3 text-xs text-blue-700 disabled:text-slate-400">
         {busy ? 'Indexing…' : 'Index this paper'}
       </button>
       {hasStoredPdf && <div className="mt-3">
         <button type="button" disabled={busy} onClick={() => reindex(true)} className="text-xs text-blue-700 disabled:text-slate-400">Index PDF bibliography</button>
-        <p className="text-xs text-slate-500 mt-1">Reads numbered bibliographies locally. Matches explicit DOI/arXiv identifiers; no GROBID setup needed.</p>
       </div>}
     </section>
   )

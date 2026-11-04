@@ -32,7 +32,7 @@ it('distinguishes unindexed, failed refresh, and previous evidence', async () =>
   const result = render(view())
   await screen.findByText('Not indexed yet.')
   result.rerender(view('p_other'))
-  await screen.findByText('Indexing failed. Showing previously indexed evidence.')
+  await screen.findByText('Indexing failed. Showing previous results.')
   expect(screen.getByRole('link', { name: 'Target paper' })).toBeInTheDocument()
   expect(screen.queryByText('Not indexed yet.')).not.toBeInTheDocument()
 })
@@ -40,7 +40,7 @@ it('distinguishes unindexed, failed refresh, and previous evidence', async () =>
 it('retries read failures without automatically indexing', async () => {
   papersApi.citations.mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValue(page())
   render(view())
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unavailable')
+  expect(await screen.findByRole('alert')).toHaveTextContent('Citation data could not be loaded.')
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   await screen.findByText('No indexed citations found.')
   expect(papersApi.reindexCitations).not.toHaveBeenCalled()
@@ -107,20 +107,20 @@ it('PDF extraction is an explicit action and reports queue failures', async () =
   await screen.findByText('Not indexed yet.')
   expect(papersApi.reindexPdfCitations).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Index PDF bibliography' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('PDF indexing unavailable')
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not start indexing. Please try again.')
   expect(papersApi.reindexPdfCitations).toHaveBeenCalledWith('p_a')
   expect(papersApi.reindexCitations).not.toHaveBeenCalled()
 })
 
-it('shows PDF bibliography evidence with the original reference and file fingerprint', async () => {
+it('shows the PDF source and original reference without implementation details', async () => {
   papersApi.citations.mockResolvedValue(page({ items: [{ ...target, evidence: [{ provider: 'pymupdf',
     method: 'exact_identifier', indexedAt: '2026-11-03T00:00:00Z',
     reference: { unstructured: 'A. Writer, Target paper, 2024.', pdf_sha256: 'a'.repeat(64) },
   }] }], total: 1 }))
   render(view())
   await screen.findByText('Target paper')
-  expect(screen.getByText(/PDF bibliography \(local\)/)).toBeInTheDocument()
+  expect(screen.getByText(/^PDF\b/)).toBeInTheDocument()
   expect(screen.getByText('A. Writer, Target paper, 2024.')).toBeInTheDocument()
-  expect(screen.getByTitle('a'.repeat(64))).toBeInTheDocument()
+  expect(screen.queryByTitle('a'.repeat(64))).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Index PDF bibliography' })).not.toBeInTheDocument()
 })
