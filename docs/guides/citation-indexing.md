@@ -8,6 +8,16 @@ Apply `backend/migrations/033_paper_citations.sql` after the existing numbered m
 
 Restart the application with this branch. Before migration, citation endpoints return a setup-specific HTTP 503 without preventing ordinary paper operations. Set a valid `OPENALEX_API_KEY` in `backend/.env` for bulk use; credentials stay server-side. Crossref does not require a separate key.
 
+## Upgrading an earlier citation installation
+
+An earlier revision of 033 could be installed without `citation_local_ids`, local identifier seeding, or the DELETE event on `paper_citations_changed`. Running the full file at that time does not install later changes to that file. Diagnose this with `backend/scripts/diagnose_citation_install.sql` in the same Supabase project's SQL editor.
+
+After 033?035, stop citation workers and apply `036_repair_citation_identity_setup.sql` in full. It upgrades the citation functions and trigger, seeds local DOI/arXiv identifiers, reconciles retained references, and requests a REST schema-cache reload. It preserves existing jobs, raw references, published runs, PDF provider constraints and the PDF revision fingerprint. It does not enqueue historical papers or contact providers. Do not replay 033 over the PDF migrations.
+
+Restart the worker after applying 036. A backfill of the intended library is still needed to resolve OpenAlex identities for potential citation targets; seeding local DOI/arXiv IDs alone cannot match references stored only as OpenAlex work IDs. Empty provider reference lists can remain empty after this upgrade.
+
+The disposable SQL runner simulates the missing helper, absent local IDs and older trigger before applying 036 twice. It checks retained-record/job preservation, reconciliation of an unindexed DOI target, unchanged PDF fingerprints, both PDF engines' opt-in and the full citation lifecycle fixtures.
+
 ## Optional PDF bibliography extraction
 
 Apply `034_pdf_citations.sql` and then `035_local_pdf_citations.sql` after 033. The default extractor uses the existing PyMuPDF dependency locally; no GROBID service or new API key is required. Click **Index PDF bibliography** for a managed PDF, or add `--include-pdf` to a new backfill:

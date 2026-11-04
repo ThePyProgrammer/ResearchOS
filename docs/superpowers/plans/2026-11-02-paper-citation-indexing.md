@@ -216,3 +216,13 @@ The user cannot run GROBID locally and approved proceeding with an existing-depe
 Decision: ship the local fallback as an opt-in aid, with a no-go for automatic library-wide PDF extraction based on this pilot. Defer GROBID/OCR and keep the provider milestone independent of local parser coverage.
 
 Validation for this revision: 372 backend tests and 403 frontend tests passed; migrations 033/034/035 each applied twice in disposable PGlite with lifecycle fixtures; citation browser workflow and production build passed. The build retains the existing large-bundle warning. Live Supabase permissions and concurrent deployment behavior remain rollout checks.
+
+
+## Installed-schema repair
+
+The user's SQL diagnostic confirmed an earlier revision of 033 is installed: `citation_local_ids` and local identifier seeding are absent, and the paper-change trigger covers INSERT/UPDATE only. This is an upgrade mismatch, not evidence that the user skipped running the complete files. The live database had 391 papers, 264 with identifiers, 12 completed provider jobs, and 243 stored references without local links at diagnosis.
+
+- [x] Prepare additive migration 036 to restore current citation functions, seed local identifiers and reconcile retained references while preserving PDF schema upgrades.
+- [x] Simulate the older installation, apply 036 twice, assert that jobs/references/runs and fingerprints survive, then rerun citation and PDF lifecycle checks.
+- [ ] User applies 036 through the Supabase SQL editor; verify the resulting live schema and seeded identities.
+- [ ] Queue the intended library backfill to resolve additional OpenAlex targets and inspect resulting local links. A repaired schema does not guarantee provider coverage or immediately match references that contain only OpenAlex IDs.

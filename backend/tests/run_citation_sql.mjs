@@ -22,7 +22,15 @@ try {
   await db.exec(localMigration)
   await db.exec(await readFile(new URL('./sql/pdf_citations.sql', import.meta.url), 'utf8'))
   await db.exec(await readFile(new URL('./sql/local_pdf_citations.sql', import.meta.url), 'utf8'))
-  console.log('Citation SQL checks passed; migrations 033, 034 and 035 applied twice.')
+  await db.exec(await readFile(new URL('./sql/citation_upgrade_setup.sql', import.meta.url), 'utf8'))
+  const repair = await readFile(new URL('../migrations/036_repair_citation_identity_setup.sql', import.meta.url), 'utf8')
+  await db.exec(repair)
+  await db.exec(repair)
+  await db.exec(await readFile(new URL('./sql/citation_upgrade_assertions.sql', import.meta.url), 'utf8'))
+  await db.exec(await readFile(new URL('./sql/paper_citations.sql', import.meta.url), 'utf8'))
+  await db.exec(await readFile(new URL('./sql/pdf_citations.sql', import.meta.url), 'utf8'))
+  await db.exec(await readFile(new URL('./sql/local_pdf_citations.sql', import.meta.url), 'utf8'))
+  console.log('Citation SQL checks passed; migrations 033-036 replayed, including legacy upgrade preservation.')
 } finally {
   await db.close()
 }
