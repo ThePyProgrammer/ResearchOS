@@ -62,9 +62,15 @@ function CitationLists({ paperId, hasStoredPdf }) {
   const busy = queueing || jobs.some(job => ['pending', 'running'].includes(job.status))
   const activeRuns = (data?.runs || []).filter(run => run.active)
   const failed = jobs.some(job => job.status === 'failed')
-  const partial = jobs.some(job => ['partial', 'not_found'].includes(job.status))
+  const partial = jobs.some(job => ['partial', 'not_found'].includes(job.status)
+    && !(job.provider === 'crossref' && job.error === 'No DOI available'))
   const lastIndexed = activeRuns.map(run => run.indexedAt).sort().at(-1)
   const label = direction === 'outgoing' ? 'References in this library' : 'Cited by in this library'
+  const emptyMessage = direction === 'incoming'
+    ? 'No papers in this library are linked as citing this paper yet.'
+    : data?.unresolvedCount > 0
+      ? 'References were found, but none are linked to papers in this library yet.'
+      : 'No linked references in this library yet.'
 
   return (
     <section className="border-t border-slate-200 p-4 text-sm" aria-label="Paper citations">
@@ -87,7 +93,7 @@ function CitationLists({ paperId, hasStoredPdf }) {
         {partial && <p className="text-slate-500 mb-2">Some references could not be found.</p>}
         {!activeRuns.length && !busy && !failed && !partial && <p className="text-slate-500">Not indexed yet.</p>}
         {lastIndexed && <p className="text-xs text-slate-500 mb-2">Last indexed: {new Date(lastIndexed).toLocaleString()}</p>}
-        {!data.items.length && <p className="text-slate-500 mb-2">No indexed citations found.</p>}
+        {!data.items.length && <p className="text-slate-500 mb-2">{emptyMessage}</p>}
         <ul className="space-y-3">
           {data.items.map(item => <li key={item.id}>
             <Link to={`/library/paper/${encodeURIComponent(item.id)}`} className="text-blue-700 hover:underline">{item.title}</Link>
@@ -111,7 +117,7 @@ function CitationLists({ paperId, hasStoredPdf }) {
           <button disabled={offset + 10 >= data.total || loading} onClick={() => { setData(null); setOffset(n => n + 10) }}>Next</button>
         </div>}
         <p className="text-xs text-slate-500 mt-3">{data.indexedPapers} of {data.libraryPapers} papers indexed.</p>
-        {data.unresolvedCount > 0 && <p className="text-xs text-slate-500">{data.unresolvedCount} references not linked to a paper in this library.</p>}
+        {direction === 'outgoing' && data.unresolvedCount > 0 && <p className="text-xs text-slate-500">{data.unresolvedCount} references not linked to a paper in this library.</p>}
       </>}
       <button type="button" disabled={busy} onClick={() => reindex()} className="mt-3 text-xs text-blue-700 disabled:text-slate-400">
         {busy ? 'Indexing…' : 'Index this paper'}

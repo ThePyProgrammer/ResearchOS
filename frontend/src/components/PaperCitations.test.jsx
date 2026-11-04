@@ -42,8 +42,22 @@ it('retries read failures without automatically indexing', async () => {
   render(view())
   expect(await screen.findByRole('alert')).toHaveTextContent('Citation data could not be loaded.')
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-  await screen.findByText('No indexed citations found.')
+  await screen.findByText('No linked references in this library yet.')
   expect(papersApi.reindexCitations).not.toHaveBeenCalled()
+})
+
+it('distinguishes retrieved references from missing library links', async () => {
+  papersApi.citations.mockResolvedValue(page({ unresolvedCount: 175,
+    jobs: [{ provider: 'crossref', status: 'not_found', error: 'No DOI available' }],
+    runs: [{ active: true, provider: 'openalex', indexedAt: '2026-11-03T00:00:00Z' }],
+  }))
+  render(view())
+  await screen.findByText('References were found, but none are linked to papers in this library yet.')
+  expect(screen.getByText('175 references not linked to a paper in this library.')).toBeInTheDocument()
+  expect(screen.queryByText('Some references could not be found.')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Cited by' }))
+  await screen.findByText('No papers in this library are linked as citing this paper yet.')
+  expect(screen.queryByText('175 references not linked to a paper in this library.')).not.toBeInTheDocument()
 })
 
 it('keeps the paper usable when a server returns a malformed citation response', async () => {
