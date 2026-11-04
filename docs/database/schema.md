@@ -1,5 +1,20 @@
 # Database Schema
 
+## Citation index (migration 033)
+
+| Table | Purpose |
+| --- | --- |
+| `paper_external_ids` | Normalized local/provider identifiers with assertion source; IDs can belong to multiple local copies |
+| `paper_reference_runs` | Immutable retrieval snapshots, source fingerprint, resolution/status, candidates, and active-run marker |
+| `paper_references` | Raw reference evidence and target identifiers, including references with no local match |
+| `paper_citations` | Unique directed `(citing_paper_id, cited_paper_id)` edges; self-edges prohibited |
+| `paper_citation_evidence` | One or more reference records supporting each edge |
+| `paper_citation_jobs` | One durable job per paper/provider, with retry scheduling, leased execution, and optional captured Crossref record |
+
+Migration 033 provides transaction functions for enqueueing, leasing, publishing, failure recording, reconciliation, and paginated reads. `paper_citations_changed` covers paper inserts, metadata changes, and deletions. Only successful full provider responses replace active evidence; partial/failing attempts retain old evidence. All paper-owned rows cascade on deletion. Reverse citation and identifier lookup indexes support library-scoped matching. RLS follows the repository's existing disabled-RLS model; this feature does not add an authorization boundary.
+
+See [citation operations](../guides/citation-indexing.md) for installation and worker commands. The historical consolidated `schema.sql` still requires later numbered migrations, including 033.
+
 ## ER Overview
 
 ```

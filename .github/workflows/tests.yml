@@ -6,6 +6,18 @@ on:
     branches: [main]
 
 jobs:
+  citation-database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install disposable PostgreSQL engine
+        run: npm install --prefix backend/data/citation-validation --no-audit --no-fund --ignore-scripts @electric-sql/pglite@0.5.14
+      - name: Verify citation migration and transactions
+        run: node backend/tests/run_citation_sql.mjs
+
   backend:
     runs-on: ubuntu-latest
     defaults:
