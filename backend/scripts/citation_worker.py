@@ -10,16 +10,25 @@ sys.path.insert(0, str(BACKEND))
 from dotenv import load_dotenv
 load_dotenv(BACKEND / ".env")
 from services.citation_job_service import run_one
+from services.citation_fallback_service import schedule_pdf_fallbacks
+from services.citation_repository import local_pdf_job_ids
+from postgrest.exceptions import APIError
 
 
 async def run(args):
     job_ids = None
+    paper_ids = None
     if args.batch:
         manifest = json.loads(args.batch.read_text(encoding="utf-8"))
         job_ids = [job for jobs in manifest["jobs"].values() for job in jobs]
+        paper_ids = list(manifest['jobs'])
     while True:
+        # Imports enqueue providers transactionally. The next sweep catches their
+        # terminal results and PDFs downloaded after the initial paper insertion.
+        schedule_pdf_fallbacks(paper_ids)
+        scoped_jobs = list(dict.fromkeys(job_ids + local_pdf_job_ids(paper_ids))) if job_ids is not None else [None]
         worked = False
-        for job_id in job_ids if job_ids is not None else [None]:
+        for job_id in scoped_jobs:
             result = await run_one(job_id)
             if result:
                 worked = True
@@ -45,3 +54,7 @@ if __name__ == "__main__":
         asyncio.run(run(parser.parse_args()))
     except KeyboardInterrupt:
         pass  # An interrupted lease is reclaimed after expiry.
+    except APIError as exc:
+        if exc.code in {'42883', 'PGRST202', 'PGRST205', '42P01'}:
+            parser.exit(1, 'Citation worker setup is incomplete. Apply migrations 033–037, then restart.\n')
+        raise

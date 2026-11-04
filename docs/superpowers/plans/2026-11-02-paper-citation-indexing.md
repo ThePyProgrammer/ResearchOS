@@ -226,3 +226,18 @@ The user's SQL diagnostic confirmed an earlier revision of 033 is installed: `ci
 - [x] Simulate the older installation, apply 036 twice, assert that jobs/references/runs and fingerprints survive, then rerun citation and PDF lifecycle checks.
 - [ ] User applies 036 through the Supabase SQL editor; verify the resulting live schema and seeded identities.
 - [ ] Queue the intended library backfill to resolve additional OpenAlex targets and inspect resulting local links. A repaired schema does not guarantee provider coverage or immediately match references that contain only OpenAlex IDs.
+
+
+## Automatic local fallback and import integration
+
+The user approved automatic local PDF fallback when provider retrieval returns no references. This supersedes the earlier decision to require manual PDF opt-in for every paper; unconditional PDF backfill and automatic GROBID use remain outside scope.
+
+- [x] Add migration 037 with current-source eligibility, paged discovery and atomic enqueue guarded by the paper lock.
+- [x] Wait for both OpenAlex/Crossref jobs to become terminal; distinguish empty references from references without local matches, including partial/retained provider evidence.
+- [x] Reuse existing local PDF jobs for unchanged sources and keep retry/lease semantics. Do not repeatedly retry unsupported PDFs on every worker sweep.
+- [x] Integrate through the common paper-insertion trigger and worker, so URL/DOI/arXiv/BibTeX imports and PDF download completion require no manual indexing click and do not depend on automatic notes.
+- [x] Sweep on worker startup/iterations and include scoped fallback jobs when resuming or draining a persisted batch.
+- [x] Test pending providers, terminal failures, retrieved-but-unmatched references, partial references, late downloads, stale candidates, unchanged-source reuse, storage restrictions and batch restart behavior.
+- [ ] Apply 037 to the live database and restart the worker. Local development tools cannot apply SQL directly to this Supabase installation.
+
+Validation: 376 backend tests passed. Disposable SQL checks passed with migrations 033?037 each replayed, including imported-paper provider queueing, late PDF availability, fallback eligibility, unchanged-source reuse and stale-candidate rejection. No live migration or new backfill was executed in this implementation step.

@@ -49,3 +49,25 @@ def capture_crossref(paper_id: str, record: dict) -> bool:
     return bool(get_client().rpc("capture_crossref_references", {
         "p_paper_id": paper_id, "p_record": record,
     }).execute().data)
+
+
+def fallback_candidates(paper_ids: list[str] | None, after: str) -> list[dict]:
+    return get_client().rpc('get_pdf_citation_fallback_candidates', {
+        'p_paper_ids': paper_ids, 'p_after_id': after, 'p_limit': 100,
+    }).execute().data or []
+
+
+def enqueue_fallback(paper_id: str, fingerprint: str) -> list[dict]:
+    return get_client().rpc('enqueue_pdf_citation_fallback', {
+        'p_paper_id': paper_id, 'p_fingerprint': fingerprint,
+    }).execute().data or []
+
+
+def local_pdf_job_ids(paper_ids: list[str]) -> list[str]:
+    # Include already-created fallback jobs when resuming a batch after a crash.
+    result = []
+    for start in range(0, len(paper_ids), 100):
+        rows = get_client().table('paper_citation_jobs').select('id').eq('provider', 'pymupdf').in_(
+            'paper_id', paper_ids[start:start + 100]).execute().data or []
+        result.extend(row['id'] for row in rows)
+    return result

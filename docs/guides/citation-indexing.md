@@ -18,7 +18,19 @@ Restart the worker after applying 036. A backfill of the intended library is sti
 
 The disposable SQL runner simulates the missing helper, absent local IDs and older trigger before applying 036 twice. It checks retained-record/job preservation, reconciliation of an unindexed DOI target, unchanged PDF fingerprints, both PDF engines' opt-in and the full citation lifecycle fixtures.
 
-## Optional PDF bibliography extraction
+## Automatic fallback and imports
+
+Apply `037_automatic_pdf_citation_fallback.sql` after 036, then restart the citation worker. New paper imports (including BibTeX and manual paper creation) already enqueue OpenAlex/Crossref through the insertion trigger, independently of automatic notes. Imported PDF downloads update the paper and requeue those providers for the current source version. The worker now automatically schedules local PyMuPDF extraction once both provider jobs finish without retrieving any references and the PDF is in configured managed storage.
+
+The trigger is absence of retrieved reference records, not absence of library matches. References in partial runs or retained active runs suppress fallback too. Pending/running provider attempts wait; terminal failures after retries can fall back. GROBID is never selected automatically, and no PDF is sent to an external parser. Papers without a stored PDF continue to use provider indexing only.
+
+An unchanged source with an existing local PDF job is not queued again by a sweep, including partial/failed PDF attempts. Existing retry limits remain in effect; use **Index PDF bibliography** to explicitly retry a terminal PDF job. Source metadata or PDF changes invalidate the existing citation fingerprint through the established triggers, so those changes can cause extraction to run again. Reindexing the providers alone does not rerun an unchanged PDF job.
+
+Worker startup and each processing loop sweep eligible papers, recovering the interval between a provider finishing and a worker crash. Resumable batches include local fallback jobs for their original enqueued paper IDs, including jobs created before a restart; they do not process other libraries' jobs. The default worker processes one job at a time. Import requests do not wait for citation network calls or parsing; keep the worker running locally for this background work.
+
+Installing 037 itself performs no indexing or provider requests. Starting the updated worker also picks up previously attempted papers that meet the fallback rule. It does not enqueue provider indexing for the entire historical library.
+
+## Manual PDF bibliography extraction
 
 Apply `034_pdf_citations.sql` and then `035_local_pdf_citations.sql` after 033. The default extractor uses the existing PyMuPDF dependency locally; no GROBID service or new API key is required. Click **Index PDF bibliography** for a managed PDF, or add `--include-pdf` to a new backfill:
 
@@ -27,7 +39,7 @@ uv run --directory backend python scripts/index_paper_citations.py --library-id 
 uv run --directory backend python scripts/index_paper_citations.py --library-id LIBRARY_ID --include-pdf
 ```
 
-PDF indexing remains opt-in. New batches record `pdf_engine: pymupdf`; old manifests without that field retain their original GROBID scope and service requirement. Managed GCS/Supabase credentials read private files directly. Arbitrary external PDF URLs must first be stored through the existing import/upload path. The size limit is 100 MiB; local extraction also rejects encrypted documents and documents over 1,000 pages.
+The PDF button and `--include-pdf` explicitly request extraction even when providers returned references. New batches record `pdf_engine: pymupdf`; old manifests without that field retain their original GROBID scope and service requirement. Managed GCS/Supabase credentials read private files directly. Arbitrary external PDF URLs must first be stored through the existing import/upload path. The size limit is 100 MiB; local extraction also rejects encrypted documents and documents over 1,000 pages.
 
 The local extractor recognizes numbered bibliographies beneath References/Bibliography/Works Cited headings, orders one- or two-column text, and retains raw text, page numbers, parser version and PDF SHA-256. It uses only explicit DOI/arXiv identifiers. Title-only references and conflicting identifiers remain unresolved. Nonsequential numbering, unrecognized bibliographies and uncertain boundaries return partial results without publishing new identifiers or erasing previous successful evidence. Scans, unnumbered references, unusual layouts and line-wrapped identifiers remain coverage limitations. No OCR or fuzzy title linking is performed. Extraction success does not guarantee that every bibliography entry was found.
 
@@ -37,7 +49,7 @@ Run a read-only pilot without applying migrations or writing citation tables:
 uv run --directory backend python scripts/pilot_pdf_citations.py --paper-id PAPER_ID --output data/citations/pdf-pilot.json
 ```
 
-This downloads the managed PDF, parses it locally, and saves raw evidence and exact same-library matches. Reports must use a new output path. The five-PDF local pilot retained 203 reference records: three successful extractions (119 records) and two partial results (84 records). It found **zero additional exact local links**. See `docs/local-pdf-citation-pilot-report.md`. Keep this feature opt-in; the evidence does not justify a library-wide automatic PDF backfill.
+This downloads the managed PDF, parses it locally, and saves raw evidence and exact same-library matches. Reports must use a new output path. The five-PDF local pilot retained 203 reference records: three successful extractions (119 records) and two partial results (84 records). It found **zero additional exact local links**. See `docs/local-pdf-citation-pilot-report.md`. The later automatic fallback is limited to provider attempts with no retrieved references; a library-wide unconditional PDF backfill remains unnecessary.
 
 GROBID remains an optional alternate parser. Configure `GROBID_URL` and explicitly use `POST /api/papers/{id}/citations/pdf/reindex?engine=grobid` or add `--engine grobid` to the pilot command to send a PDF to that service. The adapter disables external metadata consolidation and HTTP redirects. No real GROBID pilot has been run. Leaving `GROBID_URL` blank does not affect local extraction or OpenAlex/Crossref indexing.
 
@@ -107,7 +119,7 @@ npm install --prefix backend/data/citation-validation --no-audit --no-fund --ign
 node backend/tests/run_citation_sql.mjs
 ```
 
-The runner uses actual repository library/paper definitions, applies migrations 033, 034 and 035 twice, and rolls back its fixtures. It verifies transaction behavior, including same-URL PDF replacement, not Supabase permissions or production multi-connection contention. Browser coverage lives in `frontend/e2e/citations.spec.js`. PDF parser/storage fixtures are in `backend/tests/test_local_pdf_references.py`, `backend/tests/test_pdf_references.py` and `backend/tests/test_pdf_storage.py`.
+The runner uses actual repository library/paper definitions, applies migrations 033?037 twice, and rolls back its fixtures. It verifies transaction behavior, including same-URL PDF replacement, not Supabase permissions or production multi-connection contention. Browser coverage lives in `frontend/e2e/citations.spec.js`. PDF parser/storage fixtures are in `backend/tests/test_local_pdf_references.py`, `backend/tests/test_pdf_references.py` and `backend/tests/test_pdf_storage.py`.
 
 ## Rollback and limitations
 

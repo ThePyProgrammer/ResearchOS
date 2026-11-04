@@ -564,3 +564,5 @@ RLS: disabled.
 PDF public URL pattern: `{SUPABASE_URL}/storage/v1/object/public/pdfs/{paper_id}.pdf`
 
 Migration `035_local_pdf_citations.sql` adds the opt-in `pymupdf` provider and `enqueue_local_pdf_citations` RPC without changing existing GROBID jobs. Source changes requeue each previously selected PDF engine independently. The local API default uses this RPC. Apply migrations in sequence; replaying 034 after 035 would restore older provider constraints.
+
+Migration `037_automatic_pdf_citation_fallback.sql` adds eligibility, candidate paging and atomic local-fallback enqueue functions. The worker first checks that a candidate URL belongs to configured managed storage; enqueue rechecks the fingerprint and provider/reference/job conditions under the paper lock. Both provider jobs must be terminal for the current fingerprint, neither provider may have retained/current reference records, and no local PDF job may already exist for that fingerprint. Import-trigger provider queueing remains the shared entry point. The migration does not enqueue historical papers.
