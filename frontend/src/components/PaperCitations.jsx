@@ -102,17 +102,6 @@ function CitationLists({ paperId }) {
           {data.items.map(item => <li key={item.id}>
             <Link to={`/library/paper/${encodeURIComponent(item.id)}`} className="text-blue-700 hover:underline">{item.title}</Link>
             <p className="text-xs text-slate-500">{item.authors.slice(0, 2).join(', ')}{item.year ? ` · ${item.year}` : ''}</p>
-            <details className="text-xs text-slate-500 mt-1">
-              <summary className="cursor-pointer">Citation evidence</summary>
-              {item.evidence.map((evidence, index) => <div key={index} className="mt-1">
-                <p>{{ openalex: 'OpenAlex', crossref: 'Crossref', grobid: 'PDF', pymupdf: 'PDF' }[evidence.provider] || 'Source'} · {new Date(evidence.indexedAt).toLocaleDateString()}</p>
-                {evidence.provider === 'openalex' && /^W\d+$/.test(evidence.reference.source_work) &&
-                  <a className="underline" href={`https://openalex.org/${evidence.reference.source_work}`} target="_blank" rel="noreferrer">Source record</a>}
-                {evidence.reference.unstructured && <p className="mt-1">{evidence.reference.unstructured}</p>}
-                {evidence.reference.DOI && <p className="mt-1">DOI: {evidence.reference.DOI}</p>}
-                {['grobid', 'pymupdf'].includes(evidence.provider) && evidence.reference.title && <p className="mt-1">{evidence.reference.title}</p>}
-              </div>)}
-            </details>
           </li>)}
         </ul>
         {data.total > 10 && <div className="flex items-center gap-3 mt-3">
@@ -120,7 +109,7 @@ function CitationLists({ paperId }) {
           <span className="text-xs">{offset + 1}–{Math.min(offset + 10, data.total)} of {data.total}</span>
           <button disabled={offset + 10 >= data.total || loading} onClick={() => { setData(null); setOffset(n => n + 10) }}>Next</button>
         </div>}
-        {direction === 'outgoing' && data.unresolvedCount > 0 && <p className="text-xs text-slate-500">{data.unresolvedCount} references not linked to a paper in this library.</p>}
+        {direction === 'outgoing' && data.unresolvedCount > 0 && <p className="pt-3 text-xs text-slate-500">{data.unresolvedCount} references not linked to a paper in this library.</p>}
       </>}
       {lastIndexed && <p className="text-xs text-slate-500 mt-2">Last indexed: {new Date(lastIndexed).toLocaleString()}</p>}
     </section>

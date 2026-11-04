@@ -13,12 +13,11 @@ const target = { id: 'p_b', title: 'Target paper', authors: ['A Writer'], year: 
     reference: { source_work: 'W1', target_work: 'W2' } }] }
 function view(paperId = 'p_a') { return <MemoryRouter><PaperCitations paperId={paperId} libraryId="lib" /></MemoryRouter> }
 
-it('shows direction, evidence, and local navigation', async () => {
+it('shows direction and local navigation', async () => {
   papersApi.citations.mockResolvedValue(page({ items: [target], total: 1 }))
   render(view())
   expect(await screen.findByRole('link', { name: 'Target paper' })).toHaveAttribute('href', '/library/paper/p_b')
   expect(screen.getByRole('heading', { name: 'References in this library (1)' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Source record' })).toHaveAttribute('href', 'https://openalex.org/W1')
   fireEvent.click(screen.getByRole('button', { name: 'Cited by' }))
   await screen.findByRole('heading', { name: 'Cited by in this library (1)' })
   expect(papersApi.citations).toHaveBeenLastCalledWith('p_a', { direction: 'incoming', offset: 0, limit: 10 })
@@ -126,15 +125,15 @@ it('the single index action starts providers and reports queue failures', async 
   expect(papersApi.reindexPdfCitations).not.toHaveBeenCalled()
 })
 
-it('shows the PDF source and original reference without implementation details', async () => {
+it('shows PDF-linked papers without an evidence dropdown', async () => {
   papersApi.citations.mockResolvedValue(page({ items: [{ ...target, evidence: [{ provider: 'pymupdf',
     method: 'exact_identifier', indexedAt: '2026-11-03T00:00:00Z',
     reference: { unstructured: 'A. Writer, Target paper, 2024.', pdf_sha256: 'a'.repeat(64) },
   }] }], total: 1 }))
   render(view())
   await screen.findByText('Target paper')
-  expect(screen.getByText(/^PDF\b/)).toBeInTheDocument()
-  expect(screen.getByText('A. Writer, Target paper, 2024.')).toBeInTheDocument()
+  expect(screen.queryByText('Citation evidence')).not.toBeInTheDocument()
+  expect(screen.queryByText('A. Writer, Target paper, 2024.')).not.toBeInTheDocument()
   expect(screen.queryByTitle('a'.repeat(64))).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Index PDF bibliography' })).not.toBeInTheDocument()
 })

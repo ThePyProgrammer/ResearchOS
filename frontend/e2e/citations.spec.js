@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('paper citations show evidence, direction, indexing state, and target navigation', async ({ page }) => {
+test('paper citations show direction, indexing state, and target navigation', async ({ page }) => {
   const paper = id => ({ id, title: id === 'p_a' ? 'Source Paper' : 'Target Paper',
     authors: ['Researcher'], year: 2025, venue: 'Journal', status: 'read', source: 'human',
     libraryId: 'lib_citations', tags: [], collections: [], links: [], createdAt: '2026-11-03T00:00:00Z' })
@@ -28,8 +28,6 @@ test('paper citations show evidence, direction, indexing state, and target navig
   await page.goto('/library/paper/p_a')
   const citations = page.getByRole('region', { name: 'Paper citations' })
   await expect(citations.getByRole('heading', { name: 'References in this library (1)' })).toBeVisible()
-  await citations.getByText('Citation evidence').click()
-  await expect(citations.getByRole('link', { name: 'Source record' })).toHaveAttribute('href', 'https://openalex.org/W1')
   await citations.getByRole('button', { name: 'Cited by', exact: true }).click()
   await expect(citations.getByText('No papers in this library are linked as citing this paper yet.')).toBeVisible()
   await citations.getByRole('button', { name: 'References', exact: true }).click()
