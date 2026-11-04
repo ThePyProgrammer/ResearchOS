@@ -17,7 +17,12 @@ try {
   await db.exec(pdfMigration)
   await db.exec(await readFile(new URL('./sql/paper_citations.sql', import.meta.url), 'utf8'))
   await db.exec(await readFile(new URL('./sql/pdf_citations.sql', import.meta.url), 'utf8'))
-  console.log('Citation and PDF SQL checks passed; migrations 033 and 034 applied twice.')
+  const localMigration = await readFile(new URL('../migrations/035_local_pdf_citations.sql', import.meta.url), 'utf8')
+  await db.exec(localMigration)
+  await db.exec(localMigration)
+  await db.exec(await readFile(new URL('./sql/pdf_citations.sql', import.meta.url), 'utf8'))
+  await db.exec(await readFile(new URL('./sql/local_pdf_citations.sql', import.meta.url), 'utf8'))
+  console.log('Citation SQL checks passed; migrations 033, 034 and 035 applied twice.')
 } finally {
   await db.close()
 }
