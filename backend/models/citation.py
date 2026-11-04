@@ -5,7 +5,7 @@ from pydantic import Field
 
 from models.base import CamelModel
 
-Provider = Literal["openalex", "crossref"]
+Provider = Literal["openalex", "crossref", "grobid"]
 RunStatus = Literal["succeeded", "partial", "not_found"]
 
 

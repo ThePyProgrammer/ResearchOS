@@ -6,6 +6,10 @@ def enqueue(paper_id: str, force: bool = False) -> list[dict]:
     return get_client().rpc("enqueue_paper_citations", {"p_paper_id": paper_id, "p_force": force}).execute().data or []
 
 
+def enqueue_pdf(paper_id: str, force: bool = False) -> list[dict]:
+    return get_client().rpc("enqueue_pdf_citations", {"p_paper_id": paper_id, "p_force": force}).execute().data or []
+
+
 def claim(job_id: str | None = None) -> dict | None:
     data = get_client().rpc("claim_citation_job", {"p_job_id": job_id}).execute().data
     return data[0] if data else None

@@ -12,7 +12,12 @@ try {
   await db.exec(migration)
   await db.exec(migration) // Migration replay must be safe.
   await db.exec(await readFile(new URL('./sql/paper_citations.sql', import.meta.url), 'utf8'))
-  console.log('Citation SQL transaction checks passed; migration applied twice.')
+  const pdfMigration = await readFile(new URL('../migrations/034_pdf_citations.sql', import.meta.url), 'utf8')
+  await db.exec(pdfMigration)
+  await db.exec(pdfMigration)
+  await db.exec(await readFile(new URL('./sql/paper_citations.sql', import.meta.url), 'utf8'))
+  await db.exec(await readFile(new URL('./sql/pdf_citations.sql', import.meta.url), 'utf8'))
+  console.log('Citation and PDF SQL checks passed; migrations 033 and 034 applied twice.')
 } finally {
   await db.close()
 }

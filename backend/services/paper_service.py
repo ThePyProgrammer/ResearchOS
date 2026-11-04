@@ -84,7 +84,7 @@ def create_paper(data: PaperCreate) -> Paper:
         created_at=now,
         **data.model_dump(),
     )
-    get_client().table(_TABLE).insert(paper.model_dump(by_alias=False, exclude={"has_stored_pdf"})).execute()
+    get_client().table(_TABLE).insert(paper.model_dump(by_alias=False, exclude={"has_stored_pdf", "pdf_revision"})).execute()
     logger.info("Created paper %s: %s", paper.id, paper.title)
     return paper
 

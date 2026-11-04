@@ -15,6 +15,8 @@ Migration 033 provides transaction functions for enqueueing, leasing, publishing
 
 See [citation operations](../guides/citation-indexing.md) for installation and worker commands. The historical consolidated `schema.sql` still requires later numbered migrations, including 033.
 
+Migration `034_pdf_citations.sql` adds the opt-in `grobid` provider and `papers.pdf_revision`. A BEFORE trigger increments that revision for every explicit `pdf_url` update, including replacing a file at the same URL. The citation fingerprint includes the revision, so stale extraction workers cannot publish and previous evidence is invalidated. An AFTER trigger requeues PDF extraction only when that paper already has a GROBID job. `enqueue_pdf_citations` explicitly creates that opt-in. Existing retrieval/evidence tables retain the parser version and PDF hash without separate storage tables.
+
 ## ER Overview
 
 ```
