@@ -11,6 +11,34 @@ logger = logging.getLogger(__name__)
 _TABLE = "papers"
 
 
+def iter_papers(*, library_id: str | None = None, all_libraries: bool = False,
+                page_size: int = 500):
+    """Stable keyset traversal, bounded by the initial maximum ID."""
+    if not all_libraries and not library_id:
+        raise ValueError("Select a library or explicitly select all libraries")
+    if not 1 <= page_size <= 1000:
+        raise ValueError("page_size must be between 1 and 1000")
+
+    def scoped_query(fields):
+        query = get_client().table(_TABLE).select(fields)
+        return query if all_libraries else query.eq("library_id", library_id)
+
+    top = scoped_query("id").order("id", desc=True).limit(1).execute().data
+    if not top:
+        return
+    upper = top[0]["id"]
+    after = None
+    while True:
+        query = scoped_query("*").lte("id", upper).order("id").limit(page_size)
+        if after is not None:
+            query = query.gt("id", after)
+        rows = query.execute().data
+        if not rows:
+            return
+        yield from rows
+        after = rows[-1]["id"]
+
+
 def list_papers(
     collection_id: Optional[str] = None,
     status: Optional[str] = None,
