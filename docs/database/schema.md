@@ -562,3 +562,5 @@ RLS: disabled.
 - **Policies**: `pdfs public read`, `pdfs backend write`, `pdfs backend delete`, `pdfs backend update` (all granted to `public` role)
 
 PDF public URL pattern: `{SUPABASE_URL}/storage/v1/object/public/pdfs/{paper_id}.pdf`
+
+Migration `035_local_pdf_citations.sql` adds the opt-in `pymupdf` provider and `enqueue_local_pdf_citations` RPC without changing existing GROBID jobs. Source changes requeue each previously selected PDF engine independently. The local API default uses this RPC. Apply migrations in sequence; replaying 034 after 035 would restore older provider constraints.

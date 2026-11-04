@@ -8,7 +8,7 @@ Requires migration `033_paper_citations.sql` and a separately running citation w
 | --- | --- |
 | `GET /api/papers/{id}/citations?direction=outgoing&limit=20&offset=0` | Paginated local references or `direction=incoming` for local citing papers; reads never trigger provider calls |
 | `POST /api/papers/{id}/citations/reindex` | HTTP 202 with OpenAlex/Crossref job summaries; pending/running work is reused |
-| `POST /api/papers/{id}/citations/pdf/reindex` | Explicit opt-in for a managed PDF; requires migration 034 and `GROBID_URL`; HTTP 202 with its GROBID job summary |
+| `POST /api/papers/{id}/citations/pdf/reindex` | Explicit opt-in for a managed PDF; defaults to local PyMuPDF with migrations 034 and 035; HTTP 202 with its job summary. Optional `?engine=grobid` requires `GROBID_URL` |
 | `GET /api/citation-jobs/{uuid}` | Current status of a durable job; does not expose lease tokens or captured provider payloads |
 
 The citation page contains `items`, `total`, `limit`, `offset`, `direction`, `runs`, `jobs`, `unresolvedCount`, `indexedPapers`, `libraryPapers`, and `pendingJobs`. Each item contains `id`, `title`, `authors`, `year`, and `evidence`; evidence includes `provider`, `method`, `indexedAt`, and the original provider `reference` object (its keys retain provider casing). Run summaries include `active`, `resolution`, `status`, `indexedAt`, candidate metadata, and messages.

@@ -153,7 +153,7 @@ Files: add operator instructions in `docs/guides/citation-indexing.md`; create `
 - [x] Record identity-resolution rate, provider reference availability, local edges, ambiguities, failures, request volume, and runtime separately. Manually compare up to 20 detected edges with bibliographies and check every selected known positive pair. Document denominators and unavailable PDFs.
 - [x] Treat every detected false positive as a release blocker until the matching rule is fixed and checked again. Report recall limits explicitly; do not promise complete coverage from this sample.
 - [x] Prepare migration/backfill commands, rollback instructions, and the pilot report. Keep worker failure messages free of credentials and full PDF contents.
-- [ ] Apply migration 033 (and 034 for PDF extraction) to the intended live database, validate permissions and concurrent workers, then start the worker and expand the persisted backfill with resumable batches.
+- [ ] Apply migration 033 (and 034/035 for PDF extraction) to the intended live database, validate permissions and concurrent workers, then start the worker and expand the persisted backfill with resumable batches.
 - [x] Document rollback by disabling enqueueing, stopping workers, and hiding the feature while retaining additive tables/evidence. Avoid destructive rollback of indexed data.
 
 Milestone 1 exit: supported citation pairs appear in both directions with inspectable evidence; new imports reconcile; retries and restarts preserve data; coverage limitations are measured and visible.
@@ -199,3 +199,20 @@ git diff --check
 ```
 
 Suggested commit sequence: contracts/schema; provider identity and OpenAlex indexing; durable jobs/reconciliation; citation API; citation UI; pilot/docs; Crossref capture; justified fallback. Keep every implementation checkbox open until its acceptance criteria have been verified.
+
+
+## Revised fallback decision ? 2026-11-04
+
+The user cannot run GROBID locally and approved proceeding with an existing-dependency fallback. OpenAlex/Crossref remain the primary path; GROBID is optional and disabled unless explicitly configured and selected.
+
+- [x] Add a local PyMuPDF parser for numbered bibliographies; preserve raw text, pages, hash and parser version.
+- [x] Match only explicit DOI/arXiv identifiers; retain title-only entries unresolved. Return partial for unsupported layouts and uncertain boundaries.
+- [x] Add migration 035, independent local PDF opt-in, worker dispatch, default local API/UI action and local CLI pilot. Preserve GROBID jobs and older batch scopes.
+- [x] Run a five-PDF read-only pilot from the previously approved sample plus the known MAGiC-SLAM positive. Review bibliography boundaries and fix appendix/biography contamination before acceptance.
+- [x] Record measured results in `docs/local-pdf-citation-pilot-report.md`: three successful and two partial extractions; 203 retained records; zero additional exact local links.
+- [ ] Apply migrations to the intended live database and start a bounded provider indexing rollout. No live migration or backfill has been performed in this development session.
+- [ ] Consider a separate reviewed title-matching workflow if increased local citation coverage is needed. Do not turn title similarity into automatic citation evidence.
+
+Decision: ship the local fallback as an opt-in aid, with a no-go for automatic library-wide PDF extraction based on this pilot. Defer GROBID/OCR and keep the provider milestone independent of local parser coverage.
+
+Validation for this revision: 372 backend tests and 403 frontend tests passed; migrations 033/034/035 each applied twice in disposable PGlite with lifecycle fixtures; citation browser workflow and production build passed. The build retains the existing large-bundle warning. Live Supabase permissions and concurrent deployment behavior remain rollout checks.
