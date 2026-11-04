@@ -34,7 +34,7 @@
     "dompurify": "^3.4.17",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
-    "katex": "^0.19.1",
+    "katex": "^0.18.10",
     "lowlight": "^3.3.0",
     "papaparse": "^5.5.3",
     "react": "^18.3.1",
