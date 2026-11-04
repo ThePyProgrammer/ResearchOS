@@ -72,9 +72,9 @@ function CitationLists({ paperId }) {
       : 'No linked references in this library yet.'
 
   return (
-    <section className="border-t border-slate-200 p-4 text-xs" aria-label="Paper citations">
+    <section className="p-4 text-xs" aria-label="Paper citations">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-slate-800">Citations</h3>
+        <h3 className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Citations</h3>
         <button type="button" disabled={busy} onClick={() => reindex()}
           className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-500">
           {busy ? 'Indexing…' : 'Index'}
