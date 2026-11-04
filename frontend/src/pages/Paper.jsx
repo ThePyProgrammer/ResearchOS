@@ -524,7 +524,8 @@ export default function Paper() {
                   onPaperUpdate={setPaper}
                 />
                 <PaperCitations paperId={paper.id} libraryId={paper.libraryId}
-                  sourceVersion={JSON.stringify([paper.doi, paper.arxivId, paper.title, paper.authors, paper.year, paper.pdfUrl])} />
+                  hasStoredPdf={paper.hasStoredPdf}
+                  sourceVersion={JSON.stringify([paper.doi, paper.arxivId, paper.title, paper.authors, paper.year, paper.pdfUrl, paper.pdfRevision])} />
               </div>
             )}
             {sideTab === 'notes' && (

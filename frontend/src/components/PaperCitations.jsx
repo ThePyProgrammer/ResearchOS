@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom'
 import { papersApi } from '../services/api'
 
 // Remount on paper/library change so old reads, mutations and polls cannot leak state.
-export default function PaperCitations({ paperId, libraryId, sourceVersion = '' }) {
-  return <CitationLists key={`${libraryId || ''}:${paperId}:${sourceVersion}`} paperId={paperId} />
+export default function PaperCitations({ paperId, libraryId, sourceVersion = '', hasStoredPdf = false }) {
+  return <CitationLists key={`${libraryId || ''}:${paperId}:${sourceVersion}`} paperId={paperId} hasStoredPdf={hasStoredPdf} />
 }
 
-function CitationLists({ paperId }) {
+function CitationLists({ paperId, hasStoredPdf }) {
   const [direction, setDirection] = useState('outgoing')
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState(null)
@@ -44,11 +44,12 @@ function CitationLists({ paperId }) {
     return () => { cancelled = true; clearTimeout(timer) }
   }, [paperId, direction, offset, refresh])
 
-  async function reindex() {
+  async function reindex(pdf = false) {
     setQueueing(true)
     setError(null)
     try {
-      await papersApi.reindexCitations(paperId)
+      if (pdf) await papersApi.reindexPdfCitations(paperId)
+      else await papersApi.reindexCitations(paperId)
       if (alive.current) setRefresh(value => value + 1)
     } catch (err) {
       if (alive.current) setError(err.message)
@@ -94,12 +95,14 @@ function CitationLists({ paperId }) {
             <details className="text-xs text-slate-500 mt-1">
               <summary className="cursor-pointer">Citation evidence</summary>
               {item.evidence.map((evidence, index) => <div key={index} className="mt-1">
-                <p>{evidence.provider === 'openalex' ? 'OpenAlex' : 'Crossref'} · identifier match · {new Date(evidence.indexedAt).toLocaleDateString()}</p>
+                <p>{{ openalex: 'OpenAlex', crossref: 'Crossref', grobid: 'PDF bibliography (GROBID)' }[evidence.provider] || evidence.provider} · identifier match · {new Date(evidence.indexedAt).toLocaleDateString()}</p>
                 {evidence.provider === 'openalex' && /^W\d+$/.test(evidence.reference.source_work) &&
                   <a className="underline" href={`https://openalex.org/${evidence.reference.source_work}`} target="_blank" rel="noreferrer">Source record</a>}
                 {evidence.reference.unstructured && <p className="mt-1">{evidence.reference.unstructured}</p>}
                 {evidence.reference.DOI && <p className="mt-1">DOI: {evidence.reference.DOI}</p>}
                 {evidence.reference.target_work && <p className="mt-1">Referenced work: {evidence.reference.target_work}</p>}
+                {evidence.provider === 'grobid' && evidence.reference.title && <p className="mt-1">{evidence.reference.title}</p>}
+                {evidence.provider === 'grobid' && evidence.reference.pdf_sha256 && <p className="mt-1 break-all" title={evidence.reference.pdf_sha256}>PDF fingerprint: {evidence.reference.pdf_sha256.slice(0, 12)}…</p>}
               </div>)}
             </details>
           </li>)}
@@ -112,9 +115,13 @@ function CitationLists({ paperId }) {
         <p className="text-xs text-slate-500 mt-3">{data.indexedPapers} of {data.libraryPapers} library papers have indexed reference data.</p>
         {data.unresolvedCount > 0 && <p className="text-xs text-slate-500">{data.unresolvedCount} reference records not matched to a unique local citation.</p>}
       </>}
-      <button type="button" disabled={busy} onClick={reindex} className="mt-3 text-xs text-blue-700 disabled:text-slate-400">
+      <button type="button" disabled={busy} onClick={() => reindex()} className="mt-3 text-xs text-blue-700 disabled:text-slate-400">
         {busy ? 'Indexing…' : 'Index this paper'}
       </button>
+      {hasStoredPdf && <div className="mt-3">
+        <button type="button" disabled={busy} onClick={() => reindex(true)} className="text-xs text-blue-700 disabled:text-slate-400">Index PDF bibliography</button>
+        <p className="text-xs text-slate-500 mt-1">Uses the configured PDF extraction service to read the stored PDF.</p>
+      </div>}
     </section>
   )
 }

@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import PaperCitations from './PaperCitations'
 import { papersApi } from '../services/api'
 
-vi.mock('../services/api', () => ({ papersApi: { citations: vi.fn(), reindexCitations: vi.fn() } }))
+vi.mock('../services/api', () => ({ papersApi: { citations: vi.fn(), reindexCitations: vi.fn(), reindexPdfCitations: vi.fn() } }))
 beforeEach(() => vi.resetAllMocks())
 const page = (overrides = {}) => ({ items: [], total: 0, limit: 10, offset: 0, direction: 'outgoing',
   jobs: [], runs: [], unresolvedCount: 0, indexedPapers: 0, libraryPapers: 2, pendingJobs: 0, ...overrides })
@@ -98,4 +98,29 @@ it('queues explicitly and preserves visible links while awaiting the worker', as
   expect(papersApi.reindexCitations).toHaveBeenCalledWith('p_a')
   expect(screen.getByRole('button', { name: 'Indexing…' })).toBeDisabled()
   expect(screen.getByRole('link', { name: 'Target paper' })).toBeInTheDocument()
+})
+
+it('PDF extraction is an explicit action and reports missing service configuration', async () => {
+  papersApi.citations.mockResolvedValue(page())
+  papersApi.reindexPdfCitations.mockRejectedValue(new Error('Configure GROBID first'))
+  render(<MemoryRouter><PaperCitations paperId="p_a" hasStoredPdf /></MemoryRouter>)
+  await screen.findByText('Not indexed yet.')
+  expect(papersApi.reindexPdfCitations).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Index PDF bibliography' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Configure GROBID first')
+  expect(papersApi.reindexPdfCitations).toHaveBeenCalledWith('p_a')
+  expect(papersApi.reindexCitations).not.toHaveBeenCalled()
+})
+
+it('shows PDF bibliography evidence with the original reference and file fingerprint', async () => {
+  papersApi.citations.mockResolvedValue(page({ items: [{ ...target, evidence: [{ provider: 'grobid',
+    method: 'exact_identifier', indexedAt: '2026-11-03T00:00:00Z',
+    reference: { unstructured: 'A. Writer, Target paper, 2024.', pdf_sha256: 'a'.repeat(64) },
+  }] }], total: 1 }))
+  render(view())
+  await screen.findByText('Target paper')
+  expect(screen.getByText(/PDF bibliography \(GROBID\)/)).toBeInTheDocument()
+  expect(screen.getByText('A. Writer, Target paper, 2024.')).toBeInTheDocument()
+  expect(screen.getByTitle('a'.repeat(64))).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Index PDF bibliography' })).not.toBeInTheDocument()
 })

@@ -2,7 +2,7 @@
 
 Date: November 2, 2026  
 Branch: `feat/paper-citation-indexing`  
-Status: OpenAlex/Crossref implementation locally validated; production rollout and PDF fallback pending  
+Status: OpenAlex/Crossref and opt-in PDF adapter implemented; live rollout and GROBID coverage pilot pending
 Basis: [citation indexing investigation](../../citation-indexing-investigation.md)
 
 ## Execution record - November 3, 2026
@@ -23,6 +23,16 @@ Implementation adjustments:
 No migration or backfill has been applied to the live database. Production permissions, multi-connection contention, worker deployment, and full-library persistence remain rollout validation. Semantic Scholar and GROBID were not benchmarked; the external-data approval covered only OpenAlex and Crossref.
 
 Validation: 340 backend tests and 401 frontend tests passed; the full frontend suite used `TZ=UTC` for the existing Dashboard fixture's date assumptions. Migration replay and SQL transaction checks passed. The production build passed with the existing bundle-size warning. The citation browser fixture passed. Combined citation/library browser checks passed 13 of 14 tests: the unchanged row-context-menu test timed out opening/clicking its Copy & export submenu and also timed out when rerun alone. No context-menu implementation was changed. A 391-paper dry-run inventory completed without enqueueing jobs.
+
+## PDF fallback development
+
+The existing implementation was committed in seven strategic groups: plan, schema, provider resolution, jobs/import capture, API, UI, and pilot/operations. Development then continued with an optional GROBID adapter and migration 034.
+
+Implemented: credentialed managed-PDF reads, GROBID `processReferences` with consolidation disabled, raw bibliography/TEI evidence, parser versions and content hashes, conservative DOI/arXiv matching, partial-output preservation, explicit API/UI/backfill opt-in, and a read-only PDF pilot command. PDF revision tracking and a content recheck fence results from replaced files even when the URL is unchanged. PDF jobs refresh automatically only for previously opted-in papers. Title-only references remain unresolved.
+
+The user confirmed no GROBID service is available yet. Extraction remains disabled until `GROBID_URL` is configured; no private PDF has been sent to GROBID and no real parser coverage gain is claimed. Semantic Scholar remains unqueried. The next operational step is to configure a self-hosted service and run `pilot_pdf_citations.py` before rolling out PDF extraction.
+
+Validation for this phase: 358 backend tests and 403 frontend tests passed, including parser output, private-storage access, request opt-in, file replacement, evidence display, and missing-service behavior. Both migrations replay successfully and SQL fixtures pass. The citation browser test and production frontend build also passed. The earlier context-menu browser timeout and UTC-dependent Dashboard fixture remain documented above.
 
 ## Outcome and scope
 
@@ -143,7 +153,7 @@ Files: add operator instructions in `docs/guides/citation-indexing.md`; create `
 - [x] Record identity-resolution rate, provider reference availability, local edges, ambiguities, failures, request volume, and runtime separately. Manually compare up to 20 detected edges with bibliographies and check every selected known positive pair. Document denominators and unavailable PDFs.
 - [x] Treat every detected false positive as a release blocker until the matching rule is fixed and checked again. Report recall limits explicitly; do not promise complete coverage from this sample.
 - [x] Prepare migration/backfill commands, rollback instructions, and the pilot report. Keep worker failure messages free of credentials and full PDF contents.
-- [ ] Apply migration 033 to the intended live database, validate its permissions and concurrent workers, then start the worker and expand the persisted backfill with resumable batches.
+- [ ] Apply migration 033 (and 034 for PDF extraction) to the intended live database, validate permissions and concurrent workers, then start the worker and expand the persisted backfill with resumable batches.
 - [x] Document rollback by disabling enqueueing, stopping workers, and hiding the feature while retaining additive tables/evidence. Avoid destructive rollback of indexed data.
 
 Milestone 1 exit: supported citation pairs appear in both directions with inspectable evidence; new imports reconcile; retries and restarts preserve data; coverage limitations are measured and visible.
@@ -169,8 +179,8 @@ Files: proposed `backend/services/semantic_scholar_client.py` and/or `backend/se
 
 - [ ] Evaluate Semantic Scholar on unresolved arXiv/identifier cases. Verify current endpoint fields, pagination, authentication, and limits before implementation.
 - [ ] Evaluate GROBID on stored PDFs whose bibliographies are missing from provider results. Read PDFs through the existing managed-storage abstraction, including private GCS objects; do not assume stored URLs are publicly fetchable.
-- [ ] Extract from original PDF bytes rather than the truncated Markdown cache. Retain document hash/version, parser version, raw bibliography text, and structured identifiers. Use citation context/page coordinates only when supplied by a suitable parser output.
-- [ ] Report scanned/unparseable PDFs as unsupported extraction cases; do not silently produce empty bibliographies. Keep OCR as a separate decision.
+- [x] Extract from original PDF bytes rather than the truncated Markdown cache. Retain document hash/version, parser version, raw bibliography text, and structured identifiers. Use citation context/page coordinates only when supplied by a suitable parser output.
+- [x] Report empty or unparseable extraction as partial/failure, preserving old evidence and explaining that scanned PDFs may need OCR. Keep OCR as a separate decision.
 - [ ] Compare additional verified local edges, ambiguous matches, failure rate, runtime, and operating requirements. Implement the fallback with demonstrated benefit using the existing jobs/evidence model; record a no-go decision if neither adds sufficient value.
 
 Milestone 3 exit: remaining gaps have measured causes and either an integrated, tested fallback or an explicit evidence-based deferral.

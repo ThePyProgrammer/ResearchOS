@@ -8,6 +8,33 @@ Apply `backend/migrations/033_paper_citations.sql` after the existing numbered m
 
 Restart the application with this branch. Before migration, citation endpoints return a setup-specific HTTP 503 without preventing ordinary paper operations. Set a valid `OPENALEX_API_KEY` in `backend/.env` for bulk use; credentials stay server-side. Crossref does not require a separate key.
 
+## Optional PDF bibliography extraction
+
+Apply `034_pdf_citations.sql` after 033, and configure `GROBID_URL` with a self-hosted service base URL (for example, `http://localhost:8070`). See the [official GROBID service documentation](https://grobid.readthedocs.io/en/latest/Grobid-service/) for running the service. No GROBID service is currently configured for this workspace, so real extraction coverage has not been benchmarked.
+
+For a paper with a managed PDF, click **Index PDF bibliography**. This explicitly opts the paper into sending its stored PDF to the configured service. Existing metadata indexing does not enable PDF extraction automatically. The worker calls `processReferences` with `includeRawCitations=1` and `consolidateCitations=0`, disabling GROBID's external metadata consolidation. HTTP redirects are not followed with the PDF payload.
+
+For a batch, add `--include-pdf` to a new backfill command:
+
+```powershell
+uv run --directory backend python scripts/index_paper_citations.py --library-id LIBRARY_ID --include-pdf --dry-run
+uv run --directory backend python scripts/index_paper_citations.py --library-id LIBRARY_ID --include-pdf
+```
+
+The execute command requires `GROBID_URL` and queues only PDFs recognized as managed by the configured GCS/Supabase storage. The same worker and resume manifest handle these jobs. Credentials read private storage directly; arbitrary external PDF URLs must first be stored through the existing application import/upload path. The extraction size limit is 100 MiB.
+
+Each reference retains its raw bibliography text, parsed title/authors/date, TEI record, parser version, and PDF SHA-256. Matching uses only explicit DOI/arXiv identifiers; title-only and contradictory identifiers remain unresolved. No reference output (including HTTP 204) is a partial extraction that preserves prior evidence, not proof that the PDF has no bibliography. Scanned PDFs may require OCR, which is not implemented.
+
+Once a service is available, evaluate one existing managed PDF without applying migration 034 or writing citation tables:
+
+```powershell
+uv run --directory backend python scripts/pilot_pdf_citations.py --paper-id PAPER_ID --output data/citations/pdf-pilot.json
+```
+
+This command sends the full PDF to the configured service and writes a local report containing raw reference evidence and exact local DOI/arXiv matches. It does not use title matching or provider alias enrichment and should be followed by bibliography review. No real GROBID pilot has been run yet.
+
+Migration 034 versions every explicit PDF URL update, including uploads replacing the same storage key. Old evidence is invalidated and previously opted-in PDF jobs requeue; unselected papers stay opted out. The worker also re-reads the PDF after extraction to detect content replacement during processing. Existing provider jobs are requeued once when upgrading their fingerprint format; published evidence is retained until a successful refresh. Deploy 034 before enabling PDF indexing and avoid replaying 033 after 034.
+
 Start the worker from the repository root:
 
 ```powershell
@@ -72,10 +99,10 @@ npm install --prefix backend/data/citation-validation --no-audit --no-fund --ign
 node backend/tests/run_citation_sql.mjs
 ```
 
-The runner uses actual repository library/paper definitions, applies migration 033 twice, and rolls back its fixtures. It verifies transaction behavior, not Supabase permissions or production multi-connection contention. Browser coverage lives in `frontend/e2e/citations.spec.js`.
+The runner uses actual repository library/paper definitions, applies migrations 033 and 034 twice, and rolls back its fixtures. It verifies transaction behavior, including same-URL PDF replacement, not Supabase permissions or production multi-connection contention. Browser coverage lives in `frontend/e2e/citations.spec.js`. PDF parser/storage fixtures are in `backend/tests/test_pdf_references.py` and `backend/tests/test_pdf_storage.py`.
 
 ## Rollback and limitations
 
 Stop workers and hide/revert the citation UI/API to stop provider traffic. Keep pending jobs and evidence. To stop automatic queueing, disable `paper_citations_changed` in a controlled maintenance step and re-enable it before resuming. No destructive rollback is necessary.
 
-Citations use the application's existing shared self-hosted access model, with library-scoped queries. They do not add user authentication or tenant isolation. PDF parsing, OCR, Semantic Scholar enrichment, cross-library graph views, and manual candidate approval are deferred. GROBID needs a configured service and a PDF read path supporting private storage. Truncated Markdown and first-page metadata extraction cannot substitute for full bibliographies.
+Citations use the application's existing shared self-hosted access model, with library-scoped queries. They do not add user authentication or tenant isolation. OCR, Semantic Scholar enrichment, cross-library graph views, and manual candidate approval remain deferred. The GROBID adapter is implemented and fixture-tested; a real service and coverage pilot are still needed. It reads full PDF bytes rather than truncated Markdown or first-page metadata.

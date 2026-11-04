@@ -47,3 +47,7 @@ The full frontend suite requires `TZ=UTC` for the unchanged Dashboard chart test
 After the pilot, a tested resolver improvement was added: an identifier-verified OpenAlex work can contribute a unique missing DOI/arXiv alias. Multiple possible aliases remain unaccepted. The pilot was not rerun for this improvement, so the observed edge count above is unchanged and does not predict alias-enriched coverage.
 
 Production multi-connection contention, Supabase role behavior, worker deployment, and the persisted full-library backfill remain rollout checks. This pilot establishes feasibility and coverage gaps; it is not deployment completion.
+
+## Subsequent PDF adapter work
+
+An opt-in GROBID adapter, managed-storage reader, file revision safeguards, and read-only PDF pilot command have since been implemented and tested using controlled TEI/HTTP fixtures. The user confirmed there is no GROBID service available yet. Therefore the provider pilot numbers above remain the only measured coverage results; parser fixtures do not establish PDF extraction accuracy or added real-world citation coverage.
