@@ -265,6 +265,13 @@ async def import_paper(data: ImportRequest, background_tasks: BackgroundTasks):
         library_id=data.library_id,
     )
     paper = paper_service.create_paper(paper_create)
+    if meta.get("_crossref_record"):
+        try:
+            from services.citation_repository import capture_crossref
+            capture_crossref(paper.id, meta["_crossref_record"])
+        except Exception:
+            # Import succeeds even before migration 033; backfill can recover the references.
+            logger.warning("Could not capture Crossref references for paper %s", paper.id)
     logger.info("Imported paper '%s' from identifier '%s'", paper.title, identifier)
     activity_service.log_activity(
         type="human",

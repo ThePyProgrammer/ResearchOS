@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { papersApi, notesApi, projectsApi, projectPapersApi } from '../services/api'
 import PaperInfoPanel from '../components/PaperInfoPanel'
+import PaperCitations from '../components/PaperCitations'
 import NotesPanel from '../components/NotesPanel'
 import CopilotPanel from '../components/CopilotPanel'
 import { useDragResize } from '../hooks/useDragResize'
@@ -522,6 +523,8 @@ export default function Paper() {
                   onStatusChange={(_, newStatus) => setPaper(p => ({ ...p, status: newStatus }))}
                   onPaperUpdate={setPaper}
                 />
+                <PaperCitations paperId={paper.id} libraryId={paper.libraryId}
+                  sourceVersion={JSON.stringify([paper.doi, paper.arxivId, paper.title, paper.authors, paper.year, paper.pdfUrl, paper.pdfRevision])} />
               </div>
             )}
             {sideTab === 'notes' && (

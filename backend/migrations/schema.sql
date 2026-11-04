@@ -3,6 +3,8 @@
 -- =============================================================================
 -- This single file replaces running migrations 001–013 individually.
 -- New users: paste this into the Supabase SQL Editor and run it once.
+-- Then apply numbered migrations 014 onward, including 033_paper_citations.sql
+-- for citations; this historical consolidated file only replaces 001-013.
 --
 -- All statements use IF NOT EXISTS / IF NOT EXISTS so the script is safe to
 -- re-run against a database that already has some tables.

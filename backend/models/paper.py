@@ -33,6 +33,7 @@ class Paper(CamelModel):
     rejected: bool = False
     collections: list[str] = []
     pdf_url: Optional[str] = None
+    pdf_revision: int = 0
     github_url: Optional[str] = None
     website_url: Optional[str] = None
     links: list[NamedLink] = []

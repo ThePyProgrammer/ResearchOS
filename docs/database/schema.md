@@ -1,5 +1,22 @@
 # Database Schema
 
+## Citation index (migration 033)
+
+| Table | Purpose |
+| --- | --- |
+| `paper_external_ids` | Normalized local/provider identifiers with assertion source; IDs can belong to multiple local copies |
+| `paper_reference_runs` | Immutable retrieval snapshots, source fingerprint, resolution/status, candidates, and active-run marker |
+| `paper_references` | Raw reference evidence and target identifiers, including references with no local match |
+| `paper_citations` | Unique directed `(citing_paper_id, cited_paper_id)` edges; self-edges prohibited |
+| `paper_citation_evidence` | One or more reference records supporting each edge |
+| `paper_citation_jobs` | One durable job per paper/provider, with retry scheduling, leased execution, and optional captured Crossref record |
+
+Migration 033 provides transaction functions for enqueueing, leasing, publishing, failure recording, reconciliation, and paginated reads. `paper_citations_changed` covers paper inserts, metadata changes, and deletions. Only successful full provider responses replace active evidence; partial/failing attempts retain old evidence. All paper-owned rows cascade on deletion. Reverse citation and identifier lookup indexes support library-scoped matching. RLS follows the repository's existing disabled-RLS model; this feature does not add an authorization boundary.
+
+See [citation operations](../guides/citation-indexing.md) for installation and worker commands. The historical consolidated `schema.sql` still requires later numbered migrations, including 033.
+
+Migration `034_pdf_citations.sql` adds the opt-in `grobid` provider and `papers.pdf_revision`. A BEFORE trigger increments that revision for every explicit `pdf_url` update, including replacing a file at the same URL. The citation fingerprint includes the revision, so stale extraction workers cannot publish and previous evidence is invalidated. An AFTER trigger requeues PDF extraction only when that paper already has a GROBID job. `enqueue_pdf_citations` explicitly creates that opt-in. Existing retrieval/evidence tables retain the parser version and PDF hash without separate storage tables.
+
 ## ER Overview
 
 ```
@@ -545,3 +562,7 @@ RLS: disabled.
 - **Policies**: `pdfs public read`, `pdfs backend write`, `pdfs backend delete`, `pdfs backend update` (all granted to `public` role)
 
 PDF public URL pattern: `{SUPABASE_URL}/storage/v1/object/public/pdfs/{paper_id}.pdf`
+
+Migration `035_local_pdf_citations.sql` adds the opt-in `pymupdf` provider and `enqueue_local_pdf_citations` RPC without changing existing GROBID jobs. Source changes requeue each previously selected PDF engine independently. The local API default uses this RPC. Apply migrations in sequence; replaying 034 after 035 would restore older provider constraints.
+
+Migration `037_automatic_pdf_citation_fallback.sql` adds eligibility, candidate paging and atomic local-fallback enqueue functions. The worker first checks that a candidate URL belongs to configured managed storage; enqueue rechecks the fingerprint and provider/reference/job conditions under the paper lock. Both provider jobs must be terminal for the current fingerprint, neither provider may have retained/current reference records, and no local PDF job may already exist for that fingerprint. Import-trigger provider queueing remains the shared entry point. The migration does not enqueue historical papers.

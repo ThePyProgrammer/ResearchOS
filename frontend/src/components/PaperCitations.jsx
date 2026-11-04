@@ -1,0 +1,117 @@
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { papersApi } from '../services/api'
+
+// Remount on paper/library change so old reads, mutations and polls cannot leak state.
+export default function PaperCitations({ paperId, libraryId, sourceVersion = '' }) {
+  return <CitationLists key={`${libraryId || ''}:${paperId}:${sourceVersion}`} paperId={paperId} />
+}
+
+function CitationLists({ paperId }) {
+  const [direction, setDirection] = useState('outgoing')
+  const [offset, setOffset] = useState(0)
+  const [data, setData] = useState(null)
+  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [queueing, setQueueing] = useState(false)
+  const [refresh, setRefresh] = useState(0)
+  const alive = useRef(true)
+  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    let timer
+    setLoading(true)
+    setError(null)
+    async function load() {
+      try {
+        const page = await papersApi.citations(paperId, { direction, offset, limit: 10 })
+        if (cancelled) return
+        if (!Array.isArray(page?.items) || !Array.isArray(page?.jobs) || !Array.isArray(page?.runs)) {
+          throw new Error('Citation data could not be loaded.')
+        }
+        setData(page)
+        setLoading(false)
+        // Incoming links can arrive when any source in the library is indexed.
+        if (page.pendingJobs > 0 || page.jobs.some(job => ['pending', 'running'].includes(job.status))) {
+          timer = setTimeout(load, 10000)
+        }
+      } catch {
+        if (!cancelled) { setError('Citation data could not be loaded.'); setLoading(false) }
+      }
+    }
+    load()
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [paperId, direction, offset, refresh])
+
+  async function reindex() {
+    setQueueing(true)
+    setError(null)
+    try {
+      await papersApi.reindexCitations(paperId)
+      if (alive.current) setRefresh(value => value + 1)
+    } catch {
+      if (alive.current) setError('Could not start indexing. Please try again.')
+    } finally {
+      if (alive.current) setQueueing(false)
+    }
+  }
+
+  const jobs = data?.jobs || []
+  const busy = queueing || jobs.some(job => ['pending', 'running'].includes(job.status))
+  const activeRuns = (data?.runs || []).filter(run => run.active)
+  const failed = jobs.some(job => job.status === 'failed')
+  const partial = jobs.some(job => ['partial', 'not_found'].includes(job.status)
+    && !(job.provider === 'crossref' && job.error === 'No DOI available'))
+  const lastIndexed = activeRuns.map(run => run.indexedAt).sort().at(-1)
+  const label = direction === 'outgoing' ? 'References in this library' : 'Cited by in this library'
+  const emptyMessage = direction === 'incoming'
+    ? 'No papers in this library are linked as citing this paper yet.'
+    : data?.unresolvedCount > 0
+      ? 'References were found, but none are linked to papers in this library yet.'
+      : 'No linked references in this library yet.'
+
+  return (
+    <section className="p-4 text-xs" aria-label="Paper citations">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Citations</h3>
+        <button type="button" disabled={busy} onClick={() => reindex()}
+          className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-500">
+          {busy ? 'Indexing…' : 'Index'}
+        </button>
+      </div>
+      <div className="flex gap-2 mb-3" aria-label="Citation direction">
+        {['outgoing', 'incoming'].map(value => (
+          <button key={value} type="button" aria-pressed={direction === value} disabled={direction === value}
+            className={`rounded px-2 py-1 text-xs ${direction === value ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}
+            onClick={() => { setDirection(value); setOffset(0); setData(null) }}>
+            {value === 'outgoing' ? 'References' : 'Cited by'}
+          </button>
+        ))}
+      </div>
+      <h4 className="text-xs font-semibold mb-2">{label}{data ? ` (${data.total})` : ''}</h4>
+      {error && <div role="alert" className="text-red-700 mb-2">{error} <button className="underline" onClick={() => setRefresh(n => n + 1)}>Retry</button></div>}
+      {loading && <p role="status" className="text-slate-500">Loading citations…</p>}
+      {data && <>
+        {busy && <p role="status" className="text-slate-500 mb-2">Indexing queued or in progress.</p>}
+        {failed && <p className="text-amber-700 mb-2">Indexing failed. {activeRuns.length > 0 && 'Showing previous results.'}</p>}
+        {partial && <p className="text-slate-500 mb-2">Some references could not be found.</p>}
+        {!activeRuns.length && !busy && !failed && !partial && <p className="text-slate-500">Not indexed yet.</p>}
+        {!data.items.length && <p className="text-slate-500 mb-2">{emptyMessage}</p>}
+        <ul className="space-y-3">
+          {data.items.map(item => <li key={item.id}>
+            <Link to={`/library/paper/${encodeURIComponent(item.id)}`} className="text-blue-700 hover:underline">{item.title}</Link>
+            <p className="text-xs text-slate-500">{item.authors.slice(0, 2).join(', ')}{item.year ? ` · ${item.year}` : ''}</p>
+          </li>)}
+        </ul>
+        {data.total > 10 && <div className="flex items-center gap-3 mt-3">
+          <button disabled={offset === 0 || loading} onClick={() => { setData(null); setOffset(n => Math.max(0, n - 10)) }}>Previous</button>
+          <span className="text-xs">{offset + 1}–{Math.min(offset + 10, data.total)} of {data.total}</span>
+          <button disabled={offset + 10 >= data.total || loading} onClick={() => { setData(null); setOffset(n => n + 10) }}>Next</button>
+        </div>}
+        {direction === 'outgoing' && data.unresolvedCount > 0 && <p className="pt-3 text-xs text-slate-500">{data.unresolvedCount} references not linked to a paper in this library.</p>}
+      </>}
+      {lastIndexed && <p className="text-xs text-slate-500 mt-2">Last indexed: {new Date(lastIndexed).toLocaleString()}</p>}
+    </section>
+  )
+}

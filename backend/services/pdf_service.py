@@ -100,3 +100,26 @@ def delete_pdf(paper_id: str, pdf_url: str | None) -> None:
     else:
         get_client().storage.from_(_BUCKET).remove([path])
     logger.info("Deleted PDF for paper %s from %s", paper_id, provider)
+
+
+def read_managed_pdf(pdf_url: str) -> bytes:
+    """Read configured storage using credentials, with a fixed byte limit and GCS generation guard."""
+    location = managed_location(pdf_url)
+    if location is None:
+        raise ValueError("PDF reference extraction requires a managed PDF")
+    limit = 100 * 1024 * 1024
+    provider, path = location
+    if provider == "gcs":
+        blob = _gcs_bucket().get_blob(path, timeout=30)
+        if blob is None:
+            raise ValueError("Stored PDF was not found")
+        if blob.size is None or int(blob.size) > limit:
+            raise ValueError("PDF exceeds the 100 MiB extraction limit")
+        data = blob.download_as_bytes(if_generation_match=int(blob.generation), timeout=60)
+    else:
+        data = get_client().storage.from_(_BUCKET).download(path)
+    if len(data) > limit:
+        raise ValueError("PDF exceeds the 100 MiB extraction limit")
+    if not data.startswith(b"%PDF-"):
+        raise ValueError("Stored file does not have a PDF header")
+    return data

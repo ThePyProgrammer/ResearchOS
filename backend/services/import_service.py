@@ -152,6 +152,8 @@ async def _fetch_doi(doi: str) -> dict:
         "arxiv_id": None,
         "abstract": abstract[:2000] or None,
         "pdf_url": None,
+        # Internal provider payload; the import route never inserts this into papers.
+        "_crossref_record": {key: msg[key] for key in ("DOI", "reference") if key in msg},
     }
 
 

@@ -69,6 +69,32 @@ def test_computed_storage_flag_is_in_api_but_not_database_insert(mocker):
     assert paper.model_dump(by_alias=True)['hasStoredPdf'] is True
     assert 'has_stored_pdf' not in query.insert.call_args.args[0]
     assert 'hasStoredPdf' not in query.insert.call_args.args[0]
+    assert 'pdf_revision' not in query.insert.call_args.args[0]
+
+
+def test_read_pdf_uses_private_gcs_credentials_and_generation_guard(mocker):
+    blob = mocker.Mock(size=123, generation='42')
+    blob.download_as_bytes.return_value = b'%PDF-test'
+    bucket = mocker.patch.object(pdf_service, '_gcs_bucket').return_value
+    bucket.get_blob.return_value = blob
+    assert pdf_service.read_managed_pdf('https://storage.googleapis.com/test-papers/p_1.pdf') == b'%PDF-test'
+    blob.download_as_bytes.assert_called_once_with(if_generation_match=42, timeout=60)
+
+
+def test_read_pdf_rejects_oversized_object_before_download(mocker):
+    blob = mocker.Mock(size=101*1024*1024, generation='42')
+    mocker.patch.object(pdf_service, '_gcs_bucket').return_value.get_blob.return_value = blob
+    with pytest.raises(ValueError, match='100 MiB'):
+        pdf_service.read_managed_pdf('https://storage.googleapis.com/test-papers/p_1.pdf')
+    blob.download_as_bytes.assert_not_called()
+
+
+def test_read_pdf_uses_supabase_storage_and_rejects_arbitrary_urls(mocker):
+    db = mocker.patch.object(pdf_service, 'get_client').return_value
+    db.storage.from_.return_value.download.return_value = b'%PDF-supabase'
+    assert pdf_service.read_managed_pdf('https://source.supabase.co/storage/v1/object/public/pdfs/p_1.pdf') == b'%PDF-supabase'
+    with pytest.raises(ValueError, match='managed PDF'):
+        pdf_service.read_managed_pdf('https://example.org/private.pdf')
 
 
 def test_fetch_rejects_gcs_managed_pdf(client, mocker):
