@@ -44,6 +44,10 @@ export const papersApi = {
   },
   get: (id) => apiFetch(`/papers/${id}`),
   labs: (id) => apiFetch(`/papers/${encodeURIComponent(id)}/labs`),
+  citations: (id, { direction = 'outgoing', limit = 20, offset = 0 } = {}) =>
+    apiFetch(`/papers/${encodeURIComponent(id)}/citations?${new URLSearchParams({ direction, limit, offset })}`),
+  reindexCitations: (id) => apiFetch(`/papers/${encodeURIComponent(id)}/citations/reindex`, { method: 'POST' }),
+  citationJob: (id) => apiFetch(`/citation-jobs/${encodeURIComponent(id)}`),
   related: (id, { limit = 12 } = {}) => apiFetch(`/papers/${id}/related?limit=${encodeURIComponent(limit)}`),
   create: (data, { checkDuplicates = false } = {}) => {
     const qs = checkDuplicates ? '?check_duplicates=true' : ''

@@ -252,4 +252,15 @@ describe('api service wrapper', () => {
 
     expect(global.fetch.mock.calls[0][0]).toBe('/api/papers/p_42/related?limit=9')
   })
+
+  it('citation endpoints encode IDs and preserve direction and pagination', async () => {
+    global.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ items: [] }) })
+    await papersApi.citations('p/a', { direction: 'incoming', offset: 20, limit: 10 })
+    await papersApi.reindexCitations('p/a')
+    await papersApi.citationJob('job-1')
+    expect(global.fetch.mock.calls[0][0]).toBe('/api/papers/p%2Fa/citations?direction=incoming&limit=10&offset=20')
+    expect(global.fetch.mock.calls[1][0]).toBe('/api/papers/p%2Fa/citations/reindex')
+    expect(global.fetch.mock.calls[1][1].method).toBe('POST')
+    expect(global.fetch.mock.calls[2][0]).toBe('/api/citation-jobs/job-1')
+  })
 })
