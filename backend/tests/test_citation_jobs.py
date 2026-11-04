@@ -46,6 +46,16 @@ def test_crossref_captured_payload_passed_to_fetcher(monkeypatch):
     assert fetch.call_args.args[2] == job['captured_record']
 
 
+def test_pdf_job_uses_pdf_extractor_and_publishes_evidence(monkeypatch):
+    setup_job(monkeypatch, 'grobid')
+    fetch = AsyncMock(return_value=CitationResult(provider='grobid', version='grobid:test;sha256:pdf'))
+    monkeypatch.setattr(jobs, 'fetch_pdf_references', fetch)
+    monkeypatch.setattr(jobs, 'fetch_crossref', AsyncMock(side_effect=AssertionError('Wrong provider')))
+    monkeypatch.setattr(jobs.repository, 'finish', lambda job, result: result.provider == 'grobid')
+    assert asyncio.run(jobs.run_one())['status'] == 'succeeded'
+    fetch.assert_awaited_once()
+
+
 def test_keyset_iterator_handles_server_page_caps(monkeypatch):
     rows = [{'id': f'p{i:04}', 'library_id': 'lib'} for i in range(1105)]
     class Query:

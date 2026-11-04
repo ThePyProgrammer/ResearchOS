@@ -5,6 +5,7 @@ import httpx
 
 from services import citation_repository as repository, paper_service
 from services.citation_service import fetch_crossref, fetch_openalex
+from services.pdf_reference_service import fetch_pdf_references
 from services.openalex_client import CitationProviderError
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,8 @@ async def run_one(job_id: str | None = None) -> dict | None:
             data = paper.model_dump()
             if job["provider"] == "openalex":
                 result = await fetch_openalex(data, client)
+            elif job["provider"] == "grobid":
+                result = await fetch_pdf_references(data, client)
             else:
                 result = await fetch_crossref(data, client, job.get("captured_record"))
         published = repository.finish(job, result)
