@@ -73,7 +73,13 @@ function CitationLists({ paperId }) {
 
   return (
     <section className="border-t border-slate-200 p-4 text-sm" aria-label="Paper citations">
-      <h3 className="font-semibold text-slate-800 mb-3">Citations</h3>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="font-semibold text-slate-800">Citations</h3>
+        <button type="button" disabled={busy} onClick={() => reindex()}
+          className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-500">
+          {busy ? 'Indexing…' : 'Index'}
+        </button>
+      </div>
       <div className="flex gap-2 mb-3" aria-label="Citation direction">
         {['outgoing', 'incoming'].map(value => (
           <button key={value} type="button" aria-pressed={direction === value} disabled={direction === value}
@@ -116,9 +122,6 @@ function CitationLists({ paperId }) {
         </div>}
         {direction === 'outgoing' && data.unresolvedCount > 0 && <p className="text-xs text-slate-500">{data.unresolvedCount} references not linked to a paper in this library.</p>}
       </>}
-      <button type="button" disabled={busy} onClick={() => reindex()} className="mt-3 text-xs text-blue-700 disabled:text-slate-400">
-        {busy ? 'Indexing…' : 'Index'}
-      </button>
       {lastIndexed && <p className="text-xs text-slate-500 mt-2">Last indexed: {new Date(lastIndexed).toLocaleString()}</p>}
     </section>
   )
