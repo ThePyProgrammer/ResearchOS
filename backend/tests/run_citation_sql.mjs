@@ -30,7 +30,11 @@ try {
   await db.exec(await readFile(new URL('./sql/paper_citations.sql', import.meta.url), 'utf8'))
   await db.exec(await readFile(new URL('./sql/pdf_citations.sql', import.meta.url), 'utf8'))
   await db.exec(await readFile(new URL('./sql/local_pdf_citations.sql', import.meta.url), 'utf8'))
-  console.log('Citation SQL checks passed; migrations 033-036 replayed, including legacy upgrade preservation.')
+  const fallback = await readFile(new URL('../migrations/037_automatic_pdf_citation_fallback.sql', import.meta.url), 'utf8')
+  await db.exec(fallback)
+  await db.exec(fallback)
+  await db.exec(await readFile(new URL('./sql/automatic_pdf_fallback.sql', import.meta.url), 'utf8'))
+  console.log('Citation SQL checks passed; migrations 033-037 replayed, including legacy upgrade and import fallback.')
 } finally {
   await db.close()
 }
