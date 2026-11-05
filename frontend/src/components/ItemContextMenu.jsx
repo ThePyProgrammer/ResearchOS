@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 const PANEL_CLASS = 'fixed z-[100] w-60 max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl'
@@ -16,7 +16,7 @@ function ActionButton({ action, onClose, onMouseEnter }) {
   </button>
 }
 
-function Submenu({ branch, onClose, onBack }) {
+function Submenu({ branch, onClose, onBack, onMouseEnter }) {
   const ref = useRef(null)
   const [position, setPosition] = useState({ left: 0, top: 0 })
   useLayoutEffect(() => {
@@ -32,6 +32,7 @@ function Submenu({ branch, onClose, onBack }) {
   }, [branch])
 
   return <div ref={ref} role="menu" aria-label={branch.group.label} style={position} className={PANEL_CLASS}
+    onMouseEnter={onMouseEnter}
     onKeyDown={event => {
       if (event.key === 'ArrowLeft' || event.key === 'Escape') {
         event.preventDefault()
@@ -48,6 +49,20 @@ export default function ItemContextMenu({ x, y, title, groups, onClose }) {
   const menuRef = useRef(null)
   const [branch, setBranch] = useState(null)
   const [position, setPosition] = useState({ left: x, top: y })
+  const branchTimer = useRef(null)
+  const cancelBranchChange = () => clearTimeout(branchTimer.current)
+  const openBranch = next => {
+    cancelBranchChange()
+    setBranch(next)
+  }
+  const hoverBranch = next => {
+    cancelBranchChange()
+    if (branch?.group.label === next?.group.label) return
+    // Allow diagonal pointer travel across other rows into the open submenu.
+    if (branch) branchTimer.current = setTimeout(() => setBranch(next), 200)
+    else setBranch(next)
+  }
+  useEffect(() => () => clearTimeout(branchTimer.current), [])
 
   useLayoutEffect(() => {
     const menu = menuRef.current
@@ -87,7 +102,7 @@ export default function ItemContextMenu({ x, y, title, groups, onClose }) {
       : event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : null
     if (next !== null) {
       event.preventDefault()
-      if (event.target.closest('[role="menu"]') === rootRef.current) setBranch(null)
+      if (event.target.closest('[role="menu"]') === rootRef.current) openBranch(null)
       buttons[next]?.focus()
     }
   }
@@ -98,18 +113,18 @@ export default function ItemContextMenu({ x, y, title, groups, onClose }) {
       <div className="px-3 py-2 text-xs font-semibold text-slate-500 truncate" title={title}>{title}</div>
       {groups.filter(group => group.actions.length).map(group => group.actions.length === 1 ? (
         <div key={group.label} className="border-t border-slate-100 mt-1 pt-1">
-          <ActionButton action={group.actions[0]} onClose={onClose} onMouseEnter={() => setBranch(null)} />
+          <ActionButton action={group.actions[0]} onClose={onClose} onMouseEnter={() => hoverBranch(null)} />
         </div>
       ) : (
         <button key={group.label} role="menuitem" aria-haspopup="menu" aria-expanded={branch?.group.label === group.label}
           className={`${BUTTON_CLASS} text-slate-700 ${branch?.group.label === group.label ? 'bg-blue-50' : ''}`}
-          onMouseEnter={event => setBranch({ group, trigger: event.currentTarget, focus: false })}
-          onClick={event => setBranch({ group, trigger: event.currentTarget, focus: true })}
+          onMouseEnter={event => hoverBranch({ group, trigger: event.currentTarget, focus: false })}
+          onClick={event => openBranch({ group, trigger: event.currentTarget, focus: true })}
           onKeyDown={event => {
             if (event.key === 'ArrowRight') {
               event.preventDefault()
               event.stopPropagation()
-              setBranch({ group, trigger: event.currentTarget, focus: true })
+              openBranch({ group, trigger: event.currentTarget, focus: true })
             }
           }}>
           <Icon name={group.actions[0].icon} />
@@ -118,9 +133,9 @@ export default function ItemContextMenu({ x, y, title, groups, onClose }) {
         </button>
       ))}
       </div>
-      {branch && <Submenu branch={branch} onClose={onClose} onBack={() => {
+      {branch && <Submenu branch={branch} onClose={onClose} onMouseEnter={cancelBranchChange} onBack={() => {
         branch.trigger.focus()
-        setBranch(null)
+        openBranch(null)
       }} />}
     </div>, document.body,
   )
