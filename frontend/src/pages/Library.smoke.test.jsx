@@ -329,11 +329,12 @@ describe('Library page smoke', () => {
       expect(screen.getByRole('menuitem', { name })).toBeInTheDocument()
     }
     fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Process' }))
+    await screen.findByRole('menuitem', { name: /Generate notes/ })
     for (const name of [/Generate notes/, /Auto-tag/, /Fetch PDFs/, /Generate embeddings/]) {
       expect(screen.getByRole('menuitem', { name })).toBeInTheDocument()
     }
     fireEvent.mouseEnter(screen.getByRole('menuitem', { name: 'Copy & export' }))
-    expect(screen.getByRole('menuitem', { name: /Export BibTeX/ })).toBeInTheDocument()
+    expect(await screen.findByRole('menuitem', { name: /Export BibTeX/ })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /Delete item/ })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
     expect(checkbox).not.toBeChecked()

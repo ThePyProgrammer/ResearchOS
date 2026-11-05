@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "26"
       - name: Install disposable PostgreSQL engine
         run: npm install --prefix backend/data/citation-validation --no-audit --no-fund --ignore-scripts @electric-sql/pglite@0.5.14
       - name: Verify citation migration and transactions
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "26"
           cache: npm
           cache-dependency-path: "**/package-lock.json"
       - name: Install frontend deps
@@ -58,7 +58,12 @@ jobs:
         run: npm run build
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      # Keep this version aligned with @playwright/test in frontend/package-lock.json.
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --ipc=host
     needs: [backend, frontend]
     defaults:
       run:
@@ -67,12 +72,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "26"
           cache: npm
           cache-dependency-path: "**/package-lock.json"
       - name: Install frontend deps
+        timeout-minutes: 5
         run: npm ci
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+      - name: Verify Playwright image version
+        run: node -e "if (require('@playwright/test/package.json').version !== '1.58.2') throw new Error('Update the CI Playwright image to match package-lock.json')"
       - name: Run E2E smoke tests
+        timeout-minutes: 8
         run: npm run test:e2e
